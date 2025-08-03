@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
   Box,
   TextField,
@@ -17,13 +17,13 @@ interface MessageInputProps {
   onSendMessage: (message: string, file?: File) => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
+const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
     
     if (!inputMessage.trim() && !selectedFile) return;
@@ -34,18 +34,30 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  };
+  }, [inputMessage, selectedFile, onSendMessage]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setSelectedFile(file);
     }
-  };
+  }, []);
 
-  const handleEmojiSelect = (emoji: string) => {
+  const handleEmojiSelect = useCallback((emoji: string) => {
     setInputMessage(prev => prev + emoji);
-  };
+  }, []);
+
+  const clearSelectedFile = useCallback(() => {
+    setSelectedFile(null);
+  }, []);
+
+  const toggleEmojiPicker = useCallback(() => {
+    setEmojiPickerOpen(prev => !prev);
+  }, []);
+
+  const closeEmojiPicker = useCallback(() => {
+    setEmojiPickerOpen(false);
+  }, []);
 
   return (
     <>
@@ -56,7 +68,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
             <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <AttachFile fontSize="small" />
               Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
-              <IconButton size="small" onClick={() => setSelectedFile(null)}>
+              <IconButton size="small" onClick={clearSelectedFile}>
                 ✕
               </IconButton>
             </Typography>
@@ -66,7 +78,7 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
           {/* Emoji Picker Button */}
           <IconButton
-            onClick={() => setEmojiPickerOpen(true)}
+            onClick={toggleEmojiPicker}
             sx={{
               color: '#1565C0',
               borderRadius: 2,
@@ -138,11 +150,13 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSendMessage }) => {
 
       <EmojiPicker
         open={emojiPickerOpen}
-        onClose={() => setEmojiPickerOpen(false)}
+        onClose={closeEmojiPicker}
         onEmojiSelect={handleEmojiSelect}
       />
     </>
   );
-};
+});
+
+MessageInput.displayName = 'MessageInput';
 
 export default MessageInput;

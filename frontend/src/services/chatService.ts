@@ -1,9 +1,15 @@
-import { Message } from '../types/Message';
+import { Message, MessageStatus } from '../types/Message';
 import { messageUtils } from '../utils/messageUtils';
 
 export interface ChatResponse {
   message: Message;
   delay?: number;
+}
+
+export interface ChatError {
+  code: string;
+  message: string;
+  retryable: boolean;
 }
 
 class ChatService {
@@ -14,16 +20,35 @@ class ChatService {
     "I appreciate you reaching out to us. Let me gather the relevant information to give you the best possible assistance.",
   ];
 
+  private readonly MAX_RETRY_ATTEMPTS = 3;
+  private readonly RETRY_DELAY_BASE = 1000; // 1 second
+
   private getRandomResponse(): string {
     return this.DEMO_RESPONSES[Math.floor(Math.random() * this.DEMO_RESPONSES.length)];
   }
 
-  // Simulate bot response (will be replaced with real API calls)
-  async generateResponse(userMessage: Message): Promise<ChatResponse> {
+  private simulateNetworkError(): boolean {
+    // Simulate 10% chance of network error for testing
+    return Math.random() < 0.1;
+  }
+
+  // Simulate bot response with error handling
+  async generateResponse(userMessage: Message, retryCount: number = 0): Promise<ChatResponse> {
     const delay = 1000 + Math.random() * 1000; // 1-2 seconds delay
     
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       setTimeout(() => {
+        // Simulate network error for testing
+        if (this.simulateNetworkError() && retryCount === 0) {
+          const error: ChatError = {
+            code: 'NETWORK_ERROR',
+            message: 'Failed to connect to chat service. Please check your internet connection.',
+            retryable: true,
+          };
+          reject(error);
+          return;
+        }
+
         const botMessage = messageUtils.createMessage(
           this.getRandomResponse(),
           'bot'
@@ -35,6 +60,25 @@ class ChatService {
         });
       }, delay);
     });
+  }
+
+  // Retry failed message with exponential backoff
+  async retryMessage(userMessage: Message, retryCount: number): Promise<ChatResponse> {
+    if (retryCount >= this.MAX_RETRY_ATTEMPTS) {
+      const error: ChatError = {
+        code: 'MAX_RETRIES_EXCEEDED',
+        message: 'Maximum retry attempts exceeded. Please try again later.',
+        retryable: false,
+      };
+      throw error;
+    }
+
+    const retryDelay = this.RETRY_DELAY_BASE * Math.pow(2, retryCount);
+    
+    // Wait for exponential backoff delay
+    await new Promise(resolve => setTimeout(resolve, retryDelay));
+    
+    return this.generateResponse(userMessage, retryCount);
   }
 
   // Create human service escalation message

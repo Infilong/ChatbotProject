@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -6,6 +6,8 @@ import {
   Avatar,
   IconButton,
   Stack,
+  Chip,
+  Tooltip,
 } from '@mui/material';
 import { 
   SupportAgent, 
@@ -13,28 +15,64 @@ import {
   AttachFile, 
   ThumbUp, 
   ThumbDown,
+  Refresh,
+  Schedule,
+  Error as ErrorIcon,
+  CheckCircle,
 } from '@mui/icons-material';
 import { Message } from '../types/Message';
+import TypingIndicator from './TypingIndicator';
+import { throttle } from '../utils/debounce';
 
 interface MessageListProps {
   messages: Message[];
   onFeedback: (messageId: string, feedback: 'up' | 'down') => void;
+  onRetryMessage?: (messageId: string) => void;
+  isTyping?: boolean;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, onFeedback }) => {
+const MessageList: React.FC<MessageListProps> = React.memo(({ 
+  messages, 
+  onFeedback, 
+  onRetryMessage,
+  isTyping = false 
+}) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Throttle scroll to bottom to improve performance
+  const scrollToBottom = useMemo(
+    () => throttle(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100),
+    []
+  );
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
-  const formatTime = (timestamp: Date) => {
+  // Memoize utility functions to prevent unnecessary re-renders
+  const formatTime = useCallback((timestamp: Date) => {
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  }, []);
+
+  const getStatusIcon = useCallback((message: Message) => {
+    switch (message.status) {
+      case 'sending':
+        return <Schedule fontSize="small" sx={{ color: 'text.secondary' }} />;
+      case 'sent':
+      case 'delivered':
+        return <CheckCircle fontSize="small" sx={{ color: 'success.main' }} />;
+      case 'failed':
+        return <ErrorIcon fontSize="small" sx={{ color: 'error.main' }} />;
+      default:
+        return null;
+    }
+  }, []);
+
+  const canRetry = useCallback((message: Message) => {
+    return message.status === 'failed' && (message.retryCount || 0) < 3;
+  }, []);
 
   return (
     <Box
@@ -95,17 +133,46 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onFeedback }) => {
                   </Box>
                 )}
               </Paper>
-              <Typography
-                variant="caption"
-                color="text.secondary"
+              <Box
                 sx={{
-                  display: 'block',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
+                  gap: 0.5,
                   mt: 0.5,
-                  textAlign: message.sender === 'user' ? 'right' : 'left',
                 }}
               >
-                {formatTime(message.timestamp)}
-              </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                >
+                  {formatTime(message.timestamp)}
+                </Typography>
+                
+                {message.sender === 'user' && getStatusIcon(message)}
+                
+                {message.status === 'failed' && canRetry(message) && onRetryMessage && (
+                  <Tooltip title="Retry sending message">
+                    <IconButton
+                      size="small"
+                      onClick={() => onRetryMessage(message.id)}
+                      sx={{ ml: 0.5 }}
+                    >
+                      <Refresh fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              </Box>
+              
+              {message.error && (
+                <Chip
+                  label={message.error}
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  sx={{ mt: 0.5, fontSize: '0.7rem' }}
+                />
+              )}
               
               {/* Feedback buttons for bot messages */}
               {message.sender === 'bot' && (
@@ -153,9 +220,14 @@ const MessageList: React.FC<MessageListProps> = ({ messages, onFeedback }) => {
           </Box>
         </Box>
       ))}
+      
+      {isTyping && <TypingIndicator />}
+      
       <div ref={messagesEndRef} />
     </Box>
   );
-};
+});
+
+MessageList.displayName = 'MessageList';
 
 export default MessageList;

@@ -1,21 +1,24 @@
-import { Message } from '../types/Message';
+import { Message, MessageStatus } from '../types/Message';
 
 export const messageUtils = {
   createMessage: (
     text: string,
     sender: 'user' | 'bot',
-    file?: File
+    file?: File,
+    status: MessageStatus = 'sent'
   ): Message => {
     return {
       id: Date.now().toString(),
       text: text || (file ? `📎 ${file.name}` : ''),
       sender,
       timestamp: new Date(),
+      status,
       file: file ? {
         name: file.name,
         size: file.size,
         type: file.type,
       } : undefined,
+      retryCount: 0,
     };
   },
 
@@ -58,5 +61,43 @@ export const messageUtils = {
 
   formatTime: (timestamp: Date): string => {
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  },
+
+  updateMessageStatus: (
+    messages: Message[],
+    messageId: string,
+    status: MessageStatus,
+    error?: string
+  ): Message[] => {
+    return messages.map(msg => {
+      if (msg.id === messageId) {
+        return { 
+          ...msg, 
+          status,
+          error: error || undefined
+        };
+      }
+      return msg;
+    });
+  },
+
+  incrementRetryCount: (
+    messages: Message[],
+    messageId: string
+  ): Message[] => {
+    return messages.map(msg => {
+      if (msg.id === messageId) {
+        return { 
+          ...msg, 
+          retryCount: (msg.retryCount || 0) + 1,
+          status: 'sending' as MessageStatus
+        };
+      }
+      return msg;
+    });
+  },
+
+  canRetryMessage: (message: Message): boolean => {
+    return message.status === 'failed' && (message.retryCount || 0) < 3;
   },
 };

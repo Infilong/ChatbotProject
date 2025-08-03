@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Box,
   Paper,
@@ -18,9 +18,11 @@ import {
 import { Message } from '../types/Message';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
+import { useToast } from './Toast';
 import { storageUtils } from '../utils/storageUtils';
 import { messageUtils } from '../utils/messageUtils';
-import { chatService } from '../services/chatService';
+import { chatService, ChatError } from '../services/chatService';
+import { debounce } from '../utils/debounce';
 
 interface ChatPageProps {
   username: string;
@@ -29,6 +31,14 @@ interface ChatPageProps {
 
 const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const { showError, showSuccess } = useToast();
+
+  // Debounce localStorage saves to improve performance
+  const debouncedSaveMessages = useMemo(
+    () => debounce(storageUtils.saveMessages, 500),
+    []
+  );
 
   // Load saved messages on component mount
   useEffect(() => {
@@ -43,37 +53,94 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     }
   }, [username]);
 
-  // Save messages to localStorage whenever messages change
+  // Save messages to localStorage whenever messages change (debounced)
   useEffect(() => {
     if (messages.length > 0) {
-      storageUtils.saveMessages(messages);
+      debouncedSaveMessages(messages);
     }
-  }, [messages]);
+  }, [messages, debouncedSaveMessages]);
 
-  const handleSendMessage = async (message: string, file?: File) => {
+  const handleSendMessage = useCallback(async (message: string, file?: File) => {
     if (!messageUtils.validateMessage(message, file)) return;
 
-    // Add user message
-    const userMessage = messageUtils.createMessage(message, 'user', file);
+    // Add user message with sending status
+    const userMessage = messageUtils.createMessage(message, 'user', file, 'sending');
     setMessages(prev => [...prev, userMessage]);
 
-    // Generate bot response
     try {
+      // Update user message to sent status
+      setMessages(prev => 
+        messageUtils.updateMessageStatus(prev, userMessage.id, 'sent')
+      );
+
+      // Show typing indicator
+      setIsTyping(true);
+
+      // Generate bot response
       const response = await chatService.generateResponse(userMessage);
+      
+      // Hide typing indicator and add bot message
+      setIsTyping(false);
       setMessages(prev => [...prev, response.message]);
+      
     } catch (error) {
+      setIsTyping(false);
+      const chatError = error as ChatError;
+      
+      // Update user message to failed status
+      setMessages(prev => 
+        messageUtils.updateMessageStatus(prev, userMessage.id, 'failed', chatError.message)
+      );
+      
+      showError(chatError.message);
       console.error('Error generating bot response:', error);
     }
-  };
+  }, [showError]);
 
-  const handleFeedback = (messageId: string, feedback: 'up' | 'down') => {
+  const handleRetryMessage = useCallback(async (messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message || !messageUtils.canRetryMessage(message)) return;
+
+    // Increment retry count and set to sending
+    setMessages(prev => messageUtils.incrementRetryCount(prev, messageId));
+
+    try {
+      setIsTyping(true);
+      
+      const response = await chatService.retryMessage(message, message.retryCount || 0);
+      
+      setIsTyping(false);
+      
+      // Update original message to sent status
+      setMessages(prev => 
+        messageUtils.updateMessageStatus(prev, messageId, 'sent')
+      );
+      
+      // Add bot response
+      setMessages(prev => [...prev, response.message]);
+      
+      showSuccess('Message sent successfully!');
+      
+    } catch (error) {
+      setIsTyping(false);
+      const chatError = error as ChatError;
+      
+      setMessages(prev => 
+        messageUtils.updateMessageStatus(prev, messageId, 'failed', chatError.message)
+      );
+      
+      showError(chatError.message);
+    }
+  }, [messages, showError, showSuccess]);
+
+  const handleFeedback = useCallback((messageId: string, feedback: 'up' | 'down') => {
     setMessages(prev => messageUtils.updateMessageFeedback(prev, messageId, feedback));
-  };
+  }, []);
 
-  const handleHumanService = () => {
+  const handleHumanService = useCallback(() => {
     const serviceMessage = chatService.createHumanServiceMessage();
     setMessages(prev => [...prev, serviceMessage]);
-  };
+  }, []);
 
 
 
@@ -146,7 +213,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
         >
           <MessageList 
             messages={messages} 
-            onFeedback={handleFeedback} 
+            onFeedback={handleFeedback}
+            onRetryMessage={handleRetryMessage}
+            isTyping={isTyping}
           />
           
           <MessageInput onSendMessage={handleSendMessage} />

@@ -4,6 +4,8 @@ import { CssBaseline } from '@mui/material';
 import { theme } from './theme';
 import LoginPage from './components/LoginPage';
 import ChatPage from './components/ChatPage';
+import ErrorBoundary from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 import { storageUtils } from './utils/storageUtils';
 
 function App() {
@@ -63,14 +65,18 @@ function App() {
   }
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      {isLoggedIn ? (
-        <ChatPage username={username} onLogout={handleLogout} />
-      ) : (
-        <LoginPage onLogin={handleLogin} />
-      )}
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <ToastProvider>
+          {isLoggedIn ? (
+            <ChatPage username={username} onLogout={handleLogout} />
+          ) : (
+            <LoginPage onLogin={handleLogin} />
+          )}
+        </ToastProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
