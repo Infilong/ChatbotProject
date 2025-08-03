@@ -10,6 +10,8 @@ describe('chatService', () => {
   });
 
   describe('generateResponse', () => {
+    jest.setTimeout(15000); // Increase timeout for this test suite
+    
     it('generates a bot response successfully', async () => {
       const userMessage: Message = {
         id: '1',

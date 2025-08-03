@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import {
   Box,
   Paper,
@@ -8,6 +8,7 @@ import {
   Stack,
   Chip,
   Tooltip,
+  Fab,
 } from '@mui/material';
 import { 
   SupportAgent, 
@@ -19,6 +20,7 @@ import {
   Schedule,
   Error as ErrorIcon,
   CheckCircle,
+  KeyboardArrowDown,
 } from '@mui/icons-material';
 import { Message } from '../types/Message';
 import TypingIndicator from './TypingIndicator';
@@ -38,6 +40,8 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
   isTyping = false 
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   // Throttle scroll to bottom to improve performance
   const scrollToBottom = useMemo(
@@ -47,9 +51,43 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
     []
   );
 
+  // Check if user has scrolled up from bottom
+  const checkScrollPosition = useMemo(
+    () => throttle(() => {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+      
+      // Show button if user is more than 100px from bottom
+      setShowScrollButton(distanceFromBottom > 100);
+    }, 100),
+    []
+  );
+
+  // Auto-scroll to bottom on new messages only if user is near bottom
   useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    
+    // Auto-scroll only if user is near bottom (within 150px)
+    if (distanceFromBottom <= 150) {
+      scrollToBottom();
+    }
+    
+    // Also check scroll position after messages update
+    checkScrollPosition();
+  }, [messages, scrollToBottom, checkScrollPosition]);
+
+  // Handle manual scroll to bottom
+  const handleScrollToBottom = useCallback(() => {
     scrollToBottom();
-  }, [messages, scrollToBottom]);
+    setShowScrollButton(false);
+  }, [scrollToBottom]);
 
   // Memoize utility functions to prevent unnecessary re-renders
   const formatTime = useCallback((timestamp: Date) => {
@@ -75,16 +113,20 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
   }, []);
 
   return (
-    <Box
-      sx={{
-        flex: 1,
-        overflowY: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 2,
-        pb: 2,
-      }}
-    >
+    <Box sx={{ flex: 1, position: 'relative', minHeight: 0 }}>
+      <Box
+        ref={messagesContainerRef}
+        onScroll={checkScrollPosition}
+        sx={{
+          height: '100%',
+          maxHeight: '60vh', // Constrain to 60% of viewport height
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          pb: 2,
+        }}
+      >
       {messages.map((message) => (
         <Box
           key={message.id}
@@ -221,9 +263,34 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
         </Box>
       ))}
       
-      {isTyping && <TypingIndicator />}
+        {isTyping && <TypingIndicator />}
+        
+        <div ref={messagesEndRef} />
+      </Box>
       
-      <div ref={messagesEndRef} />
+      {/* Scroll to bottom button */}
+      {showScrollButton && (
+        <Fab
+          size="small"
+          onClick={handleScrollToBottom}
+          sx={{
+            position: 'absolute',
+            bottom: 80, // Moved up to avoid Human Help button
+            right: 16,
+            backgroundColor: '#1976D2',
+            color: 'white',
+            zIndex: 1001, // Higher than Human Help button
+            boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
+            '&:hover': {
+              backgroundColor: '#1565C0',
+              transform: 'scale(1.1)',
+            },
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <KeyboardArrowDown />
+        </Fab>
+      )}
     </Box>
   );
 });

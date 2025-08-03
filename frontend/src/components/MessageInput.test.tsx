@@ -85,8 +85,7 @@ describe('MessageInput', () => {
       <MessageInput onSendMessage={mockOnSendMessage} />
     );
 
-    const attachButton = screen.getByRole('button');
-    const attachIcon = attachButton.querySelector('[data-testid="AttachFileIcon"]');
+    const attachIcon = screen.getByTestId('AttachFileIcon');
     expect(attachIcon).toBeInTheDocument();
   });
 

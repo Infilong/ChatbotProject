@@ -196,6 +196,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
           pt: 10, // Add top padding to account for fixed header
           pb: 2,
           px: 2,
+          height: 0, // Force height constraint in flexbox
         }}
       >
         <Paper
@@ -209,6 +210,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             mb: 2,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
             border: 'none',
+            height: 0, // Force flexbox to constrain height
+            minHeight: 400, // Minimum height for chat
           }}
         >
           <MessageList 
