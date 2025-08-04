@@ -34,11 +34,16 @@ backend/db.sqlite3-journal
 backend/media/
 backend/staticfiles/
 backend/static/
+
+# Test files and temporary scripts
 backend/create_superuser.py
 backend/test_db.py
+backend/test_models.py
+backend/test_*.py
 
-# Django migrations (optional - comment out if you want to track them)
+# Django migrations (optional - uncomment if you want to ignore them)
 # backend/*/migrations/
+# !backend/*/migrations/__init__.py
 
 # IDE and editor files
 .vscode/
