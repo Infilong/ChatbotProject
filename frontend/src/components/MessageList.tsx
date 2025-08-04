@@ -66,16 +66,21 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
     []
   );
 
-  // Auto-scroll to bottom on new messages only if user is near bottom
+  // Auto-scroll to bottom on new messages
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container) return;
+    if (!container || messages.length === 0) return;
 
     const { scrollTop, scrollHeight, clientHeight } = container;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     
-    // Auto-scroll only if user is near bottom (within 150px)
-    if (distanceFromBottom <= 150) {
+    // Get the last message
+    const lastMessage = messages[messages.length - 1];
+    
+    // Always scroll to bottom for new user messages or if user is near bottom
+    const shouldAutoScroll = lastMessage.sender === 'user' || distanceFromBottom <= 150;
+    
+    if (shouldAutoScroll) {
       scrollToBottom();
     }
     
