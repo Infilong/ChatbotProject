@@ -7,20 +7,38 @@ backend/node_modules/
 frontend/build/
 backend/dist/
 
-# Environment variables
+# Environment variables (exclude actual secrets)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
 
+# Keep example files in git
+!.env.example
+
 # Python virtual environment
 venv/
 backend/venv/
+backend/.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
+*$py.class
+
+# Django specific
+backend/db.sqlite3
+backend/db.sqlite3-journal
+backend/media/
+backend/staticfiles/
+backend/static/
+backend/create_superuser.py
+backend/test_db.py
+
+# Django migrations (optional - comment out if you want to track them)
+# backend/*/migrations/
 
 # IDE and editor files
 .vscode/
@@ -77,6 +95,6 @@ jspm_packages/
 # Yarn Integrity file
 .yarn-integrity
 
-# Documentation files
-CLAUDE.md
-README.md
+# Documentation files (commented out - usually you want to track these)
+# CLAUDE.md
+# README.md
