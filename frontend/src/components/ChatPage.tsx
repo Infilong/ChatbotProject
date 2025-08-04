@@ -8,6 +8,7 @@ import {
   Toolbar,
   Container,
   Chip,
+  Avatar,
 } from '@mui/material';
 import { 
   SupportAgent, 
@@ -162,17 +163,22 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             DataPro Support Chat
           </Typography>
           <Chip
-            avatar={<AccountCircle />}
+            avatar={
+              <Avatar sx={{ 
+                backgroundColor: 'white !important',
+                color: '#1565C0 !important',
+                width: 24,
+                height: 24,
+              }}>
+                <AccountCircle />
+              </Avatar>
+            }
             label={username}
             variant="outlined"
             sx={{ 
               color: 'white', 
               borderColor: 'white', 
               mr: 2,
-              '& .MuiAvatar-root': {
-                backgroundColor: 'transparent',
-                color: 'white',
-              }
             }}
           />
           

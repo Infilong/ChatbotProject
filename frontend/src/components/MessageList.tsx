@@ -151,11 +151,11 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
           >
             <Avatar
               sx={{
-                backgroundColor: message.sender === 'user' ? '#FFFFFF' : '#26A69A',
+                backgroundColor: message.sender === 'user' ? '#1565C0' : '#26A69A',
                 width: 32,
                 height: 32,
-                color: message.sender === 'user' ? '#1565C0' : 'white',
-                border: message.sender === 'user' ? '2px solid #1565C0' : 'none',
+                color: 'white',
+                border: 'none',
               }}
             >
               {message.sender === 'user' ? <AccountCircle /> : <SupportAgent />}
