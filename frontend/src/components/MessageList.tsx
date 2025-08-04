@@ -94,6 +94,7 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
     setShowScrollButton(false);
   }, [scrollToBottom]);
 
+
   // Memoize utility functions to prevent unnecessary re-renders
   const formatTime = useCallback((timestamp: Date) => {
     return timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -172,7 +173,14 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
                   {message.text}
                 </Typography>
                 {message.file && (
-                  <Box sx={{ mt: 1, p: 1, backgroundColor: '#F5F5F5', borderRadius: 1 }}>
+                  <Box 
+                    sx={{ 
+                      mt: 1, 
+                      p: 1, 
+                      backgroundColor: '#F5F5F5', 
+                      borderRadius: 1,
+                    }}
+                  >
                     <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <AttachFile fontSize="small" />
                       {message.file.name} ({(message.file.size / 1024).toFixed(1)} KB)
@@ -296,6 +304,7 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
           <KeyboardArrowDown />
         </Fab>
       )}
+
     </Box>
   );
 });
