@@ -14,7 +14,9 @@ import {
   SupportAgent, 
   AccountCircle, 
   ExitToApp, 
-  HeadsetMic
+  HeadsetMic,
+  History,
+  Add
 } from '@mui/icons-material';
 import { Message } from '../types/Message';
 import MessageList from './MessageList';
@@ -25,7 +27,9 @@ import { messageUtils } from '../utils/messageUtils';
 import { chatService, ChatError } from '../services/chatService';
 import { debounce } from '../utils/debounce';
 import LanguageSelector from './LanguageSelector';
+import ConversationHistoryPanel from './ConversationHistoryPanel';
 import { useLanguage } from '../contexts/LanguageContext';
+import { useConversationHistory } from '../contexts/ConversationHistoryContext';
 
 interface ChatPageProps {
   username: string;
@@ -35,20 +39,36 @@ interface ChatPageProps {
 const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
+  const [historyPanelOpen, setHistoryPanelOpen] = useState(false);
   const { showError, showSuccess } = useToast();
   const { language, setLanguage } = useLanguage();
+  const { 
+    saveConversation, 
+    updateCurrentConversation, 
+    loadConversation, 
+    startNewConversation,
+    state: historyState 
+  } = useConversationHistory();
 
   // Language translations
   const translations = {
     en: {
       title: 'DataPro Support Chat',
       logout: 'Logout',
-      humanHelp: 'Get Human Help'
+      humanHelp: 'Get Human Help',
+      history: 'Conversation History',
+      newConversation: 'New Chat',
+      loadSuccess: 'Conversation loaded successfully!',
+      loadError: 'Failed to load conversation'
     },
     ja: {
       title: 'DataProサポートチャット',
       logout: 'ログアウト',
-      humanHelp: '人間のサポートを受ける'
+      humanHelp: '人間のサポートを受ける',
+      history: '会話履歴',
+      newConversation: '新しいチャット',
+      loadSuccess: '会話が正常に読み込まれました！',
+      loadError: '会話の読み込みに失敗しました'
     }
   };
 
@@ -162,6 +182,56 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     setMessages(prev => [...prev, serviceMessage]);
   }, [language]);
 
+  // Auto-save conversation whenever messages change (with meaningful content)
+  useEffect(() => {
+    if (messages.length > 1) { // More than just welcome message
+      const autoSave = async () => {
+        try {
+          await updateCurrentConversation(messages, username, language);
+        } catch (error) {
+          console.error('Error auto-saving conversation:', error);
+        }
+      };
+      
+      // Debounce auto-save to avoid too frequent saves
+      const timeoutId = setTimeout(autoSave, 2000); // Save 2 seconds after last message
+      return () => clearTimeout(timeoutId);
+    }
+  }, [messages, username, language, updateCurrentConversation]);
+
+  const handleLoadConversation = useCallback(async (conversationId: string) => {
+    try {
+      const conversation = await loadConversation(conversationId);
+      if (conversation) {
+        setMessages(conversation.messages);
+        showSuccess(t.loadSuccess);
+      }
+    } catch (error) {
+      showError(t.loadError);
+      console.error('Error loading conversation:', error);
+    }
+  }, [loadConversation, showSuccess, showError, t]);
+
+  const handleHistoryToggle = useCallback(() => {
+    setHistoryPanelOpen(prev => !prev);
+  }, []);
+
+  const handleHistoryClose = useCallback(() => {
+    setHistoryPanelOpen(false);
+  }, []);
+
+  const handleNewConversation = useCallback(() => {
+    // Start new conversation (auto-save will handle saving current conversation)
+    startNewConversation();
+    const welcomeMessage = messageUtils.createWelcomeMessage(username, language);
+    setMessages([welcomeMessage]);
+  }, [startNewConversation, username, language]);
+
+  const handleLogout = useCallback(() => {
+    // Auto-save will handle saving current conversation
+    onLogout();
+  }, [onLogout]);
+
 
 
   return (
@@ -182,6 +252,26 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             {t.title}
           </Typography>
           
+          {/* New Conversation Button */}
+          <Button
+            color="inherit"
+            startIcon={<Add />}
+            onClick={handleNewConversation}
+            sx={{ mr: 1 }}
+          >
+            {t.newConversation}
+          </Button>
+
+          {/* History Button */}
+          <Button
+            color="inherit"
+            startIcon={<History />}
+            onClick={handleHistoryToggle}
+            sx={{ mr: 1 }}
+          >
+            {t.history}
+          </Button>
+
           {/* Language Selector */}
           <LanguageSelector
             currentLanguage={language}
@@ -211,7 +301,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
           <Button
             color="inherit"
             startIcon={<ExitToApp />}
-            onClick={onLogout}
+            onClick={handleLogout}
           >
             {t.logout}
           </Button>
@@ -290,6 +380,14 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
           {t.humanHelp}
         </Button>
       </Box>
+
+      {/* Conversation History Panel */}
+      <ConversationHistoryPanel
+        open={historyPanelOpen}
+        onClose={handleHistoryClose}
+        onLoadConversation={handleLoadConversation}
+        currentUsername={username}
+      />
     </Box>
   );
 };
