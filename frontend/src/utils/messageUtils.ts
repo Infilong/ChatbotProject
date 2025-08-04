@@ -1,5 +1,7 @@
 import { Message, MessageStatus } from '../types/Message';
 
+type LanguageType = 'en' | 'ja';
+
 export const messageUtils = {
   createMessage: (
     text: string,
@@ -22,10 +24,15 @@ export const messageUtils = {
     };
   },
 
-  createWelcomeMessage: (username: string): Message => {
+  createWelcomeMessage: (username: string, language: LanguageType = 'en'): Message => {
+    const translations = {
+      en: `Hello ${username}! 👋 Welcome to DataPro Solutions support. I'm here to help you with any questions or issues you might have. How can I assist you today?`,
+      ja: `こんにちは${username}さん！👋 DataProソリューションサポートへようこそ。ご質問やお困りのことがございましたら、お気軽にお声かけください。本日はどのようなご用件でしょうか？`
+    };
+
     return {
       id: '1',
-      text: `Hello ${username}! 👋 Welcome to DataPro Solutions support. I'm here to help you with any questions or issues you might have. How can I assist you today?`,
+      text: translations[language],
       sender: 'bot',
       timestamp: new Date(),
     };

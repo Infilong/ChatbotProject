@@ -28,6 +28,24 @@ describe('chatService', () => {
       expect(response).toHaveProperty('delay');
     });
 
+    it('generates Japanese bot response when language is set to ja', async () => {
+      const userMessage: Message = {
+        id: '1',
+        text: 'Hello',
+        sender: 'user',
+        timestamp: new Date(),
+      };
+
+      const response = await chatService.generateResponse(userMessage, 'ja');
+
+      expect(response).toHaveProperty('message');
+      expect(response.message.sender).toBe('bot');
+      expect(response.message.text).toBeTruthy();
+      // Check that it contains Japanese characters
+      expect(response.message.text).toMatch(/[\u3040-\u30ff\u4e00-\u9faf]/);
+      expect(response).toHaveProperty('delay');
+    });
+
     it('can simulate network errors', async () => {
       const userMessage: Message = {
         id: '1',
@@ -65,14 +83,14 @@ describe('chatService', () => {
     };
 
     it('successfully retries message within retry limit', async () => {
-      const response = await chatService.retryMessage(userMessage, 1);
+      const response = await chatService.retryMessage(userMessage, 'en', 1);
 
       expect(response).toHaveProperty('message');
       expect(response.message.sender).toBe('bot');
     });
 
     it('throws error when retry count exceeds maximum', async () => {
-      await expect(chatService.retryMessage(userMessage, 3)).rejects.toEqual({
+      await expect(chatService.retryMessage(userMessage, 'en', 3)).rejects.toEqual({
         code: 'MAX_RETRIES_EXCEEDED',
         message: 'Maximum retry attempts exceeded. Please try again later.',
         retryable: false,
@@ -84,7 +102,7 @@ describe('chatService', () => {
       const startTime = Date.now();
       
       try {
-        await chatService.retryMessage(userMessage, 2);
+        await chatService.retryMessage(userMessage, 'en', 2);
       } catch (error) {
         // Error might occur, but we're testing timing
       }
@@ -98,12 +116,20 @@ describe('chatService', () => {
   });
 
   describe('createHumanServiceMessage', () => {
-    it('creates human service escalation message', () => {
-      const message = chatService.createHumanServiceMessage();
+    it('creates human service escalation message in English', () => {
+      const message = chatService.createHumanServiceMessage('en');
 
       expect(message.sender).toBe('bot');
       expect(message.text).toContain('human support team');
       expect(message.text).toContain('customer service representative');
+    });
+
+    it('creates human service escalation message in Japanese', () => {
+      const message = chatService.createHumanServiceMessage('ja');
+
+      expect(message.sender).toBe('bot');
+      expect(message.text).toContain('人間のサポートチーム');
+      expect(message.text).toContain('カスタマーサービス担当者');
     });
   });
 

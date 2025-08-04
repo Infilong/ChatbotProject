@@ -12,6 +12,7 @@ import {
   AttachFile,
 } from '@mui/icons-material';
 import EmojiPicker from './EmojiPicker';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface MessageInputProps {
   onSendMessage: (message: string, file?: File) => void;
@@ -22,6 +23,23 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { language } = useLanguage();
+
+  // Language translations
+  const translations = {
+    en: {
+      placeholder: "Type your message here...",
+      selected: "Selected:",
+      kb: "KB"
+    },
+    ja: {
+      placeholder: "メッセージを入力してください...",
+      selected: "選択済み:",
+      kb: "KB"
+    }
+  };
+
+  const t = translations[language];
 
   const handleSubmit = useCallback((e: React.FormEvent) => {
     e.preventDefault();
@@ -67,7 +85,7 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
           <Box sx={{ mb: 1, p: 1, backgroundColor: '#E3F2FD', borderRadius: 1 }}>
             <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
               <AttachFile fontSize="small" />
-              Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+              {t.selected} {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} {t.kb})
               <IconButton size="small" onClick={clearSelectedFile}>
                 ✕
               </IconButton>
@@ -96,7 +114,7 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
             fullWidth
             multiline
             maxRows={4}
-            placeholder="Type your message here..."
+            placeholder={t.placeholder}
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             variant="outlined"

@@ -6,6 +6,7 @@ import LoginPage from './components/LoginPage';
 import ChatPage from './components/ChatPage';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
+import { LanguageProvider } from './contexts/LanguageContext';
 import { storageUtils } from './utils/storageUtils';
 
 function App() {
@@ -68,13 +69,15 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        <ToastProvider>
-          {isLoggedIn ? (
-            <ChatPage username={username} onLogout={handleLogout} />
-          ) : (
-            <LoginPage onLogin={handleLogin} />
-          )}
-        </ToastProvider>
+        <LanguageProvider>
+          <ToastProvider>
+            {isLoggedIn ? (
+              <ChatPage username={username} onLogout={handleLogout} />
+            ) : (
+              <LoginPage onLogin={handleLogin} />
+            )}
+          </ToastProvider>
+        </LanguageProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

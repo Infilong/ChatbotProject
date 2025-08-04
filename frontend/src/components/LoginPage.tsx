@@ -11,6 +11,8 @@ import {
   InputAdornment,
 } from '@mui/material';
 import { Person, Lock } from '@mui/icons-material';
+import LanguageSelector from './LanguageSelector';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface LoginPageProps {
   onLogin: (username: string, password: string) => void;
@@ -20,13 +22,38 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const { language, setLanguage } = useLanguage();
+
+  // Language translations
+  const translations = {
+    en: {
+      title: 'DataPro Solutions',
+      subtitle: 'Intelligent Customer Support',
+      username: 'Username',
+      password: 'Password',
+      signIn: 'Sign In',
+      demo: 'Demo credentials: admin / password',
+      validation: 'Please enter both username and password'
+    },
+    ja: {
+      title: 'DataProソリューション',
+      subtitle: 'インテリジェントカスタマーサポート',
+      username: 'ユーザー名',
+      password: 'パスワード',
+      signIn: 'サインイン',
+      demo: 'デモ認証情報: admin / password',
+      validation: 'ユーザー名とパスワードの両方を入力してください'
+    }
+  };
+
+  const t = translations[language];
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
     if (!username.trim() || !password.trim()) {
-      setError('Please enter both username and password');
+      setError(t.validation);
       return;
     }
 
@@ -58,15 +85,25 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             padding: 4,
             borderRadius: 3,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+            position: 'relative',
           }}
         >
+          {/* Language Selector */}
+          <Box sx={{ position: 'absolute', top: 16, right: 16 }}>
+            <LanguageSelector
+              currentLanguage={language}
+              onLanguageChange={setLanguage}
+              variant="page"
+            />
+          </Box>
+          
           <CardContent>
             <Box sx={{ textAlign: 'center', mb: 4 }}>
               <Typography variant="h3" component="h1" gutterBottom>
-                DataPro Solutions
+                {t.title}
               </Typography>
               <Typography variant="h6" color="text.secondary">
-                Intelligent Customer Support
+                {t.subtitle}
               </Typography>
             </Box>
 
@@ -74,7 +111,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <Box sx={{ mb: 3 }}>
                 <TextField
                   fullWidth
-                  label="Username"
+                  label={t.username}
                   variant="outlined"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -93,7 +130,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               <Box sx={{ mb: 3 }}>
                 <TextField
                   fullWidth
-                  label="Password"
+                  label={t.password}
                   type="password"
                   variant="outlined"
                   value={password}
@@ -136,13 +173,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   },
                 }}
               >
-                Sign In
+                {t.signIn}
               </Button>
             </form>
 
             <Box sx={{ mt: 3, textAlign: 'center' }}>
               <Typography variant="body2" color="text.secondary">
-                Demo credentials: admin / password
+                {t.demo}
               </Typography>
             </Box>
           </CardContent>

@@ -24,6 +24,8 @@ import { storageUtils } from '../utils/storageUtils';
 import { messageUtils } from '../utils/messageUtils';
 import { chatService, ChatError } from '../services/chatService';
 import { debounce } from '../utils/debounce';
+import LanguageSelector from './LanguageSelector';
+import { useLanguage } from '../contexts/LanguageContext';
 
 interface ChatPageProps {
   username: string;
@@ -34,6 +36,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const { showError, showSuccess } = useToast();
+  const { language, setLanguage } = useLanguage();
+
+  // Language translations
+  const translations = {
+    en: {
+      title: 'DataPro Support Chat',
+      logout: 'Logout',
+      humanHelp: 'Get Human Help'
+    },
+    ja: {
+      title: 'DataProサポートチャット',
+      logout: 'ログアウト',
+      humanHelp: '人間のサポートを受ける'
+    }
+  };
+
+  const t = translations[language];
 
   // Debounce localStorage saves to improve performance
   const debouncedSaveMessages = useMemo(
@@ -49,10 +68,10 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       setMessages(savedMessages);
     } else {
       // No saved messages, start with welcome message
-      const welcomeMessage = messageUtils.createWelcomeMessage(username);
+      const welcomeMessage = messageUtils.createWelcomeMessage(username, language);
       setMessages([welcomeMessage]);
     }
-  }, [username]);
+  }, [username, language]);
 
   // Save messages to localStorage whenever messages change (debounced)
   useEffect(() => {
@@ -78,7 +97,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       setIsTyping(true);
 
       // Generate bot response
-      const response = await chatService.generateResponse(userMessage);
+      const response = await chatService.generateResponse(userMessage, language);
       
       // Hide typing indicator and add bot message
       setIsTyping(false);
@@ -96,7 +115,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       showError(chatError.message);
       console.error('Error generating bot response:', error);
     }
-  }, [showError]);
+  }, [showError, language]);
 
   const handleRetryMessage = useCallback(async (messageId: string) => {
     const message = messages.find(m => m.id === messageId);
@@ -108,7 +127,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     try {
       setIsTyping(true);
       
-      const response = await chatService.retryMessage(message, message.retryCount || 0);
+      const response = await chatService.retryMessage(message, language, message.retryCount || 0);
       
       setIsTyping(false);
       
@@ -132,16 +151,16 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       
       showError(chatError.message);
     }
-  }, [messages, showError, showSuccess]);
+  }, [messages, showError, showSuccess, language]);
 
   const handleFeedback = useCallback((messageId: string, feedback: 'up' | 'down') => {
     setMessages(prev => messageUtils.updateMessageFeedback(prev, messageId, feedback));
   }, []);
 
   const handleHumanService = useCallback(() => {
-    const serviceMessage = chatService.createHumanServiceMessage();
+    const serviceMessage = chatService.createHumanServiceMessage(language);
     setMessages(prev => [...prev, serviceMessage]);
-  }, []);
+  }, [language]);
 
 
 
@@ -160,8 +179,15 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
         <Toolbar>
           <SupportAgent sx={{ mr: 2 }} />
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            DataPro Support Chat
+            {t.title}
           </Typography>
+          
+          {/* Language Selector */}
+          <LanguageSelector
+            currentLanguage={language}
+            onLanguageChange={setLanguage}
+            variant="header"
+          />
           <Chip
             avatar={
               <Avatar sx={{ 
@@ -187,7 +213,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             startIcon={<ExitToApp />}
             onClick={onLogout}
           >
-            Logout
+            {t.logout}
           </Button>
         </Toolbar>
       </AppBar>
@@ -261,7 +287,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             transition: 'all 0.3s ease',
           }}
         >
-          Get Human Help
+          {t.humanHelp}
         </Button>
       </Box>
     </Box>
