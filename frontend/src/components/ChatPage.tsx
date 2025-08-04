@@ -246,30 +246,88 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     }}>
       {/* Header */}
       <AppBar position="fixed" sx={{ backgroundColor: '#1565C0', zIndex: 1100 }}>
-        <Toolbar>
-          <SupportAgent sx={{ mr: 2 }} />
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+        <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, px: { xs: 1, sm: 3 } }}>
+          <SupportAgent sx={{ mr: { xs: 1, sm: 2 } }} />
+          <Typography 
+            variant="h6" 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              fontSize: { xs: '1rem', sm: '1.25rem' }, // Smaller title on mobile
+              display: { xs: 'none', sm: 'block' }, // Hide full title on mobile
+            }}
+          >
             {t.title}
           </Typography>
+          <Typography 
+            variant="h6" 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              fontSize: '1rem',
+              display: { xs: 'block', sm: 'none' }, // Show short title on mobile
+            }}
+          >
+            DataPro
+          </Typography>
+          
+          {/* Mobile: Icon-only buttons, Desktop: Full buttons */}
           
           {/* New Conversation Button */}
           <Button
             color="inherit"
-            startIcon={<Add />}
             onClick={handleNewConversation}
-            sx={{ mr: 1 }}
+            sx={{ 
+              mr: { xs: 0.5, sm: 1 },
+              minWidth: { xs: 40, sm: 'auto' },
+              px: { xs: 1, sm: 2 },
+            }}
           >
-            {t.newConversation}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+              <Add />
+              {t.newConversation}
+            </Box>
+            <Box sx={{ display: { xs: 'flex', sm: 'none' } }}>
+              <Add />
+            </Box>
           </Button>
 
           {/* History Button */}
           <Button
             color="inherit"
-            startIcon={<History />}
             onClick={handleHistoryToggle}
-            sx={{ mr: 1 }}
+            sx={{ 
+              mr: { xs: 0.5, sm: 1 },
+              minWidth: { xs: 40, sm: 'auto' },
+              px: { xs: 1, sm: 2 },
+            }}
           >
-            {t.history}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+              <History />
+              {t.history}
+            </Box>
+            <Box sx={{ display: { xs: 'flex', sm: 'none' } }}>
+              <History />
+            </Box>
+          </Button>
+
+          {/* Human Help Button */}
+          <Button
+            color="inherit"
+            onClick={handleHumanService}
+            sx={{ 
+              mr: { xs: 0.5, sm: 1 },
+              minWidth: { xs: 40, sm: 'auto' },
+              px: { xs: 1, sm: 2 },
+            }}
+          >
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+              <HeadsetMic />
+              {t.humanHelp}
+            </Box>
+            <Box sx={{ display: { xs: 'flex', sm: 'none' } }}>
+              <HeadsetMic />
+            </Box>
           </Button>
 
           {/* Language Selector */}
@@ -278,32 +336,60 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             onLanguageChange={setLanguage}
             variant="header"
           />
-          <Chip
-            avatar={
-              <Avatar sx={{ 
+          
+          {/* User Avatar - Raw avatar on mobile, chip container on desktop */}
+          <Box sx={{ mr: { xs: 0.5, sm: 2 } }}>
+            {/* Mobile: Just the raw Avatar (no chip container) */}
+            <Avatar 
+              sx={{ 
+                display: { xs: 'flex', sm: 'none' },
                 backgroundColor: 'white !important',
                 color: '#1565C0 !important',
                 width: 24,
                 height: 24,
-              }}>
-                <AccountCircle />
-              </Avatar>
-            }
-            label={username}
-            variant="outlined"
-            sx={{ 
-              color: 'white', 
-              borderColor: 'white', 
-              mr: 2,
-            }}
-          />
+              }}
+            >
+              <AccountCircle />
+            </Avatar>
+            
+            {/* Desktop: Full Chip container with avatar + username */}
+            <Chip
+              avatar={
+                <Avatar sx={{ 
+                  backgroundColor: 'white !important',
+                  color: '#1565C0 !important',
+                  width: 24,
+                  height: 24,
+                }}>
+                  <AccountCircle />
+                </Avatar>
+              }
+              label={username}
+              variant="outlined"
+              sx={{ 
+                display: { xs: 'none', sm: 'flex' },
+                color: 'white', 
+                borderColor: 'white',
+              }}
+            />
+          </Box>
           
+          {/* Logout Button */}
           <Button
             color="inherit"
-            startIcon={<ExitToApp />}
             onClick={handleLogout}
+            sx={{ 
+              minWidth: { xs: 40, sm: 'auto' },
+              px: { xs: 1, sm: 2 },
+            }}
           >
-            {t.logout}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'center', gap: 1 }}>
+              <ExitToApp />
+              {t.logout}
+            </Box>
+            <Box sx={{ display: { xs: 'flex', sm: 'none' } }}>
+              <ExitToApp />
+            </Box>
           </Button>
         </Toolbar>
       </AppBar>
@@ -315,7 +401,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
           flex: 1, 
           display: 'flex', 
           flexDirection: 'column',
-          pt: 10, // Add top padding to account for fixed header
+          pt: { xs: 9, sm: 14, md: 12 }, // Spacing: 72px mobile, 112px tablet (labels), 96px desktop
           pb: 2,
           px: 2,
           height: 0, // Force height constraint in flexbox
@@ -347,39 +433,6 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
         </Paper>
       </Container>
 
-      {/* Floating Human Help Button - Bottom Right Corner */}
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          zIndex: 1000,
-        }}
-      >
-        <Button
-          variant="contained"
-          startIcon={<HeadsetMic />}
-          onClick={handleHumanService}
-          sx={{
-            borderRadius: 3,
-            px: 3,
-            py: 1.5,
-            fontSize: '0.875rem',
-            textTransform: 'none',
-            backgroundColor: '#1976D2',
-            color: 'white',
-            boxShadow: '0 4px 12px rgba(25, 118, 210, 0.3)',
-            '&:hover': { 
-              backgroundColor: '#1565C0',
-              transform: 'translateY(-2px)',
-              boxShadow: '0 6px 20px rgba(25, 118, 210, 0.4)',
-            },
-            transition: 'all 0.3s ease',
-          }}
-        >
-          {t.humanHelp}
-        </Button>
-      </Box>
 
       {/* Conversation History Panel */}
       <ConversationHistoryPanel
