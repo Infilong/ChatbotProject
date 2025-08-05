@@ -1,24 +1,25 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class Conversation(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations')
-    title = models.CharField(max_length=200, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    is_active = models.BooleanField(default=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', verbose_name=_('User'))
+    title = models.CharField(max_length=200, blank=True, verbose_name=_('Title'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated At'))
+    is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
     
     # Analytics fields
-    total_messages = models.IntegerField(default=0)
-    satisfaction_score = models.FloatField(null=True, blank=True)
-    langextract_analysis = models.JSONField(default=dict, blank=True)
+    total_messages = models.IntegerField(default=0, verbose_name=_('Total Messages'))
+    satisfaction_score = models.FloatField(null=True, blank=True, verbose_name=_('Satisfaction Score'))
+    langextract_analysis = models.JSONField(default=dict, blank=True, verbose_name=_('LangExtract Analysis'))
     
     class Meta:
         ordering = ['-updated_at']
-        verbose_name = 'Conversation'
-        verbose_name_plural = 'Conversations'
+        verbose_name = _('Conversation')
+        verbose_name_plural = _('Conversations')
         
     def __str__(self):
         return f"Conversation {self.id} - {self.user.username}"
@@ -35,34 +36,34 @@ class Conversation(models.Model):
 
 class Message(models.Model):
     SENDER_CHOICES = [
-        ('user', 'User'),
-        ('bot', 'Bot'),
-        ('admin', 'Admin'),
+        ('user', _('User')),
+        ('bot', _('Bot')),
+        ('admin', _('Admin')),
     ]
     
     FEEDBACK_CHOICES = [
-        ('positive', 'Positive'),
-        ('negative', 'Negative'),
+        ('positive', _('Positive')),
+        ('negative', _('Negative')),
     ]
     
-    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
-    content = models.TextField()
-    sender_type = models.CharField(max_length=10, choices=SENDER_CHOICES)
-    timestamp = models.DateTimeField(auto_now_add=True)
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', verbose_name=_('Conversation'))
+    content = models.TextField(verbose_name=_('Content'))
+    sender_type = models.CharField(max_length=10, choices=SENDER_CHOICES, verbose_name=_('Sender Type'))
+    timestamp = models.DateTimeField(auto_now_add=True, verbose_name=_('Timestamp'))
     
     # Optional fields
-    feedback = models.CharField(max_length=10, choices=FEEDBACK_CHOICES, null=True, blank=True)
-    file_attachment = models.FileField(upload_to='message_attachments/', null=True, blank=True)
-    metadata = models.JSONField(default=dict, blank=True)
+    feedback = models.CharField(max_length=10, choices=FEEDBACK_CHOICES, null=True, blank=True, verbose_name=_('Feedback'))
+    file_attachment = models.FileField(upload_to='message_attachments/', null=True, blank=True, verbose_name=_('File Attachment'))
+    metadata = models.JSONField(default=dict, blank=True, verbose_name=_('Metadata'))
     
     # Bot response metadata
-    response_time = models.FloatField(null=True, blank=True)
-    llm_model_used = models.CharField(max_length=50, null=True, blank=True)
+    response_time = models.FloatField(null=True, blank=True, verbose_name=_('Response Time'))
+    llm_model_used = models.CharField(max_length=50, null=True, blank=True, verbose_name=_('LLM Model Used'))
     
     class Meta:
         ordering = ['timestamp']
-        verbose_name = 'Message'
-        verbose_name_plural = 'Messages'
+        verbose_name = _('Message')
+        verbose_name_plural = _('Messages')
         
     def __str__(self):
         return f"{self.sender_type}: {self.content[:50]}..."
@@ -77,21 +78,21 @@ class Message(models.Model):
 
 
 class UserSession(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions')
-    session_id = models.CharField(max_length=100, unique=True)
-    started_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions', verbose_name=_('User'))
+    session_id = models.CharField(max_length=100, unique=True, verbose_name=_('Session ID'))
+    started_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Started At'))
+    ended_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Ended At'))
+    is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
     
     # Session analytics
-    total_conversations = models.IntegerField(default=0)
-    total_messages_sent = models.IntegerField(default=0)
-    average_response_time = models.FloatField(null=True, blank=True)
+    total_conversations = models.IntegerField(default=0, verbose_name=_('Total Conversations'))
+    total_messages_sent = models.IntegerField(default=0, verbose_name=_('Total Messages Sent'))
+    average_response_time = models.FloatField(null=True, blank=True, verbose_name=_('Average Response Time'))
     
     class Meta:
         ordering = ['-started_at']
-        verbose_name = 'User Session'
-        verbose_name_plural = 'User Sessions'
+        verbose_name = _('User Session')
+        verbose_name_plural = _('User Sessions')
         
     def __str__(self):
         return f"Session {self.session_id} - {self.user.username}"

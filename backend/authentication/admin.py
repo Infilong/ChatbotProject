@@ -2,20 +2,21 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.auth.models import User
 from django.utils.html import format_html
+from django.utils.translation import gettext_lazy as _
 from .models import UserProfile, UserPreferences
 
 
 class UserProfileInline(admin.StackedInline):
     model = UserProfile
     can_delete = False
-    verbose_name_plural = 'Profile'
+    verbose_name_plural = _('Profile')
     fields = ['role', 'phone_number', 'company', 'job_title', 'preferred_language', 'email_notifications']
 
 
 class UserPreferencesInline(admin.StackedInline):
     model = UserPreferences
     can_delete = False
-    verbose_name_plural = 'Preferences'
+    verbose_name_plural = _('Preferences')
     fields = ['chat_theme', 'show_timestamps', 'enable_sound_notifications', 'preferred_response_style', 'enable_proactive_suggestions']
 
 
@@ -34,15 +35,15 @@ class UserAdmin(BaseUserAdmin):
             }
             color = colors.get(role, 'black')
             return format_html('<span style="color: {};">{}</span>', color, role.title())
-        return 'No Profile'
-    role_display.short_description = 'Role'
+        return _('No Profile')
+    role_display.short_description = _('Role')
     role_display.admin_order_field = 'profile__role'
     
     def total_conversations(self, obj):
         if hasattr(obj, 'profile'):
             return obj.profile.total_conversations
         return 0
-    total_conversations.short_description = 'Conversations'
+    total_conversations.short_description = _('Conversations')
     total_conversations.admin_order_field = 'profile__total_conversations'
     
     def average_satisfaction(self, obj):
@@ -54,16 +55,16 @@ class UserAdmin(BaseUserAdmin):
                 color = 'orange'
             else:
                 color = 'red'
-            return format_html('<span style="color: {};">{:.1f}</span>', color, score)
+            return format_html('<span style="color: {};">{}</span>', color, f'{score:.1f}')
         return '-'
-    average_satisfaction.short_description = 'Avg Satisfaction'
+    average_satisfaction.short_description = _('Avg Satisfaction')
     average_satisfaction.admin_order_field = 'profile__average_satisfaction'
     
     def last_active(self, obj):
         if hasattr(obj, 'profile') and obj.profile.last_active:
             return obj.profile.last_active.strftime('%Y-%m-%d %H:%M')
-        return 'Never'
-    last_active.short_description = 'Last Active'
+        return _('Never')
+    last_active.short_description = _('Last Active')
     last_active.admin_order_field = 'profile__last_active'
     
     def get_queryset(self, request):
@@ -87,20 +88,20 @@ class UserProfileAdmin(admin.ModelAdmin):
     ordering = ['-last_active']
     
     fieldsets = (
-        ('User Information', {
+        (_('User Information'), {
             'fields': ('user', 'role')
         }),
-        ('Contact Details', {
+        (_('Contact Details'), {
             'fields': ('phone_number', 'company', 'job_title')
         }),
-        ('Preferences', {
+        (_('Preferences'), {
             'fields': ('preferred_language', 'email_notifications')
         }),
-        ('Usage Statistics', {
+        (_('Usage Statistics'), {
             'fields': ('total_conversations', 'total_messages_sent', 'average_satisfaction', 'last_active'),
             'classes': ('collapse',)
         }),
-        ('Timestamps', {
+        (_('Timestamps'), {
             'fields': ('created_at', 'updated_at'),
             'classes': ('collapse',)
         })
@@ -108,7 +109,7 @@ class UserProfileAdmin(admin.ModelAdmin):
     
     def user_link(self, obj):
         return format_html('<a href="/admin/auth/user/{}/change/">{}</a>', obj.user.id, obj.user.username)
-    user_link.short_description = 'User'
+    user_link.short_description = _('User')
     user_link.admin_order_field = 'user__username'
 
 
@@ -122,19 +123,19 @@ class UserPreferencesAdmin(admin.ModelAdmin):
     ordering = ['-updated_at']
     
     fieldsets = (
-        ('User', {
+        (_('User'), {
             'fields': ('user',)
         }),
-        ('Chat Preferences', {
+        (_('Chat Preferences'), {
             'fields': ('chat_theme', 'show_timestamps', 'enable_sound_notifications')
         }),
-        ('AI Preferences', {
+        (_('AI Preferences'), {
             'fields': ('preferred_response_style', 'enable_proactive_suggestions')
         }),
-        ('Privacy Settings', {
+        (_('Privacy Settings'), {
             'fields': ('allow_conversation_analysis', 'share_data_for_improvements')
         }),
-        ('Metadata', {
+        (_('Metadata'), {
             'fields': ('updated_at',),
             'classes': ('collapse',)
         })
@@ -142,5 +143,5 @@ class UserPreferencesAdmin(admin.ModelAdmin):
     
     def user_link(self, obj):
         return format_html('<a href="/admin/auth/user/{}/change/">{}</a>', obj.user.id, obj.user.username)
-    user_link.short_description = 'User'
+    user_link.short_description = _('User')
     user_link.admin_order_field = 'user__username'

@@ -1,0 +1,710 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# 
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2025-08-05 21:19+0900\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+
+#: .\analytics\admin.py:39 .\analytics\admin.py:152 .\chat\admin.py:43
+#: .\chat\models.py:21
+msgid "Conversation"
+msgstr "会話"
+
+#: .\analytics\admin.py:56
+msgid "Sentiment"
+msgstr "センチメント"
+
+#: .\analytics\admin.py:73 .\authentication\admin.py:112
+#: .\authentication\admin.py:146 .\chat\admin.py:21 .\chat\admin.py:71
+#: .\chat\models.py:39 .\documents\admin.py:126
+msgid "User"
+msgstr "ユーザー"
+
+#: .\analytics\admin.py:79 .\chat\models.py:65
+msgid "Message"
+msgstr "メッセージ"
+
+#: .\analytics\admin.py:86 .\chat\admin.py:56 .\documents\admin.py:144
+msgid "Feedback"
+msgstr "フィードバック"
+
+#: .\analytics\admin.py:131
+msgid "Pos/Neg Ratio"
+msgstr "ポジ/ネガ比率"
+
+#: .\analytics\admin.py:147 .\documents\admin.py:121 .\documents\admin.py:160
+msgid "Document"
+msgstr "文書"
+
+#: .\analytics\apps.py:8
+msgid "Chat Analytics"
+msgstr "チャット分析"
+
+#: .\analytics\models.py:9 .\chat\models.py:45
+msgid "Positive"
+msgstr "ポジティブ"
+
+#: .\analytics\models.py:10 .\chat\models.py:46
+msgid "Negative"
+msgstr "ネガティブ"
+
+#: .\analytics\models.py:11
+msgid "Neutral"
+msgstr "中立"
+
+#: .\analytics\models.py:15 .\documents\models.py:98
+msgid "Resolved"
+msgstr "解決済み"
+
+#: .\analytics\models.py:16
+msgid "Pending"
+msgstr "保留中"
+
+#: .\analytics\models.py:17
+msgid "Escalated"
+msgstr "エスカレーション"
+
+#: .\analytics\models.py:42 .\analytics\models.py:43
+msgid "Analysis"
+msgstr "分析"
+
+#: .\analytics\models.py:62 .\analytics\models.py:63
+msgid "User Feedback"
+msgstr "ユーザーフィードバック"
+
+#: .\analytics\models.py:96
+msgid "Analytics Summary"
+msgstr "分析サマリー"
+
+#: .\analytics\models.py:97
+msgid "Analytics Summaries"
+msgstr "分析サマリー"
+
+#: .\analytics\models.py:115 .\analytics\models.py:116
+msgid "Document Usage"
+msgstr "文書使用状況"
+
+#: .\authentication\admin.py:39
+msgid "Role"
+msgstr "ロール"
+
+#: .\authentication\admin.py:46 .\chat\models.py:22
+msgid "Conversations"
+msgstr "会話"
+
+#: .\authentication\admin.py:60
+msgid "Avg Satisfaction"
+msgstr "平均満足度"
+
+#: .\authentication\admin.py:67
+msgid "Last Active"
+msgstr "最終アクティブ"
+
+#: .\authentication\apps.py:8
+msgid "User Authentication"
+msgstr "ユーザー認証"
+
+#: .\authentication\models.py:10
+msgid "Customer"
+msgstr "顧客"
+
+#: .\authentication\models.py:11 .\chat\models.py:41
+msgid "Admin"
+msgstr "管理者"
+
+#: .\authentication\models.py:12
+msgid "Support Agent"
+msgstr "サポートエージェント"
+
+#: .\authentication\models.py:39
+msgid "User Profile"
+msgstr "ユーザープロファイル"
+
+#: .\authentication\models.py:40
+msgid "User Profiles"
+msgstr "ユーザープロファイル"
+
+#: .\authentication\models.py:87 .\authentication\models.py:88
+msgid "User Preferences"
+msgstr "ユーザー設定"
+
+#: .\chat\admin.py:27
+msgid "Title"
+msgstr "タイトル"
+
+#: .\chat\admin.py:48
+msgid "Content"
+msgstr "コンテンツ"
+
+#: .\chat\admin.py:76
+msgid "Session ID"
+msgstr "セッションID"
+
+#: .\chat\admin.py:87
+msgid "Duration"
+msgstr "継続時間"
+
+#: .\chat\apps.py:8
+msgid "Chat Bot"
+msgstr "チャットボット"
+
+#: .\chat\models.py:40
+msgid "Bot"
+msgstr "ボット"
+
+#: .\chat\models.py:66
+msgid "Messages"
+msgstr "メッセージ"
+
+#: .\chat\models.py:94
+msgid "User Session"
+msgstr "ユーザーセッション"
+
+#: .\chat\models.py:95
+msgid "User Sessions"
+msgstr "ユーザーセッション"
+
+#: .\chatbot_backend\settings.py:122
+msgid "English"
+msgstr "英語"
+
+#: .\chatbot_backend\settings.py:123
+msgid "Japanese"
+msgstr "日本語"
+
+#: .\documents\admin.py:21
+msgid "Color"
+msgstr "色"
+
+#: .\documents\admin.py:29 .\documents\apps.py:8
+msgid "Documents"
+msgstr "文書"
+
+#: .\documents\admin.py:72
+msgid "File Size"
+msgstr "ファイルサイズ"
+
+#: .\documents\admin.py:104
+msgid "Query"
+msgstr "クエリ"
+
+#: .\documents\models.py:14
+msgid "Document Category"
+msgstr "文書カテゴリ"
+
+#: .\documents\models.py:15
+msgid "Document Categories"
+msgstr "文書カテゴリ"
+
+#: .\documents\models.py:53
+msgid "Company Document"
+msgstr "会社文書"
+
+#: .\documents\models.py:54
+msgid "Company Documents"
+msgstr "会社文書"
+
+#: .\documents\models.py:80
+msgid "Document Version"
+msgstr "文書バージョン"
+
+#: .\documents\models.py:81
+msgid "Document Versions"
+msgstr "文書バージョン"
+
+#: .\documents\models.py:89
+msgid "Low"
+msgstr "低"
+
+#: .\documents\models.py:90
+msgid "Medium"
+msgstr "中"
+
+#: .\documents\models.py:91
+msgid "High"
+msgstr "高"
+
+#: .\documents\models.py:92
+msgid "Critical"
+msgstr "緊急"
+
+#: .\documents\models.py:96
+msgid "Identified"
+msgstr "特定済み"
+
+#: .\documents\models.py:97
+msgid "In Progress"
+msgstr "進行中"
+
+#: .\documents\models.py:99
+msgid "Dismissed"
+msgstr "却下"
+
+#: .\documents\models.py:123
+msgid "Knowledge Gap"
+msgstr "知識ギャップ"
+
+#: .\documents\models.py:124
+msgid "Knowledge Gaps"
+msgstr "知識ギャップ"
+
+#: .\documents\models.py:132
+msgid "Helpful"
+msgstr "役立つ"
+
+#: .\documents\models.py:133
+msgid "Not Helpful"
+msgstr "役立たない"
+
+#: .\documents\models.py:134
+msgid "Outdated"
+msgstr "古い"
+
+#: .\documents\models.py:135
+msgid "Unclear"
+msgstr "不明確"
+
+#: .\documents\models.py:153 .\documents\models.py:154
+msgid "Document Feedback"
+msgstr "文書フィードバック"
+
+#: .\authentication\models.py:19
+msgid "Phone Number"
+msgstr "電話番号"
+
+#: .\authentication\models.py:20
+msgid "Company"
+msgstr "会社"
+
+#: .\authentication\models.py:21
+msgid "Job Title"
+msgstr "職種"
+
+#: .\authentication\models.py:24
+msgid "Preferred Language"
+msgstr "優先言語"
+
+#: .\authentication\models.py:25
+msgid "Email Notifications"
+msgstr "メール通知"
+
+#: .\authentication\models.py:28
+msgid "Total Conversations"
+msgstr "総会話数"
+
+#: .\authentication\models.py:29
+msgid "Total Messages Sent"
+msgstr "送信メッセージ総数"
+
+#: .\authentication\models.py:30
+msgid "Average Satisfaction"
+msgstr "平均満足度"
+
+#: .\authentication\models.py:34
+msgid "Created At"
+msgstr "作成日時"
+
+#: .\authentication\models.py:35
+msgid "Updated At"
+msgstr "更新日時"
+
+#: .\authentication\admin.py:12
+msgid "Profile"
+msgstr "プロフィール"
+
+#: .\authentication\admin.py:19
+msgid "Preferences"
+msgstr "設定"
+
+#: .\authentication\admin.py:38
+msgid "No Profile"
+msgstr "プロフィールなし"
+
+#: .\authentication\admin.py:66
+msgid "Never"
+msgstr "未活動"
+
+#: .\authentication\admin.py:91
+msgid "User Information"
+msgstr "ユーザー情報"
+
+#: .\authentication\admin.py:94
+msgid "Contact Details"
+msgstr "連絡先詳細"
+
+#: .\authentication\admin.py:100
+msgid "Usage Statistics"
+msgstr "使用統計"
+
+#: .\authentication\admin.py:104
+msgid "Timestamps"
+msgstr "タイムスタンプ"
+
+#: .\authentication\admin.py:130
+msgid "Chat Preferences"
+msgstr "チャット設定"
+
+#: .\authentication\admin.py:133
+msgid "AI Preferences"
+msgstr "AI設定"
+
+#: .\authentication\admin.py:136
+msgid "Privacy Settings"
+msgstr "プライバシー設定"
+
+#: .\authentication\admin.py:139
+msgid "Metadata"
+msgstr "メタデータ"
+
+#: .\chat\admin.py:55
+msgid "-"
+msgstr "-"
+
+#: .\chat\admin.py:85
+msgid "Active"
+msgstr "アクティブ"
+
+#: .\chat\admin.py:86
+msgid "Unknown"
+msgstr "不明"
+
+#: .\analytics\admin.py:20
+msgid "Analysis Results"
+msgstr "分析結果"
+
+#: .\analytics\admin.py:23
+msgid "Issues & Resolution"
+msgstr "問題と解決"
+
+#: .\analytics\admin.py:26
+msgid "LangExtract Data"
+msgstr "LangExtractデータ"
+
+#: .\analytics\admin.py:30
+msgid "Timestamp"
+msgstr "タイムスタンプ"
+
+#: .\analytics\admin.py:122
+msgid "No data"
+msgstr "データなし"
+
+#: .\analytics\admin.py:100
+msgid "Daily Metrics"
+msgstr "日次メトリクス"
+
+#: .\analytics\admin.py:103
+msgid "Sentiment Distribution"
+msgstr "センチメント分布"
+
+#: .\analytics\admin.py:106
+msgid "Issue Tracking"
+msgstr "問題追跡"
+
+#: .\analytics\admin.py:109
+msgid "Performance"
+msgstr "パフォーマンス"
+
+#: .\documents\admin.py:28
+msgid "0 documents"
+msgstr "0個の文書"
+
+#: .\documents\admin.py:43
+msgid "Document Information"
+msgstr "文書情報"
+
+#: .\documents\admin.py:46
+msgid "File Upload"
+msgstr "ファイルアップロード"
+
+#: .\documents\admin.py:49
+msgid "AI Content Processing"
+msgstr "AIコンテンツ処理"
+
+#: .\documents\admin.py:53
+msgid "Analytics"
+msgstr "分析"
+
+#: .\documents\admin.py:86
+msgid "Gap Information"
+msgstr "ギャップ情報"
+
+#: .\documents\admin.py:89
+msgid "Assignment"
+msgstr "割り当て"
+
+#: .\documents\admin.py:92
+msgid "Timeline"
+msgstr "タイムライン"
+
+#: .\documents\admin.py:96
+msgid "Related Data"
+msgstr "関連データ"
+
+#: .\authentication\models.py:72
+msgid "Chat Theme"
+msgstr "チャットテーマ"
+
+#: .\authentication\models.py:73
+msgid "Show Timestamps"
+msgstr "タイムスタンプ表示"
+
+#: .\authentication\models.py:74
+msgid "Enable Sound Notifications"
+msgstr "音声通知を有効にする"
+
+#: .\authentication\models.py:77
+msgid "Preferred Response Style"
+msgstr "優先回答スタイル"
+
+#: .\authentication\models.py:78
+msgid "Enable Proactive Suggestions"
+msgstr "積極的提案を有効にする"
+
+#: .\authentication\models.py:81
+msgid "Allow Conversation Analysis"
+msgstr "会話分析を許可"
+
+#: .\authentication\models.py:82
+msgid "Share Data for Improvements"
+msgstr "改善のためのデータ共有"
+
+#: .\analytics\models.py:70
+msgid "Date"
+msgstr "日付"
+
+#: .\analytics\models.py:73
+msgid "Total Conversations"
+msgstr "総会話数"
+
+#: .\analytics\models.py:74
+msgid "Total Messages"
+msgstr "総メッセージ数"
+
+#: .\analytics\models.py:75
+msgid "Unique Users"
+msgstr "ユニークユーザー"
+
+#: .\analytics\models.py:79
+msgid "Positive Conversations"
+msgstr "ポジティブ会話"
+
+#: .\analytics\models.py:80
+msgid "Negative Conversations"
+msgstr "ネガティブ会話"
+
+#: .\analytics\models.py:81
+msgid "Neutral Conversations"
+msgstr "中立会話"
+
+#: .\analytics\models.py:84
+msgid "Total Issues Raised"
+msgstr "提起された問題総数"
+
+#: .\analytics\models.py:85
+msgid "Resolved Issues"
+msgstr "解決済み問題"
+
+#: .\analytics\models.py:86
+msgid "Escalated Issues"
+msgstr "エスカレーション問題"
+
+#: .\analytics\models.py:89
+msgid "Average Response Time"
+msgstr "平均応答時間"
+
+#: .\analytics\models.py:90
+msgid "Bot vs Human Ratio"
+msgstr "ボット対人間比率"
+
+#: .\chat\models.py:12
+msgid "Is Active"
+msgstr "アクティブ"
+
+#: .\chat\models.py:16
+msgid "Satisfaction Score"
+msgstr "満足度スコア"
+
+#: .\chat\models.py:17
+msgid "LangExtract Analysis"
+msgstr "LangExtract分析"
+
+#: .\chat\models.py:51
+msgid "Sender Type"
+msgstr "送信者タイプ"
+
+#: .\chat\models.py:56
+msgid "File Attachment"
+msgstr "ファイル添付"
+
+#: .\chat\models.py:60
+msgid "Response Time"
+msgstr "応答時間"
+
+#: .\chat\models.py:61
+msgid "LLM Model Used"
+msgstr "使用LLMモデル"
+
+#: .\documents\models.py:8
+msgid "Name"
+msgstr "名前"
+
+#: .\documents\models.py:31
+msgid "File"
+msgstr "ファイル"
+
+#: .\documents\models.py:41
+msgid "Version"
+msgstr "バージョン"
+
+#: .\documents\models.py:36
+msgid "Content Text"
+msgstr "コンテンツテキスト"
+
+#: .\documents\models.py:37
+msgid "Content Summary"
+msgstr "コンテンツサマリー"
+
+#: .\documents\models.py:38
+msgid "Keywords"
+msgstr "キーワード"
+
+#: .\documents\models.py:43
+msgid "Created By"
+msgstr "作成者"
+
+#: .\documents\models.py:48
+msgid "Usage Count"
+msgstr "使用回数"
+
+#: .\documents\models.py:49
+msgid "Effectiveness Score"
+msgstr "効果スコア"
+
+#: .\documents\models.py:50
+msgid "Last Referenced"
+msgstr "最終参照"
+
+#: .\documents\models.py:69
+msgid "Version Number"
+msgstr "バージョン番号"
+
+#: .\documents\models.py:74
+msgid "Change Notes"
+msgstr "変更メモ"
+
+#: .\documents\models.py:104
+msgid "Frequency"
+msgstr "頻度"
+
+#: .\documents\models.py:106
+msgid "First Identified"
+msgstr "初回特定"
+
+#: .\documents\models.py:107
+msgid "Last Encountered"
+msgstr "最終遭遇"
+
+#: .\documents\models.py:111
+msgid "Priority"
+msgstr "優先度"
+
+#: .\documents\models.py:112
+msgid "Status"
+msgstr "ステータス"
+
+#: .\documents\models.py:115
+msgid "Assigned To"
+msgstr "担当者"
+
+#: .\documents\models.py:116
+msgid "Resolution Notes"
+msgstr "解決メモ"
+
+#: .\documents\models.py:117
+msgid "Resolved At"
+msgstr "解決日時"
+
+#: .\documents\models.py:141
+msgid "Feedback Type"
+msgstr "フィードバックタイプ"
+
+#: .\documents\models.py:142
+msgid "Comment"
+msgstr "コメント"
+
+#: .\documents\models.py:143
+msgid "Rating"
+msgstr "評価"
+
+#: .\documents\models.py:147
+msgid "Search Query"
+msgstr "検索クエリ"
+
+#: .\analytics\models.py:21
+msgid "Analyzed At"
+msgstr "分析日時"
+
+#: .\analytics\models.py:25
+msgid "Satisfaction Level"
+msgstr "満足度レベル"
+
+#: .\analytics\models.py:26
+msgid "Issues Raised"
+msgstr "提起された問題"
+
+#: .\analytics\models.py:27
+msgid "Urgency Indicators"
+msgstr "緊急度指標"
+
+#: .\analytics\models.py:28
+msgid "Resolution Status"
+msgstr "解決ステータス"
+
+#: .\analytics\models.py:29
+msgid "Customer Intent"
+msgstr "顧客意図"
+
+#: .\analytics\models.py:30
+msgid "Key Insights"
+msgstr "重要洞察"
+
+#: .\analytics\models.py:33
+msgid "Source Spans"
+msgstr "ソーススパン"
+
+#: .\analytics\models.py:34
+msgid "Confidence Score"
+msgstr "信頼度スコア"
+
+#: .\analytics\models.py:37
+msgid "LangExtract Model Used"
+msgstr "使用LangExtractモデル"
+
+#: .\analytics\models.py:38
+msgid "Processing Time"
+msgstr "処理時間"
+
+#: .\chat\models.py:82
+msgid "Session ID"
+msgstr "セッションID"
+
+#: .\chat\models.py:83
+msgid "Started At"
+msgstr "開始日時"
+
+#: .\chat\models.py:84
+msgid "Ended At"
+msgstr "終了日時"

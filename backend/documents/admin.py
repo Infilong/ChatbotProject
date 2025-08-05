@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy as _
 from .models import DocumentCategory, CompanyDocument, DocumentVersion, KnowledgeGap, DocumentFeedback
 
 
@@ -17,15 +18,15 @@ class DocumentCategoryAdmin(admin.ModelAdmin):
             '<span style="display: inline-block; width: 20px; height: 20px; background-color: {}; border-radius: 3px; margin-right: 5px;"></span>{}',
             obj.color, obj.color
         )
-    color_display.short_description = 'Color'
+    color_display.short_description = _('Color')
     
     def document_count(self, obj):
         count = obj.documents.count()
         if count > 0:
             url = f'/admin/documents/companydocument/?category__id__exact={obj.id}'
             return format_html('<a href="{}">{} documents</a>', url, count)
-        return '0 documents'
-    document_count.short_description = 'Documents'
+        return _('0 documents')
+    document_count.short_description = _('Documents')
 
 
 @admin.register(CompanyDocument)
@@ -39,21 +40,21 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
     ordering = ['-created_at']
     
     fieldsets = (
-        ('Document Information', {
+        (_('Document Information'), {
             'fields': ('title', 'description', 'category', 'version', 'is_active')
         }),
-        ('File Upload', {
+        (_('File Upload'), {
             'fields': ('file', 'file_size')
         }),
-        ('AI Content Processing', {
+        (_('AI Content Processing'), {
             'fields': ('content_text', 'content_summary', 'keywords'),
             'classes': ('collapse',)
         }),
-        ('Analytics', {
+        (_('Analytics'), {
             'fields': ('usage_count', 'effectiveness_score', 'last_referenced'),
             'classes': ('collapse',)
         }),
-        ('Metadata', {
+        (_('Metadata'), {
             'fields': ('created_by', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         })
@@ -67,8 +68,8 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
                 return f"{obj.file_size / 1024:.1f} KB"
             else:
                 return f"{obj.file_size / (1024 * 1024):.1f} MB"
-        return "Unknown"
-    file_size_display.short_description = 'File Size'
+        return _("Unknown")
+    file_size_display.short_description = _('File Size')
     file_size_display.admin_order_field = 'file_size'
 
 
@@ -82,17 +83,17 @@ class KnowledgeGapAdmin(admin.ModelAdmin):
     ordering = ['-frequency', '-last_encountered']
     
     fieldsets = (
-        ('Gap Information', {
+        (_('Gap Information'), {
             'fields': ('query', 'frequency', 'category', 'priority', 'status')
         }),
-        ('Assignment', {
+        (_('Assignment'), {
             'fields': ('assigned_to', 'resolution_notes', 'resolved_at')
         }),
-        ('Timeline', {
+        (_('Timeline'), {
             'fields': ('first_identified', 'last_encountered'),
             'classes': ('collapse',)
         }),
-        ('Related Data', {
+        (_('Related Data'), {
             'fields': ('conversations',),
             'classes': ('collapse',)
         })
@@ -100,7 +101,7 @@ class KnowledgeGapAdmin(admin.ModelAdmin):
     
     def query_preview(self, obj):
         return obj.query[:80] + "..." if len(obj.query) > 80 else obj.query
-    query_preview.short_description = 'Query'
+    query_preview.short_description = _('Query')
     query_preview.admin_order_field = 'query'
 
 
@@ -117,12 +118,12 @@ class DocumentFeedbackAdmin(admin.ModelAdmin):
     def document_link(self, obj):
         url = reverse('admin:documents_companydocument_change', args=[obj.document.id])
         return format_html('<a href="{}">{}</a>', url, obj.document.title[:30])
-    document_link.short_description = 'Document'
+    document_link.short_description = _('Document')
     
     def user_link(self, obj):
         url = reverse('admin:auth_user_change', args=[obj.user.id])
         return format_html('<a href="{}">{}</a>', url, obj.user.username)
-    user_link.short_description = 'User'
+    user_link.short_description = _('User')
     
     def feedback_display(self, obj):
         colors = {
@@ -140,7 +141,7 @@ class DocumentFeedbackAdmin(admin.ModelAdmin):
         color = colors.get(obj.feedback_type, 'black')
         icon = icons.get(obj.feedback_type, '')
         return format_html('<span style="color: {};">{} {}</span>', color, icon, obj.feedback_type.replace('_', ' ').title())
-    feedback_display.short_description = 'Feedback'
+    feedback_display.short_description = _('Feedback')
 
 
 @admin.register(DocumentVersion)
@@ -156,4 +157,4 @@ class DocumentVersionAdmin(admin.ModelAdmin):
     def document_link(self, obj):
         url = reverse('admin:documents_companydocument_change', args=[obj.document.id])
         return format_html('<a href="{}">{}</a>', url, obj.document.title)
-    document_link.short_description = 'Document'
+    document_link.short_description = _('Document')

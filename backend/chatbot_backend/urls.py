@@ -17,11 +17,13 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from django.http import HttpResponse
+from django.conf.urls.i18n import i18n_patterns
 
 def test_view(request):
     return HttpResponse("Django server is working! Go to <a href='/admin/'>/admin/</a>")
 
 urlpatterns = [
+    path('i18n/', include('django.conf.urls.i18n')),
     path('', test_view),  # Test view at root
     path('admin/', admin.site.urls),
 ]
