@@ -35,6 +35,8 @@ class UserProfile(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'User Profile'
+        verbose_name_plural = 'User Profiles'
         
     def __str__(self):
         return f"{self.user.username} Profile ({self.role})"
@@ -79,6 +81,10 @@ class UserPreferences(models.Model):
     share_data_for_improvements = models.BooleanField(default=True)
     
     updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = 'User Preferences'
+        verbose_name_plural = 'User Preferences'
     
     def __str__(self):
         return f"Preferences for {self.user.username}"

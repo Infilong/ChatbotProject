@@ -38,6 +38,8 @@ class ConversationAnalysis(models.Model):
     
     class Meta:
         ordering = ['-analyzed_at']
+        verbose_name = 'Conversation Analysis'
+        verbose_name_plural = 'Conversation Analysis'
         
     def __str__(self):
         return f"Analysis for Conversation {self.conversation.id} - {self.sentiment}"
@@ -56,6 +58,8 @@ class UserFeedback(models.Model):
     class Meta:
         ordering = ['-timestamp']
         unique_together = ['user', 'message']  # One feedback per user per message
+        verbose_name = 'User Feedback'
+        verbose_name_plural = 'User Feedback'
         
     def __str__(self):
         return f"{self.feedback_type} feedback by {self.user.username}"
@@ -88,6 +92,8 @@ class AnalyticsSummary(models.Model):
     
     class Meta:
         ordering = ['-date']
+        verbose_name = 'Analytics Summary'
+        verbose_name_plural = 'Analytics Summaries'
         
     def __str__(self):
         return f"Analytics Summary for {self.date}"
@@ -105,6 +111,8 @@ class DocumentUsage(models.Model):
     
     class Meta:
         ordering = ['-referenced_at']
+        verbose_name = 'Document Usage'
+        verbose_name_plural = 'Document Usage'
         
     def __str__(self):
         return f"Document {self.document.title} used in Conversation {self.conversation.id}"

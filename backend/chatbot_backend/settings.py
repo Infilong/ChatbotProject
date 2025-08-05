@@ -27,12 +27,13 @@ SECRET_KEY = config('DJANGO_SECRET_KEY', default='django-insecure-_nlh&+!=+i2z&n
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+ALLOWED_HOSTS = ['*']  # Allow all hosts for development
 
 
 # Application definition
 
 INSTALLED_APPS = [
+    'jazzmin',  # Must be before django.contrib.admin
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -64,7 +65,7 @@ ROOT_URLCONF = 'chatbot_backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -126,6 +127,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -170,3 +172,58 @@ MEDIA_ROOT = BASE_DIR / 'media'
 OPENAI_API_KEY = config('OPENAI_API_KEY', default='')
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 CLAUDE_API_KEY = config('CLAUDE_API_KEY', default='')
+
+# Jazzmin Admin Theme Configuration
+JAZZMIN_SETTINGS = {
+    "site_title": "DataPro",
+    "site_header": "DataPro",
+    "site_brand": "DataPro",
+    "welcome_sign": "Welcome to DataPro Analytics Dashboard",
+    "copyright": "DataPro Solutions",
+    "search_model": "auth.User",
+    "show_sidebar": True,
+    "navigation_expanded": True,
+    "order_with_respect_to": ["auth", "authentication", "chat", "analytics", "documents"],
+    "show_ui_builder": False,
+    "show_sidebar_user": False,
+    "navbar_user_avatar": True,
+    "user_avatar": "fas fa-user-shield",
+    "topmenu_links": [
+        {}
+    ],
+    "icons": {
+        "auth": "fas fa-shield-alt",
+        "auth.user": "fas fa-user",
+        "auth.Group": "fas fa-users",
+        "authentication": "fas fa-user-shield",
+        "authentication.UserProfile": "fas fa-user-circle",
+        "authentication.UserPreferences": "fas fa-user-cog",
+        "chat": "fas fa-comments",
+        "chat.Conversation": "fas fa-comment-dots",
+        "chat.Message": "fas fa-comment",
+        "chat.UserSession": "fas fa-clock",
+        "analytics": "fas fa-chart-line",
+        "analytics.ConversationAnalysis": "fas fa-brain",
+        "analytics.UserFeedback": "fas fa-thumbs-up",
+        "analytics.AnalyticsSummary": "fas fa-chart-bar",
+        "analytics.DocumentUsage": "fas fa-bookmark",
+        "documents": "fas fa-folder-open",
+        "documents.DocumentCategory": "fas fa-tags",
+        "documents.CompanyDocument": "fas fa-file-alt",
+        "documents.DocumentVersion": "fas fa-code-branch",
+        "documents.KnowledgeGap": "fas fa-question-circle",
+        "documents.DocumentFeedback": "fas fa-star",
+    },
+    "theme": "flatly",
+    "custom_css": "admin/css/sidebar-responsive.css",
+}
+
+JAZZMIN_UI_TWEAKS = {
+    "navbar": "navbar-white navbar-light",
+    "sidebar": "sidebar-light-primary",
+    "sidebar_nav_small_text": False,
+    "sidebar_nav_compact_style": True,
+    "sidebar_nav_flat_style": True,
+    "sidebar_disable_expand": False,
+    "theme": "flatly",
+}

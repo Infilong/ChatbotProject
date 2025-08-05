@@ -10,7 +10,8 @@ class DocumentCategory(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        verbose_name_plural = "Document Categories"
+        verbose_name = 'Document Category'
+        verbose_name_plural = 'Document Categories'
         ordering = ['name']
         
     def __str__(self):
@@ -48,6 +49,8 @@ class CompanyDocument(models.Model):
     
     class Meta:
         ordering = ['-created_at']
+        verbose_name = 'Company Document'
+        verbose_name_plural = 'Company Documents'
         
     def __str__(self):
         return f"{self.title} (v{self.version})"
@@ -73,6 +76,8 @@ class DocumentVersion(models.Model):
     class Meta:
         ordering = ['-created_at']
         unique_together = ['document', 'version_number']
+        verbose_name = 'Document Version'
+        verbose_name_plural = 'Document Versions'
         
     def __str__(self):
         return f"{self.document.title} v{self.version_number}"
@@ -114,6 +119,8 @@ class KnowledgeGap(models.Model):
     
     class Meta:
         ordering = ['-frequency', '-last_encountered']
+        verbose_name = 'Knowledge Gap'
+        verbose_name_plural = 'Knowledge Gaps'
         
     def __str__(self):
         return f"Gap: {self.query[:50]}... (freq: {self.frequency})"
@@ -142,6 +149,8 @@ class DocumentFeedback(models.Model):
     class Meta:
         ordering = ['-created_at']
         unique_together = ['document', 'user', 'conversation']
+        verbose_name = 'Document Feedback'
+        verbose_name_plural = 'Document Feedback'
         
     def __str__(self):
         return f"{self.feedback_type} feedback for {self.document.title}"

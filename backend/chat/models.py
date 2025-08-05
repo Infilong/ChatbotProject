@@ -17,6 +17,8 @@ class Conversation(models.Model):
     
     class Meta:
         ordering = ['-updated_at']
+        verbose_name = 'Conversation'
+        verbose_name_plural = 'Conversations'
         
     def __str__(self):
         return f"Conversation {self.id} - {self.user.username}"
@@ -59,6 +61,8 @@ class Message(models.Model):
     
     class Meta:
         ordering = ['timestamp']
+        verbose_name = 'Message'
+        verbose_name_plural = 'Messages'
         
     def __str__(self):
         return f"{self.sender_type}: {self.content[:50]}..."
@@ -86,6 +90,8 @@ class UserSession(models.Model):
     
     class Meta:
         ordering = ['-started_at']
+        verbose_name = 'User Session'
+        verbose_name_plural = 'User Sessions'
         
     def __str__(self):
         return f"Session {self.session_id} - {self.user.username}"
