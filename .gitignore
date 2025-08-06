@@ -103,3 +103,38 @@ jspm_packages/
 # Documentation files (commented out - usually you want to track these)
 # CLAUDE.md
 # README.md
+
+# API Keys and secrets (critical security)
+*.key
+*.pem
+secrets.json
+config/secrets.json
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Compiled translation files (can be regenerated)
+backend/locale/*/LC_MESSAGES/*.mo
+
+# User uploads and media
+uploads/
+user_uploads/
+
+# Cache and temporary files
+.cache/
+.temp/
+.tmp/
+tmp/
+
+# Development and debug files
+.debug
+debug.log
+error.log
+
+# Package lock files (choose one approach)
+# Uncomment the next line if using npm and want to ignore lock files
+# package-lock.json
+# Uncomment the next line if using yarn and want to ignore lock files
+# yarn.lock

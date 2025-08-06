@@ -2,6 +2,25 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Multilingual GUI Support
+
+**BEFORE WRITING ANY NEW CODE, ALWAYS CONSIDER MULTILINGUAL SUPPORT:**
+
+🌍 **All user interface components MUST support multiple languages from the start**
+- Use Django's `gettext_lazy as _` for all user-facing text
+- Frontend components should use i18n libraries (React i18next recommended)
+- Never hardcode English text in user interfaces
+- All admin interfaces must use custom display methods with translated labels
+- Database models should have verbose_name with translations
+- Form labels, error messages, and help text must be translatable
+
+**Translation Implementation Requirements:**
+- Backend: Use `from django.utils.translation import gettext_lazy as _` 
+- Frontend: Implement React i18next for component translations
+- Admin interfaces: Create custom display methods with `short_description = _('Translation')`
+- All user-facing strings wrapped with `_('Text')`
+- Maintain Japanese translations in `backend/locale/ja/LC_MESSAGES/django.po`
+
 ## Common Development Tasks
 
 ### Frontend Development
@@ -324,3 +343,38 @@ uv run python manage.py test        # Run backend tests
 - django-plotly-dash for advanced data visualizations
 - django-admin-interface for modern UI themes
 - django-import-export for data export capabilities
+
+## Django Admin Translation Strategy
+
+**Critical: All admin interfaces must be fully translatable**
+
+**Problem:** Django admin displays field names (not verbose_name) as column headers when model fields are used directly in `list_display`.
+
+**Solution:** Always use custom display methods with Japanese `short_description` labels:
+
+```python
+# ❌ Wrong - displays English field names
+list_display = ['name', 'category', 'created_at', 'is_active']
+
+# ✅ Correct - uses custom display methods with translations
+list_display = ['name_display', 'category_display', 'created_at_display', 'is_active_display']
+
+def name_display(self, obj):
+    return obj.name
+name_display.short_description = _('Name')
+name_display.admin_order_field = 'name'
+
+def is_active_display(self, obj):
+    return obj.is_active
+is_active_display.short_description = _('Is Active')
+is_active_display.admin_order_field = 'is_active'
+is_active_display.boolean = True  # For boolean fields
+```
+
+**Translation Workflow:**
+1. Create custom display methods for all `list_display` fields
+2. Add `short_description = _('Japanese Translation')` to each method
+3. Maintain sorting with `admin_order_field = 'field_name'`
+4. Use `.boolean = True` for boolean field display
+5. Update translations in `backend/locale/ja/LC_MESSAGES/django.po`
+6. Run `uv run python manage.py compilemessages` to compile translations

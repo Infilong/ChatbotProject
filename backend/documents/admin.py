@@ -8,7 +8,7 @@ from .models import DocumentCategory, CompanyDocument, DocumentVersion, Knowledg
 
 @admin.register(DocumentCategory)
 class DocumentCategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'color_display', 'document_count', 'description', 'created_at']
+    list_display = ['name_display', 'color_display', 'document_count', 'description_display', 'created_at_display']
     search_fields = ['name', 'description']
     list_per_page = 25
     ordering = ['name']
@@ -27,11 +27,26 @@ class DocumentCategoryAdmin(admin.ModelAdmin):
             return format_html('<a href="{}">{} documents</a>', url, count)
         return _('0 documents')
     document_count.short_description = _('Documents')
+    
+    def name_display(self, obj):
+        return obj.name
+    name_display.short_description = _('Name')
+    name_display.admin_order_field = 'name'
+    
+    def description_display(self, obj):
+        return obj.description
+    description_display.short_description = _('Description')
+    description_display.admin_order_field = 'description'
+    
+    def created_at_display(self, obj):
+        return obj.created_at
+    created_at_display.short_description = _('Created At')
+    created_at_display.admin_order_field = 'created_at'
 
 
 @admin.register(CompanyDocument)
 class CompanyDocumentAdmin(admin.ModelAdmin):
-    list_display = ['title', 'category', 'version', 'file_size_display', 'usage_count', 'effectiveness_score', 'is_active', 'created_at']
+    list_display = ['title_display', 'category_display', 'version_display', 'file_size_display', 'usage_count_display', 'effectiveness_score_display', 'is_active_display', 'created_at_display']
     list_filter = ['category', 'is_active', 'created_at', 'updated_at', 'effectiveness_score']
     search_fields = ['title', 'description', 'content_text', 'keywords']
     readonly_fields = ['created_at', 'updated_at', 'file_size', 'usage_count', 'last_referenced']
@@ -71,11 +86,47 @@ class CompanyDocumentAdmin(admin.ModelAdmin):
         return _("Unknown")
     file_size_display.short_description = _('File Size')
     file_size_display.admin_order_field = 'file_size'
+    
+    def title_display(self, obj):
+        return obj.title
+    title_display.short_description = _('Title')
+    title_display.admin_order_field = 'title'
+    
+    def category_display(self, obj):
+        return obj.category
+    category_display.short_description = _('Category')
+    category_display.admin_order_field = 'category'
+    
+    def version_display(self, obj):
+        return obj.version
+    version_display.short_description = _('Version')
+    version_display.admin_order_field = 'version'
+    
+    def usage_count_display(self, obj):
+        return obj.usage_count
+    usage_count_display.short_description = _('Usage Count')
+    usage_count_display.admin_order_field = 'usage_count'
+    
+    def effectiveness_score_display(self, obj):
+        return f"{obj.effectiveness_score:.1f}" if obj.effectiveness_score else "-"
+    effectiveness_score_display.short_description = _('Effectiveness Score')
+    effectiveness_score_display.admin_order_field = 'effectiveness_score'
+    
+    def is_active_display(self, obj):
+        return obj.is_active
+    is_active_display.short_description = _('Is Active')
+    is_active_display.admin_order_field = 'is_active'
+    is_active_display.boolean = True
+    
+    def created_at_display(self, obj):
+        return obj.created_at
+    created_at_display.short_description = _('Created At')
+    created_at_display.admin_order_field = 'created_at'
 
 
 @admin.register(KnowledgeGap)
 class KnowledgeGapAdmin(admin.ModelAdmin):
-    list_display = ['query_preview', 'frequency', 'priority', 'status', 'category', 'assigned_to', 'last_encountered']
+    list_display = ['query_preview', 'frequency_display', 'priority_display', 'status_display', 'category_display', 'assigned_to_display', 'last_encountered_display']
     list_filter = ['priority', 'status', 'category', 'first_identified', 'last_encountered']
     search_fields = ['query', 'resolution_notes']
     list_per_page = 25
@@ -103,6 +154,36 @@ class KnowledgeGapAdmin(admin.ModelAdmin):
         return obj.query[:80] + "..." if len(obj.query) > 80 else obj.query
     query_preview.short_description = _('Query')
     query_preview.admin_order_field = 'query'
+    
+    def frequency_display(self, obj):
+        return obj.frequency
+    frequency_display.short_description = _('Frequency')
+    frequency_display.admin_order_field = 'frequency'
+    
+    def priority_display(self, obj):
+        return obj.get_priority_display()
+    priority_display.short_description = _('Priority')
+    priority_display.admin_order_field = 'priority'
+    
+    def status_display(self, obj):
+        return obj.get_status_display()
+    status_display.short_description = _('Status')
+    status_display.admin_order_field = 'status'
+    
+    def category_display(self, obj):
+        return obj.category
+    category_display.short_description = _('Category')
+    category_display.admin_order_field = 'category'
+    
+    def assigned_to_display(self, obj):
+        return obj.assigned_to if obj.assigned_to else "-"
+    assigned_to_display.short_description = _('Assigned To')
+    assigned_to_display.admin_order_field = 'assigned_to'
+    
+    def last_encountered_display(self, obj):
+        return obj.last_encountered
+    last_encountered_display.short_description = _('Last Encountered')
+    last_encountered_display.admin_order_field = 'last_encountered'
 
 
 @admin.register(DocumentFeedback)

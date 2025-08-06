@@ -83,7 +83,7 @@ msgstr "分析"
 
 #: .\analytics\models.py:62 .\analytics\models.py:63
 msgid "User Feedback"
-msgstr "ユーザーフィードバック"
+msgstr "フィードバック"
 
 #: .\analytics\models.py:96
 msgid "Analytics Summary"
@@ -131,15 +131,15 @@ msgstr "サポートエージェント"
 
 #: .\authentication\models.py:39
 msgid "User Profile"
-msgstr "ユーザープロファイル"
+msgstr "プロファイル"
 
 #: .\authentication\models.py:40
 msgid "User Profiles"
-msgstr "ユーザープロファイル"
+msgstr "プロファイル"
 
 #: .\authentication\models.py:87 .\authentication\models.py:88
 msgid "User Preferences"
-msgstr "ユーザー設定"
+msgstr "環境設定"
 
 #: .\chat\admin.py:27
 msgid "Title"
@@ -485,9 +485,6 @@ msgstr "改善のためのデータ共有"
 msgid "Date"
 msgstr "日付"
 
-#: .\analytics\models.py:73
-msgid "Total Conversations"
-msgstr "総会話数"
 
 #: .\analytics\models.py:74
 msgid "Total Messages"
@@ -697,9 +694,6 @@ msgstr "使用LangExtractモデル"
 msgid "Processing Time"
 msgstr "処理時間"
 
-#: .\chat\models.py:82
-msgid "Session ID"
-msgstr "セッションID"
 
 #: .\chat\models.py:83
 msgid "Started At"
@@ -708,3 +702,9 @@ msgstr "開始日時"
 #: .\chat\models.py:84
 msgid "Ended At"
 msgstr "終了日時"
+
+msgid "Category"
+msgstr "カテゴリ"
+
+msgid "Referenced At"
+msgstr "参照日時"

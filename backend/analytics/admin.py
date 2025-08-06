@@ -133,7 +133,7 @@ class AnalyticsSummaryAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentUsage)
 class DocumentUsageAdmin(admin.ModelAdmin):
-    list_display = ['id', 'document_link', 'conversation_link', 'effectiveness_score', 'search_query', 'referenced_at']
+    list_display = ['id', 'document_link', 'conversation_link', 'effectiveness_score_display', 'search_query_display', 'referenced_at_display']
     list_filter = ['referenced_at', 'effectiveness_score']
     search_fields = ['document__title', 'search_query', 'conversation__user__username']
     readonly_fields = ['referenced_at']
@@ -150,3 +150,18 @@ class DocumentUsageAdmin(admin.ModelAdmin):
         url = reverse('admin:chat_conversation_change', args=[obj.conversation.id])
         return format_html('<a href="{}">Conv #{}</a>', url, obj.conversation.id)
     conversation_link.short_description = _('Conversation')
+    
+    def effectiveness_score_display(self, obj):
+        return f"{obj.effectiveness_score:.1f}" if obj.effectiveness_score else "-"
+    effectiveness_score_display.short_description = _('Effectiveness Score')
+    effectiveness_score_display.admin_order_field = 'effectiveness_score'
+    
+    def search_query_display(self, obj):
+        return obj.search_query
+    search_query_display.short_description = _('Search Query')  
+    search_query_display.admin_order_field = 'search_query'
+    
+    def referenced_at_display(self, obj):
+        return obj.referenced_at
+    referenced_at_display.short_description = _('Referenced At')
+    referenced_at_display.admin_order_field = 'referenced_at'
