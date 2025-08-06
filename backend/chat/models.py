@@ -101,3 +101,18 @@ class UserSession(models.Model):
         self.ended_at = timezone.now()
         self.is_active = False
         self.save()
+
+
+class TestModel(models.Model):
+    """Simple test model to verify admin functionality"""
+    name = models.CharField(max_length=100, verbose_name=_('Name'))
+    description = models.TextField(blank=True, verbose_name=_('Description'))
+    is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
+    
+    class Meta:
+        verbose_name = _('Test Model')
+        verbose_name_plural = _('Test Models')
+    
+    def __str__(self):
+        return self.name

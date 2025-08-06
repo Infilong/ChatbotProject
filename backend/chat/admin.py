@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from .models import Conversation, Message, UserSession
+from .models import Conversation, Message, UserSession, TestModel
 
 
 @admin.register(Conversation)
@@ -85,3 +85,14 @@ class UserSessionAdmin(admin.ModelAdmin):
             return _("Active")
         return _("Unknown")
     duration.short_description = _('Duration')
+
+
+class TestModelAdmin(admin.ModelAdmin):
+    """Simple admin for test model"""
+    list_display = ['name', 'description', 'is_active', 'created_at']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['name']
+    fields = ['name', 'description', 'is_active']
+
+# Use traditional registration instead of decorator
+admin.site.register(TestModel, TestModelAdmin)
