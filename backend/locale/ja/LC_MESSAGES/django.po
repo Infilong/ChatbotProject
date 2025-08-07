@@ -744,3 +744,71 @@ msgstr "このプロバイダーのAPIパラメータを設定"
 
 msgid "Input Model Name"
 msgstr "モデル名を入力"
+
+msgid "Admin Prompt"
+msgstr "管理プロンプト"
+
+msgid "Admin Prompts"
+msgstr "管理プロンプト"
+
+msgid "Prompt Name"
+msgstr "プロンプト名"
+
+msgid "Prompt Type"
+msgstr "プロンプトタイプ"
+
+msgid "System Prompt"
+msgstr "システムプロンプト"
+
+msgid "Greeting Prompt"
+msgstr "挨拶プロンプト"
+
+msgid "Error Handling"
+msgstr "エラー処理"
+
+msgid "Clarification Request"
+msgstr "確認要求"
+
+msgid "Escalation Prompt"
+msgstr "エスカレーションプロンプト"
+
+msgid "Conversation Closing"
+msgstr "会話終了"
+
+msgid "Instruction Prompt"
+msgstr "指示プロンプト"
+
+msgid "Custom Prompt"
+msgstr "カスタムプロンプト"
+
+msgid "Prompt Text"
+msgstr "プロンプトテキスト"
+
+msgid "The actual prompt text that will be sent to the LLM"
+msgstr "LLMに送信される実際のプロンプトテキスト"
+
+msgid "Description of when and how this prompt is used"
+msgstr "このプロンプトがいつ、どのように使用されるかの説明"
+
+msgid "Is Default"
+msgstr "デフォルト"
+
+msgid "Use this as the default prompt for this type"
+msgstr "このタイプのデフォルトプロンプトとして使用"
+
+msgid "Language"
+msgstr "言語"
+
+
+msgid "Prompt Information"
+msgstr "プロンプト情報"
+
+msgid "Prompt Content"
+msgstr "プロンプト内容"
+
+msgid "Settings"
+msgstr "設定"
+
+msgid "Only one default prompt per type and language is allowed"
+msgstr "タイプと言語ごとに1つのデフォルトプロンプトのみ許可されます"
+

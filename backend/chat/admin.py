@@ -3,7 +3,7 @@ from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django import forms
-from .models import Conversation, Message, UserSession, APIConfiguration
+from .models import Conversation, Message, UserSession, APIConfiguration, AdminPrompt
 
 
 @admin.register(Conversation)
@@ -151,3 +151,91 @@ class APIConfigurationAdmin(admin.ModelAdmin):
 
 # Register APIConfiguration
 admin.site.register(APIConfiguration, APIConfigurationAdmin)
+
+
+
+
+@admin.register(AdminPrompt)
+class AdminPromptAdmin(admin.ModelAdmin):
+    """Admin interface for admin prompt management"""
+    list_display = [
+        'name_display', 'prompt_type_display', 'language_display', 
+        'is_default_display', 'is_active_display', 'usage_count_display', 'created_by_display', 'updated_at_display'
+    ]
+    list_filter = ['prompt_type', 'language', 'is_active', 'is_default', 'created_at', 'created_by']
+    search_fields = ['name', 'prompt_text', 'description']
+    readonly_fields = ['usage_count', 'last_used', 'created_at', 'updated_at']
+    list_per_page = 25
+    ordering = ['prompt_type', 'language', '-is_default', 'name']
+    
+    fieldsets = (
+        (_('Prompt Information'), {
+            'fields': ('name', 'prompt_type', 'language', 'description')
+        }),
+        (_('Prompt Content'), {
+            'fields': ('prompt_text',),
+            'description': _('The actual prompt text that will be sent to the LLM')
+        }),
+        (_('Settings'), {
+            'fields': ('is_active', 'is_default'),
+            'description': _('Only one default prompt per type and language is allowed')
+        }),
+        (_('Usage Statistics'), {
+            'fields': ('usage_count', 'last_used'),
+            'classes': ('collapse',)
+        }),
+        (_('Metadata'), {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def save_model(self, request, obj, form, change):
+        if not change:  # If creating new object
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+    
+    def name_display(self, obj):
+        return obj.name
+    name_display.short_description = _('Name')
+    name_display.admin_order_field = 'name'
+    
+    def prompt_type_display(self, obj):
+        return obj.get_prompt_type_display()
+    prompt_type_display.short_description = _('Prompt Type')
+    prompt_type_display.admin_order_field = 'prompt_type'
+    
+    def language_display(self, obj):
+        return obj.get_language_display()
+    language_display.short_description = _('Language')
+    language_display.admin_order_field = 'language'
+    
+    def is_default_display(self, obj):
+        if obj.is_default:
+            return format_html('<span style="color: green; font-weight: bold;">✓ Default</span>')
+        return format_html('<span style="color: gray;">-</span>')
+    is_default_display.short_description = _('Is Default')
+    is_default_display.admin_order_field = 'is_default'
+    
+    def is_active_display(self, obj):
+        return obj.is_active
+    is_active_display.short_description = _('Is Active')
+    is_active_display.admin_order_field = 'is_active'
+    is_active_display.boolean = True
+    
+    def usage_count_display(self, obj):
+        return obj.usage_count
+    usage_count_display.short_description = _('Usage Count')
+    usage_count_display.admin_order_field = 'usage_count'
+    
+    def created_by_display(self, obj):
+        if obj.created_by:
+            return obj.created_by.username
+        return _('Unknown')
+    created_by_display.short_description = _('Created By')
+    created_by_display.admin_order_field = 'created_by__username'
+    
+    def updated_at_display(self, obj):
+        return obj.updated_at.strftime('%Y-%m-%d %H:%M')
+    updated_at_display.short_description = _('Updated At')
+    updated_at_display.admin_order_field = 'updated_at'

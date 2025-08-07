@@ -215,6 +215,7 @@ JAZZMIN_SETTINGS = {
         "chat.Message": "fas fa-comment",
         "chat.UserSession": "fas fa-clock",
         "chat.APIConfiguration": "fas fa-key",
+        "chat.AdminPrompt": "fas fa-robot",
         "analytics": "fas fa-chart-line",
         "analytics.ConversationAnalysis": "fas fa-brain",
         "analytics.UserFeedback": "fas fa-thumbs-up",

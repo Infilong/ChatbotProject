@@ -4,6 +4,8 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 
+
+
 class Conversation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', verbose_name=_('User'))
     title = models.CharField(max_length=200, blank=True, verbose_name=_('Title'))
@@ -139,3 +141,91 @@ class APIConfiguration(models.Model):
     
     def __str__(self):
         return f"{self.get_provider_display()} - {'Active' if self.is_active else 'Inactive'}"
+
+
+
+
+class AdminPrompt(models.Model):
+    """Model for storing admin-defined system prompts for LLM"""
+    
+    PROMPT_TYPE_CHOICES = [
+        ('system', _('System Prompt')),
+        ('greeting', _('Greeting Prompt')),
+        ('error', _('Error Handling')),
+        ('clarification', _('Clarification Request')),
+        ('escalation', _('Escalation Prompt')),
+        ('closing', _('Conversation Closing')),
+        ('instruction', _('Instruction Prompt')),
+        ('custom', _('Custom Prompt')),
+    ]
+    
+    name = models.CharField(max_length=100, verbose_name=_('Prompt Name'))
+    prompt_type = models.CharField(
+        max_length=20,
+        choices=PROMPT_TYPE_CHOICES,
+        verbose_name=_('Prompt Type')
+    )
+    prompt_text = models.TextField(
+        verbose_name=_('Prompt Text'),
+        help_text=_('The actual prompt text that will be sent to the LLM')
+    )
+    description = models.TextField(
+        blank=True,
+        verbose_name=_('Description'),
+        help_text=_('Description of when and how this prompt is used')
+    )
+    is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name=_('Is Default'),
+        help_text=_('Use this as the default prompt for this type')
+    )
+    language = models.CharField(
+        max_length=10,
+        choices=[('en', _('English')), ('ja', _('Japanese'))],
+        default='en',
+        verbose_name=_('Language')
+    )
+    
+    # Usage tracking
+    usage_count = models.IntegerField(default=0, verbose_name=_('Usage Count'))
+    last_used = models.DateTimeField(null=True, blank=True, verbose_name=_('Last Used'))
+    
+    # Metadata
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        verbose_name=_('Created By')
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated At'))
+    
+    class Meta:
+        verbose_name = _('Admin Prompt')
+        verbose_name_plural = _('Admin Prompts')
+        ordering = ['prompt_type', 'language', '-is_default', 'name']
+    
+    def __str__(self):
+        default_marker = " (Default)" if self.is_default else ""
+        return f"{self.name} [{self.get_prompt_type_display()}]{default_marker}"
+    
+    def get_preview(self, length=100):
+        """Return a preview of the prompt text"""
+        return self.prompt_text[:length] + "..." if len(self.prompt_text) > length else self.prompt_text
+    
+    def increment_usage(self):
+        """Increment usage count and update last used timestamp"""
+        self.usage_count += 1
+        self.last_used = timezone.now()
+        self.save(update_fields=['usage_count', 'last_used'])
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one default per prompt_type and language
+        if self.is_default:
+            AdminPrompt.objects.filter(
+                prompt_type=self.prompt_type,
+                language=self.language,
+                is_default=True
+            ).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
