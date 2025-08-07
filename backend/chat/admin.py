@@ -2,7 +2,8 @@ from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
-from .models import Conversation, Message, UserSession, TestModel
+from django import forms
+from .models import Conversation, Message, UserSession, APIConfiguration
 
 
 @admin.register(Conversation)
@@ -87,12 +88,66 @@ class UserSessionAdmin(admin.ModelAdmin):
     duration.short_description = _('Duration')
 
 
-class TestModelAdmin(admin.ModelAdmin):
-    """Simple admin for test model"""
-    list_display = ['name', 'description', 'is_active', 'created_at']
-    list_filter = ['is_active', 'created_at']
-    search_fields = ['name']
-    fields = ['name', 'description', 'is_active']
 
-# Use traditional registration instead of decorator
-admin.site.register(TestModel, TestModelAdmin)
+
+class APIConfigurationAdmin(admin.ModelAdmin):
+    """Admin interface for API configuration management"""
+    list_display = ['provider_display', 'model_name_display', 'is_active_display', 'api_key_preview', 'updated_at_display']
+    list_filter = ['provider', 'is_active', 'updated_at']
+    search_fields = ['provider', 'model_name']
+    readonly_fields = ['created_at', 'updated_at']
+    list_per_page = 20
+    ordering = ['provider']
+    
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "model_name":
+            kwargs['widget'] = forms.TextInput(attrs={'placeholder': _('Input Model Name')})
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+    
+    fieldsets = (
+        (_('Provider Information'), {
+            'fields': ('provider', 'model_name', 'is_active')
+        }),
+        (_('API Settings'), {
+            'fields': ('api_key',),
+            'description': _('Configure API parameters for this provider')
+        }),
+        (_('Metadata'), {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def provider_display(self, obj):
+        return obj.get_provider_display()
+    provider_display.short_description = _('Provider')
+    provider_display.admin_order_field = 'provider'
+    
+    def model_name_display(self, obj):
+        return obj.model_name
+    model_name_display.short_description = _('Model Name')
+    model_name_display.admin_order_field = 'model_name'
+    
+    def is_active_display(self, obj):
+        return obj.is_active
+    is_active_display.short_description = _('Is Active')
+    is_active_display.admin_order_field = 'is_active'
+    is_active_display.boolean = True
+    
+    def updated_at_display(self, obj):
+        return obj.updated_at.strftime('%Y-%m-%d %H:%M')
+    updated_at_display.short_description = _('Updated At')
+    updated_at_display.admin_order_field = 'updated_at'
+    
+    def api_key_preview(self, obj):
+        """Show masked preview of API key"""
+        if obj.api_key:
+            if len(obj.api_key) > 10:
+                return f"{obj.api_key[:6]}...{obj.api_key[-4:]}"
+            else:
+                return f"{obj.api_key[:3]}..."
+        return "-"
+    api_key_preview.short_description = _('API Key')
+
+# Register APIConfiguration
+admin.site.register(APIConfiguration, APIConfigurationAdmin)

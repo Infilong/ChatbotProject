@@ -708,3 +708,39 @@ msgstr "カテゴリ"
 
 msgid "Referenced At"
 msgstr "参照日時"
+
+msgid "Provider"
+msgstr "プロバイダー"
+
+msgid "Model Name"
+msgstr "モデル名"
+
+msgid "API Key"
+msgstr "APIキー"
+
+msgid "Description"
+msgstr "説明"
+
+msgid "API Configuration"
+msgstr "API設定"
+
+msgid "API Configurations"
+msgstr "API設定"
+
+msgid "Test Model"
+msgstr "テストモデル"
+
+msgid "Test Models"
+msgstr "テストモデル"
+
+msgid "Provider Information"
+msgstr "プロバイダー情報"
+
+msgid "API Settings"
+msgstr "API設定"
+
+msgid "Configure API parameters for this provider"
+msgstr "このプロバイダーのAPIパラメータを設定"
+
+msgid "Input Model Name"
+msgstr "モデル名を入力"

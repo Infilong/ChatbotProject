@@ -103,16 +103,39 @@ class UserSession(models.Model):
         self.save()
 
 
-class TestModel(models.Model):
-    """Simple test model to verify admin functionality"""
-    name = models.CharField(max_length=100, verbose_name=_('Name'))
-    description = models.TextField(blank=True, verbose_name=_('Description'))
+
+
+class APIConfiguration(models.Model):
+    """Model for storing LLM API configurations"""
+    
+    PROVIDER_CHOICES = [
+        ('openai', 'OpenAI'),
+        ('gemini', 'Google Gemini'),
+        ('claude', 'Anthropic Claude'),
+    ]
+    
+    provider = models.CharField(
+        max_length=20, 
+        choices=PROVIDER_CHOICES, 
+        unique=True, 
+        verbose_name=_('Provider')
+    )
+    api_key = models.TextField(
+        verbose_name=_('API Key'), 
+        help_text=_('API key for the provider')
+    )
+    model_name = models.CharField(
+        max_length=100, 
+        verbose_name=_('Model Name')
+    )
     is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated At'))
     
     class Meta:
-        verbose_name = _('Test Model')
-        verbose_name_plural = _('Test Models')
+        verbose_name = _('API Configuration')
+        verbose_name_plural = _('API Configurations')
+        ordering = ['provider']
     
     def __str__(self):
-        return self.name
+        return f"{self.get_provider_display()} - {'Active' if self.is_active else 'Inactive'}"
