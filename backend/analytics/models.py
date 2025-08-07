@@ -101,7 +101,7 @@ class AnalyticsSummary(models.Model):
 
 
 class DocumentUsage(models.Model):
-    document = models.ForeignKey('documents.CompanyDocument', on_delete=models.CASCADE, related_name='usage_stats', verbose_name=_('Document'))
+    document = models.ForeignKey('documents.Document', on_delete=models.CASCADE, related_name='usage_stats', verbose_name=_('Document'))
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, verbose_name=_('Conversation'))
     message = models.ForeignKey(Message, on_delete=models.CASCADE, verbose_name=_('Message'))
     
@@ -116,4 +116,4 @@ class DocumentUsage(models.Model):
         verbose_name_plural = _('Document Usage')
         
     def __str__(self):
-        return f"Document {self.document.title} used in Conversation {self.conversation.id}"
+        return f"Document {self.document.name} used in Conversation {self.conversation.id}"

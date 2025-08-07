@@ -1,0 +1,400 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .chat-header {
+            background: #007cba;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message.assistant {
+            justify-content: flex-start;
+        }
+        
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        
+        .message.user .message-content {
+            background: #007cba;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message.assistant .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e0e0e0;
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .message.user .message-avatar {
+            background: #007cba;
+            color: white;
+            order: 1;
+        }
+        
+        .message.assistant .message-avatar {
+            background: #28a745;
+            color: white;
+        }
+        
+        .chat-input {
+            border-top: 1px solid #e0e0e0;
+            padding: 20px;
+            background: white;
+        }
+        
+        .input-container {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .input-field {
+            flex: 1;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 20px;
+            resize: vertical;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        
+        .input-field:focus {
+            outline: none;
+            border-color: #007cba;
+        }
+        
+        .send-button {
+            background: #007cba;
+            color: white;
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+        
+        .send-button:hover {
+            background: #005a87;
+        }
+        
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 0;
+            color: #666;
+            font-style: italic;
+        }
+        
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            background: #666;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+        
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+        
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+        
+        .welcome-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="chat-container">
+    <!-- Chat Header -->
+    <div class="chat-header">
+        <div style="font-size: 24px;">🤖</div>
+        <div>
+            <h2 style="margin: 0;">{% trans "AI Helper" %}</h2>
+            <small>{% trans "Your intelligent assistant for system management" %}</small>
+        </div>
+    </div>
+    
+    <!-- Messages Container -->
+    <div class="chat-messages" id="chatMessages">
+        <div class="welcome-message" id="welcomeMessage">
+            <div class="welcome-icon">👋</div>
+            <h3>{% trans "Welcome to AI Helper!" %}</h3>
+            <p>{% trans "I'm here to help you manage your system. Ask me anything about documents, users, chat settings, analytics, or general system information." %}</p>
+            <p><strong>{% trans "Try asking:" %}</strong></p>
+            <ul style="text-align: left; display: inline-block;">
+                <li>"{% trans "Show me system statistics" %}"</li>
+                <li>"{% trans "How do I upload documents?" %}"</li>
+                <li>"{% trans "What's the user activity?" %}"</li>
+                <li>"{% trans "Help with chat configuration" %}"</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Typing Indicator -->
+    <div class="typing-indicator" id="typingIndicator">
+        <div class="message-avatar" style="background: #28a745; color: white;">🤖</div>
+        <div>
+            {% trans "AI is typing" %}
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chat Input -->
+    <div class="chat-input">
+        <div class="input-container">
+            <textarea 
+                id="messageInput" 
+                class="input-field" 
+                placeholder="{% trans 'Type your message here...' %}"
+                rows="1"></textarea>
+            <button id="sendButton" class="send-button" title="{% trans 'Send message' %}">
+                ➤
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sessionId = '{{ session_id }}';
+    const messagesContainer = document.getElementById('chatMessages');
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const typingIndicator = document.getElementById('typingIndicator');
+    const welcomeMessage = document.getElementById('welcomeMessage');
+    
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = this.scrollHeight + 'px';
+    });
+    
+    // Send message on Enter (but Shift+Enter for new line)
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Send button click
+    sendButton.addEventListener('click', sendMessage);
+    
+    // Load existing messages
+    loadMessages();
+    
+    function loadMessages() {
+        fetch(`/admin/ai_helper/api/get-messages/${sessionId}/`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.messages.length > 0) {
+                    welcomeMessage.style.display = 'none';
+                    data.messages.forEach(message => {
+                        addMessageToChat(message.type, message.content);
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading messages:', error));
+    }
+    
+    function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message || sendButton.disabled) return;
+        
+        // Add user message to chat
+        addMessageToChat('user', message);
+        
+        // Clear input and disable send button
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        sendButton.disabled = true;
+        
+        // Hide welcome message
+        welcomeMessage.style.display = 'none';
+        
+        // Show typing indicator
+        typingIndicator.style.display = 'flex';
+        scrollToBottom();
+        
+        // Send to server
+        fetch('/admin/ai_helper/api/send-message/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken')
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                message: message
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide typing indicator
+            typingIndicator.style.display = 'none';
+            
+            if (data.success) {
+                // Add AI response
+                addMessageToChat('assistant', data.response);
+            } else {
+                addMessageToChat('system', 'Sorry, there was an error processing your message.');
+            }
+        })
+        .catch(error => {
+            typingIndicator.style.display = 'none';
+            addMessageToChat('system', 'Connection error. Please try again.');
+            console.error('Error:', error);
+        })
+        .finally(() => {
+            sendButton.disabled = false;
+        });
+    }
+    
+    function addMessageToChat(type, content) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${type}`;
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        // Format content (basic markdown-like formatting)
+        const formattedContent = formatMessage(content);
+        contentDiv.innerHTML = formattedContent;
+        
+        if (type === 'user') {
+            avatar.textContent = '{{ user.first_name|first|default:"U" }}';
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(avatar);
+        } else if (type === 'assistant') {
+            avatar.textContent = '🤖';
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+        } else {
+            avatar.textContent = '⚠️';
+            messageDiv.appendChild(avatar);
+            messageDiv.appendChild(contentDiv);
+        }
+        
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+    }
+    
+    function formatMessage(content) {
+        // Basic formatting for AI responses
+        return content
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+            .replace(/\*(.*?)\*/g, '<em>$1</em>')  // Italic
+            .replace(/`(.*?)`/g, '<code>$1</code>')  // Code
+            .replace(/\n/g, '<br>');  // Line breaks
+    }
+    
+    function scrollToBottom() {
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+});
+</script>
+{% endblock %}

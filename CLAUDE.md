@@ -21,6 +21,237 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - All user-facing strings wrapped with `_('Text')`
 - Maintain Japanese translations in `backend/locale/ja/LC_MESSAGES/django.po`
 
+## CRITICAL: User-Friendly Error Handling
+
+**NEVER SHOW DJANGO ERROR PAGES TO USERS - ALWAYS USE FRIENDLY NOTIFICATIONS:**
+
+❌ **AVOID Django Error Pages:**
+- Never let ValidationError exceptions reach users with scary stack traces
+- Never show technical Django error pages for user mistakes
+- Never display raw exception messages to end users
+
+✅ **ALWAYS Use User-Friendly Notifications:**
+- **Form-level validation**: Handle validation in custom form `clean_*()` methods
+- **Admin messages**: Use Django's `messages.error()`, `messages.warning()`, `messages.success()`
+- **Custom error handling**: Create graceful error responses that keep users on the same page
+- **Pop-up notifications**: Use JavaScript modals or toast notifications for immediate feedback
+- **Inline field errors**: Show validation errors directly next to form fields
+
+**Implementation Pattern:**
+```python
+# ❌ Wrong - Model validation that creates scary error pages
+def save(self, *args, **kwargs):
+    if some_condition:
+        raise ValidationError("Scary technical error!")
+
+# ✅ Correct - Form validation with friendly messages  
+class MyAdminForm(forms.ModelForm):
+    def clean_field_name(self):
+        value = self.cleaned_data.get('field_name')
+        if some_condition:
+            raise ValidationError(
+                _('Friendly message explaining what to do instead.')
+            )
+        return value
+
+# ✅ Correct - View-level error handling with messages
+def my_view(request):
+    try:
+        # Some operation
+        pass
+    except SomeException:
+        messages.error(request, _('Something went wrong. Please try again.'))
+        return redirect('back_to_form')
+```
+
+**Error Message Guidelines:**
+- **Be specific**: Explain exactly what went wrong
+- **Be helpful**: Tell users what they can do to fix it
+- **Be multilingual**: All error messages must support Japanese translation
+- **Be positive**: Focus on solutions, not problems
+- **Stay in context**: Keep users on the same form/page when possible
+
+**Examples of Good Error Messages:**
+- ❌ "ValidationError: Duplicate file hash detected"
+- ✅ "A file with identical content already exists: 'document.pdf'. Please choose a different file or update the existing document instead."
+
+**Frontend Error Handling:**
+- Use toast notifications for temporary messages
+- Use modal dialogs for important warnings
+- Use inline validation for form errors
+- Always provide clear actions users can take
+
+## CRITICAL: Security Best Practices
+
+**ALWAYS IMPLEMENT SECURITY-FIRST DESIGN IN BACKEND SYSTEMS:**
+
+### 🔒 **URL Security & Resource Access**
+
+❌ **NEVER Use Sequential/Predictable URLs:**
+- `/api/documents/1/`, `/api/documents/2/` - Predictable enumeration
+- `/admin/files/download/123/` - Easy to guess other files
+- `/user/profile/456/` - Exposes user IDs and allows enumeration attacks
+
+✅ **ALWAYS Use Secure, Non-Enumerable Identifiers:**
+- **UUIDs**: `/api/documents/a4c9d8e2-1234-5678-9abc-def123456789/`
+- **Hash-based IDs**: `/files/download/7f8e9d2c1b0a/`
+- **Slug + UUID**: `/documents/my-document-a4c9d8e2/`
+- **Signed URLs**: `/secure/file/abc123?signature=xyz789&expires=1234567890`
+
+### 🛡️ **Data Integrity & Duplication Prevention**
+
+❌ **NEVER Rely Only on Filenames or Surface-Level Checks:**
+```python
+# Wrong - only checking filename
+if Document.objects.filter(name=uploaded_file.name).exists():
+    raise ValidationError("File already exists")
+```
+
+✅ **ALWAYS Use Content-Based Validation:**
+```python
+# Correct - checking actual file content with SHA-256 hash
+file_hash = calculate_file_hash(uploaded_file)
+if Document.objects.filter(file_hash=file_hash).exists():
+    raise ValidationError("Identical file content already exists")
+```
+
+### 🔐 **Access Control & Authorization**
+
+**Implementation Requirements:**
+- **UUID-based URLs**: Use `models.UUIDField(default=uuid.uuid4)` for all public resource identifiers
+- **Content hashing**: SHA-256 hash validation for file deduplication and integrity
+- **Permission checks**: Always verify user permissions before resource access
+- **Rate limiting**: Implement rate limiting on sensitive endpoints
+- **Input validation**: Validate and sanitize all user inputs
+- **File validation**: Check file types, sizes, and content before processing
+
+### 🚫 **Common Security Anti-Patterns to AVOID:**
+
+1. **Sequential ID Exposure:**
+   ```python
+   # ❌ Wrong - Exposes database IDs
+   class Document(models.Model):
+       # Uses default auto-increment ID - security risk
+   
+   # URLs become: /documents/1/, /documents/2/, etc.
+   ```
+
+2. **Filename-Only Duplicate Detection:**
+   ```python
+   # ❌ Wrong - Can be bypassed by renaming files  
+   if os.path.exists(f"uploads/{filename}"):
+       return "File exists"
+   ```
+
+3. **Predictable Resource URLs:**
+   ```python
+   # ❌ Wrong - Easy enumeration attack
+   path('download/<int:file_id>/', download_view)
+   ```
+
+### ✅ **Security-First Implementation Pattern:**
+
+```python
+class Document(models.Model):
+    # Secure: UUID for public URLs
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    
+    # Secure: Content-based duplicate detection
+    file_hash = models.CharField(max_length=64, db_index=True, editable=False)
+    
+    def save(self, *args, **kwargs):
+        if self.file and not self.file_hash:
+            # Generate hash from actual file content
+            self.file_hash = calculate_file_hash(self.file)
+        super().save(*args, **kwargs)
+
+# Secure URL patterns using UUID
+urlpatterns = [
+    path('download/<uuid:document_uuid>/', download_view, name='download'),
+    path('preview/<uuid:document_uuid>/', preview_view, name='preview'),
+]
+
+def download_view(request, document_uuid):
+    # Secure: Get by UUID, check permissions
+    document = get_object_or_404(Document, uuid=document_uuid)
+    
+    # Always verify access permissions
+    if not request.user.has_perm('documents.view_document', document):
+        raise PermissionDenied("Access denied")
+    
+    return serve_file(document.file)
+```
+
+### 🔧 **Admin Interface Security Implementation:**
+
+**CRITICAL**: Django admin URLs must also use UUIDs instead of sequential IDs to prevent enumeration attacks.
+
+```python
+# Secure Django Admin with UUID-based URLs
+@admin.register(Document)
+class DocumentAdmin(admin.ModelAdmin):
+    # Override get_object to handle UUID lookup
+    def get_object(self, request, object_id, from_field=None):
+        try:
+            # Parse as UUID first
+            uuid_obj = uuid.UUID(object_id)
+            return self.get_queryset(request).get(uuid=uuid_obj)
+        except (ValueError, TypeError):
+            # Fallback to PK for backward compatibility
+            try:
+                return self.get_queryset(request).get(pk=object_id)
+            except (ValueError, Document.DoesNotExist):
+                return None
+        except Document.DoesNotExist:
+            return None
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        # Override default admin URLs with UUID-based ones
+        custom_urls = [
+            path('<uuid:object_id>/change/', self.admin_site.admin_view(self.change_view), 
+                 name='documents_document_change'),
+            path('<uuid:object_id>/delete/', self.admin_site.admin_view(self.delete_view), 
+                 name='documents_document_delete'),
+            path('<uuid:object_id>/history/', self.admin_site.admin_view(self.history_view), 
+                 name='documents_document_history'),
+        ]
+        return custom_urls + urls
+    
+    def response_change(self, request, obj):
+        """Redirect to UUID-based URLs after form submission"""
+        response = super().response_change(request, obj)
+        if hasattr(response, 'url') and response.url:
+            import re
+            pattern = r'/admin/documents/document/\d+/'
+            replacement = f'/admin/documents/document/{obj.uuid}/'
+            response.url = re.sub(pattern, replacement, response.url)
+        return response
+    
+    def name_display(self, obj):
+        """Link to UUID-based admin edit page"""
+        name = obj.name or _('Untitled')
+        edit_url = reverse('admin:documents_document_change', args=[obj.uuid])
+        return format_html('<a href="{}">{}</a>', edit_url, name)
+```
+
+**Result**: Admin URLs change from:
+- ❌ `http://localhost:8000/admin/documents/document/5/change/` (predictable)
+- ✅ `http://localhost:8000/admin/documents/document/a4c9d8e2-1234-5678-9abc-def123456789/change/` (secure)
+
+### 🎯 **Security Checklist for Every Feature:**
+
+- [ ] **UUIDs used** for all public resource identifiers
+- [ ] **Content validation** implemented (hashing, file type checking)
+- [ ] **Permission checks** in place for all resource access
+- [ ] **Input sanitization** applied to all user inputs  
+- [ ] **Rate limiting** configured on sensitive endpoints
+- [ ] **Error messages** don't expose internal system details
+- [ ] **Logging** implemented for security-relevant events
+- [ ] **HTTPS enforced** in production (SSL/TLS)
+
+**Remember: Security is not optional - it must be built in from the start, not added later.**
+
 ## Common Development Tasks
 
 ### Frontend Development

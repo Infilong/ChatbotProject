@@ -1,0 +1,86 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url 'admin:documents_document_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {% trans 'File Information' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="module aligned">
+    <h1>{{ title }}</h1>
+    
+    <div class="form-row">
+        <div>
+            <h2>{% trans 'File Details' %}</h2>
+            <table>
+                <tbody>
+                    <tr>
+                        <th>{% trans 'Document Name' %}:</th>
+                        <td>{{ document.name }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Original Filename' %}:</th>
+                        <td>{{ document.original_filename }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'File Type' %}:</th>
+                        <td>{{ document.file_type|upper }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'File Size' %}:</th>
+                        <td>{{ document.get_file_size_display }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Category' %}:</th>
+                        <td>{{ document.category|default:_('Uncategorized') }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Tags' %}:</th>
+                        <td>{{ document.tags|default:'-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Description' %}:</th>
+                        <td>{{ document.description|default:'-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Uploaded By' %}:</th>
+                        <td>{{ document.uploaded_by.username|default:_('Unknown') }}</td>
+                    </tr>
+                    <tr>
+                        <th>{% trans 'Created At' %}:</th>
+                        <td>{{ document.created_at|date:"Y-m-d H:i" }}</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div style="margin-top: 20px;">
+                <h3>{% trans 'Preview Not Available' %}</h3>
+                <p>{% trans 'This file type cannot be previewed in the browser. You can download it to view the content.' %}</p>
+                
+                <div style="margin-top: 15px;">
+                    <a href="{% url 'admin:documents_download' document.uuid %}" class="button default" style="margin-right: 10px;">
+                        📥 {% trans 'Download File' %}
+                    </a>
+                    
+                    {% if has_change_permission %}
+                    <a href="{% url 'admin:documents_document_change' document.pk %}" class="button">
+                        ✏️ {% trans 'Edit Document' %}
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{% url 'admin:documents_document_changelist' %}" class="button" style="margin-left: 10px;">
+                        ← {% trans 'Back to List' %}
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
