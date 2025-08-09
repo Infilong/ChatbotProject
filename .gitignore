@@ -40,6 +40,9 @@ backend/create_superuser.py
 backend/test_db.py
 backend/test_models.py
 backend/test_*.py
+# Root level test and check scripts
+test_*.py
+check_*.py
 
 # Django migrations (optional - uncomment if you want to ignore them)
 # backend/*/migrations/
