@@ -6,6 +6,7 @@ from django.utils import timezone
 import os
 import hashlib
 import uuid
+import json
 
 
 def calculate_file_hash(file):
@@ -121,6 +122,53 @@ class Document(models.Model):
     
     is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
     
+    # Knowledge base fields
+    extracted_text = models.TextField(
+        blank=True,
+        verbose_name=_('Extracted Text'),
+        help_text=_('Full text extracted from document for knowledge base')
+    )
+    
+    ai_summary = models.TextField(
+        blank=True,
+        verbose_name=_('AI Summary'),
+        help_text=_('AI-generated summary of document content')
+    )
+    
+    ai_keywords_json = models.TextField(
+        blank=True,
+        default='[]',
+        verbose_name=_('AI Keywords JSON'),
+        help_text=_('AI-extracted keywords and topics (JSON string)')
+    )
+    
+    search_vector = models.TextField(
+        blank=True,
+        db_index=True,
+        verbose_name=_('Search Vector'),
+        help_text=_('Preprocessed text for fast searching')
+    )
+    
+    # Usage analytics
+    reference_count = models.IntegerField(
+        default=0,
+        verbose_name=_('Reference Count'),
+        help_text=_('Number of times referenced by LLM')
+    )
+    
+    last_referenced = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_('Last Referenced'),
+        help_text=_('Last time this document was used by LLM')
+    )
+    
+    effectiveness_score = models.FloatField(
+        default=0.0,
+        verbose_name=_('Effectiveness Score'),
+        help_text=_('How useful this document is for answering questions')
+    )
+    
     # Audit fields
     uploaded_by = models.ForeignKey(
         User,
@@ -162,6 +210,24 @@ class Document(models.Model):
             return [tag.strip() for tag in self.tags.split(',') if tag.strip()]
         return []
     
+    @property
+    def ai_keywords(self):
+        """Get ai_keywords as Python list from JSON string"""
+        if not self.ai_keywords_json:
+            return []
+        try:
+            return json.loads(self.ai_keywords_json)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    
+    @ai_keywords.setter
+    def ai_keywords(self, value):
+        """Set ai_keywords as JSON string from Python list"""
+        if isinstance(value, (list, dict)):
+            self.ai_keywords_json = json.dumps(value)
+        else:
+            self.ai_keywords_json = '[]'
+    
     def save(self, *args, **kwargs):
         # Set file metadata on save
         if self.file:
@@ -191,5 +257,82 @@ class Document(models.Model):
             return original.file != self.file
         except Document.DoesNotExist:
             return True
+    
+    def increment_reference(self):
+        """Increment reference count when used by LLM"""
+        from django.utils import timezone
+        self.reference_count += 1
+        self.last_referenced = timezone.now()
+        self.save(update_fields=['reference_count', 'last_referenced'])
+    
+    def get_relevance_score(self, query: str) -> float:
+        """Calculate relevance score for a query"""
+        if not self.extracted_text and not self.ai_summary:
+            return 0.0
+        
+        query_lower = query.lower()
+        score = 0.0
+        
+        # Check title relevance (higher weight)
+        if query_lower in self.name.lower():
+            score += 2.0
+        
+        # Check keywords relevance (high weight)
+        for keyword in self.ai_keywords:
+            if isinstance(keyword, str) and query_lower in keyword.lower():
+                score += 1.5
+        
+        # Check category relevance
+        if self.category and query_lower in self.category.lower():
+            score += 1.0
+        
+        # Check tags relevance
+        for tag in self.get_tags_list():
+            if query_lower in tag.lower():
+                score += 1.0
+        
+        # Check content relevance (lower weight but important)
+        if self.extracted_text and query_lower in self.extracted_text.lower():
+            score += 0.5
+        
+        if self.ai_summary and query_lower in self.ai_summary.lower():
+            score += 0.8
+        
+        # Boost score based on effectiveness and usage
+        score *= (1 + self.effectiveness_score / 10)
+        score *= (1 + min(self.reference_count / 100, 0.5))
+        
+        return score
+    
+    def get_excerpt(self, query: str = None, max_length: int = 300) -> str:
+        """Get relevant excerpt from document for context"""
+        if not self.extracted_text:
+            return self.ai_summary[:max_length] if self.ai_summary else ""
+        
+        if not query:
+            # Return beginning of text if no query
+            return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
+        
+        # Find relevant excerpt around query match
+        text = self.extracted_text.lower()
+        query_pos = text.find(query.lower())
+        
+        if query_pos == -1:
+            # Query not found, return summary or beginning
+            return self.ai_summary[:max_length] if self.ai_summary else self.extracted_text[:max_length]
+        
+        # Extract context around query
+        start = max(0, query_pos - max_length // 2)
+        end = min(len(self.extracted_text), start + max_length)
+        
+        excerpt = self.extracted_text[start:end]
+        
+        # Add ellipsis if needed
+        if start > 0:
+            excerpt = "..." + excerpt
+        if end < len(self.extracted_text):
+            excerpt = excerpt + "..."
+        
+        return excerpt
 
 

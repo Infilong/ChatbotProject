@@ -1,0 +1,1368 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:"Django site admin" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="chat-app">
+    <!-- Sidebar for conversation history -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <button id="new-conversation-btn" class="new-conversation-btn">
+                <svg width="16" height="16" fill="currentColor">
+                    <path d="M12 4.5v3a.75.75 0 01-.75.75h-3a.75.75 0 010-1.5h3v-3a.75.75 0 011.5 0z"/>
+                    <path d="M2.75 2h6.5a.75.75 0 01.75.75v6.5a.75.75 0 01-.75.75h-6.5a.75.75 0 01-.75-.75v-6.5A.75.75 0 012.75 2z"/>
+                </svg>
+                {% trans "New Conversation" %}
+            </button>
+        </div>
+        
+        <div class="conversations-list">
+            <h3>{% trans "Conversation History" %}</h3>
+            <div id="conversations-container" class="conversations-container">
+                <!-- Conversations will be loaded here -->
+            </div>
+        </div>
+        
+    </div>
+
+    <!-- Main chat area -->
+    <div class="main-chat">
+        <!-- Chat Header -->
+        <div class="chat-header">
+            <div class="header-left">
+                <button id="show-history-btn" class="show-history-btn" style="display: none;">
+                    <svg width="20" height="20" fill="currentColor">
+                        <path d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.5L8 18l-1.5-3H5a2 2 0 01-2-2V5z"/>
+                    </svg>
+                    {% trans "History" %}
+                </button>
+                <h1 id="conversation-title">{% trans "Admin AI Assistant" %}</h1>
+            </div>
+            <div class="chat-config">
+                <select id="provider-select" class="provider-select">
+                    {% for provider in available_providers %}
+                        <option value="{{ provider }}" {% if provider == 'openai' %}selected{% endif %}>
+                            {% if provider == 'openai' %}GPT{% elif provider == 'gemini' %}Gemini{% elif provider == 'claude' %}Claude{% else %}{{ provider|title }}{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <label class="knowledge-toggle">
+                    <input type="checkbox" id="use-knowledge-base" checked>
+                    <span>Knowledge Base</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages">
+                <div class="welcome-message">
+                    <div class="welcome-content">
+                        <h2>{% trans "Welcome to Admin AI Assistant" %}</h2>
+                        <p>{% trans "I can help you with:" %}</p>
+                        <ul>
+                            <li>{% trans "Customer analytics and statistics" %}</li>
+                            <li>{% trans "Database queries and system info" %}</li>
+                            <li>{% trans "Document search and knowledge base" %}</li>
+                            <li>{% trans "Testing chatbot responses" %}</li>
+                        </ul>
+                        <p class="examples">
+                            <strong>{% trans "Try asking:" %}</strong><br>
+                            "What's our customer satisfaction rate?"<br>
+                            "How many conversations this week?"<br>
+                            "Show me user activity stats"
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div class="chat-input-container">
+            <div class="input-wrapper">
+                <textarea 
+                    id="message-input" 
+                    placeholder="{% trans 'Ask me about your system data, analytics, or test the chatbot...' %}"
+                    rows="1"></textarea>
+                <button id="send-button" class="send-button" type="button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden elements for functionality -->
+    <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
+    <input type="hidden" id="history-api-url" value="{% url 'admin_llm:chat_history_api' %}">
+    <input type="hidden" id="chat-api-url" value="{% url 'admin_llm:llm_chat_api' %}">
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const chatMessages = document.getElementById('chat-messages');
+    const providerSelect = document.getElementById('provider-select');
+    const useKnowledgeBase = document.getElementById('use-knowledge-base');
+    const csrfToken = document.getElementById('csrf-token').value;
+    
+    // Get API URLs from Django template
+    const HISTORY_API_URL = document.getElementById('history-api-url').value;
+    const CHAT_API_URL = document.getElementById('chat-api-url').value;
+    
+    // Sidebar elements
+    const sidebar = document.getElementById('sidebar');
+    const newConversationBtn = document.getElementById('new-conversation-btn');
+    const conversationsContainer = document.getElementById('conversations-container');
+    const conversationTitle = document.getElementById('conversation-title');
+    const showHistoryBtn = document.getElementById('show-history-btn');
+    
+    // Current conversation state
+    let currentConversationId = null;
+    let conversations = [];
+    let isInitializing = true;
+    
+    // Show initial loading state
+    showInitialLoadingState();
+    
+    // Load conversations and initialize with timeout
+    loadConversations();
+    
+    // Fallback timeout to clear loading state
+    setTimeout(() => {
+        if (isInitializing) {
+            console.log('Loading timeout - forcing initialization complete');
+            isInitializing = false;
+            conversations = []; // Set empty conversations to allow normal flow
+            showWelcomeMessage();
+            updateConversationTitle();
+            renderConversations();
+            addMessage("⚠️ Loading took too long. Some features may not work properly. Please refresh the page.", false);
+        }
+    }, 5000); // 5 second timeout
+    
+    // Even simpler emergency fallback
+    setTimeout(() => {
+        if (isInitializing) {
+            console.log('Emergency fallback - clearing loading state');
+            isInitializing = false;
+            conversationsContainer.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No history available</p>';
+            showWelcomeMessage();
+        }
+    }, 2000); // 2 second emergency fallback
+    
+    // Auto-resize textarea
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    
+    function addMessage(content, isUser = false, metadata = null) {
+        // Remove welcome message if it exists
+        const welcomeMessage = chatMessages.querySelector('.welcome-message');
+        if (welcomeMessage) {
+            welcomeMessage.remove();
+        }
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        
+        // Format content for better display
+        const formattedContent = content.replace(/\n/g, '<br>');
+        contentDiv.innerHTML = formattedContent;
+        
+        // Only add avatar for AI messages, remove for user messages to maintain consistency
+        if (!isUser) {
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.textContent = 'AI';
+            messageDiv.appendChild(avatar);
+        }
+        
+        messageDiv.appendChild(contentDiv);
+        
+        chatMessages.appendChild(messageDiv);
+        
+        // Auto-scroll to bottom
+        setTimeout(() => {
+            chatMessages.scrollTo({
+                top: chatMessages.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 100);
+    }
+    
+    function showInitialLoadingState() {
+        // Show loading message in chat area
+        chatMessages.innerHTML = `
+            <div class="loading-state">
+                <div class="loading-content">
+                    <div class="loading-spinner"></div>
+                    <h2>{% trans "Loading Admin AI Assistant..." %}</h2>
+                    <p>{% trans "Please wait while we initialize your chat interface." %}</p>
+                </div>
+            </div>
+        `;
+        
+        // Show loading in conversations container
+        conversationsContainer.innerHTML = `
+            <div class="loading-conversations">
+                <div class="loading-spinner-small"></div>
+                <p>{% trans "Loading history..." %}</p>
+            </div>
+        `;
+    }
+    
+    async function loadConversations() {
+        try {
+            console.log('Loading conversations from:', HISTORY_API_URL);
+            const response = await fetch(HISTORY_API_URL, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            console.log('Response status:', response.status, response.ok);
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('Conversations data:', data);
+                conversations = data.conversations || [];
+                
+                // Clear loading state FIRST
+                isInitializing = false;
+                renderConversations();
+                
+                // If no conversations exist, show welcome message
+                if (conversations.length === 0) {
+                    currentConversationId = null;
+                    showWelcomeMessage();
+                    updateConversationTitle();
+                } else {
+                    // Find most recent conversation with messages
+                    const conversationsWithMessages = conversations.filter(c => c.message_count > 0);
+                    if (conversationsWithMessages.length > 0) {
+                        currentConversationId = conversationsWithMessages[0].id;
+                        await loadConversationHistory(currentConversationId);
+                        updateConversationTitle();
+                    } else {
+                        // No conversations with messages, show welcome
+                        currentConversationId = null;
+                        showWelcomeMessage();
+                        updateConversationTitle();
+                    }
+                }
+            } else {
+                console.log('Response not ok:', response.statusText);
+                // Clear loading state on error
+                isInitializing = false;
+                showWelcomeMessage();
+                updateConversationTitle();
+                renderConversations();
+            }
+        } catch (error) {
+            console.log('Could not load conversations:', error);
+            // Clear loading state
+            isInitializing = false;
+            // Show welcome message if can't load conversations
+            currentConversationId = null;
+            showWelcomeMessage();
+            updateConversationTitle();
+            renderConversations();
+            // Show user-friendly error in chat
+            addMessage("❌ Unable to load conversation history. Please refresh the page or check your connection.", false);
+        }
+    }
+    
+    async function createNewConversation() {
+        // Check if current conversation is empty (no user messages sent)
+        if (currentConversationId) {
+            const currentConv = conversations.find(c => c.id === currentConversationId);
+            if (currentConv && currentConv.message_count === 0) {
+                // Current conversation is empty, just clear the chat area
+                showWelcomeMessage();
+                return;
+            }
+        }
+        
+        // Reset current conversation and show welcome message
+        currentConversationId = null;
+        showWelcomeMessage();
+        updateConversationTitle();
+        renderConversations(); // Update UI to show no active conversation
+    }
+    
+    async function createActualNewConversation() {
+        try {
+            const response = await fetch(HISTORY_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    action: 'new_conversation'
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                currentConversationId = data.conversation_id;
+                
+                // Add to conversations list
+                conversations.unshift(data.conversation);
+                renderConversations();
+                updateConversationTitle();
+                return true;
+            }
+        } catch (error) {
+            console.log('Could not create new conversation:', error);
+            addMessage("❌ Unable to create new conversation. Please try again.", false);
+            return false;
+        }
+        return false;
+    }
+    
+    function showWelcomeMessage() {
+        chatMessages.innerHTML = `
+            <div class="welcome-message">
+                <div class="welcome-content">
+                    <h2>{% trans "Welcome to Admin AI Assistant" %}</h2>
+                    <p>{% trans "I can help you with:" %}</p>
+                    <ul>
+                        <li>{% trans "Customer analytics and statistics" %}</li>
+                        <li>{% trans "Database queries and system info" %}</li>
+                        <li>{% trans "Document search and knowledge base" %}</li>
+                        <li>{% trans "Testing chatbot responses" %}</li>
+                    </ul>
+                    <p class="examples">
+                        <strong>{% trans "Try asking:" %}</strong><br>
+                        "What's our customer satisfaction rate?"<br>
+                        "How many conversations this week?"<br>
+                        "Show me user activity stats"
+                    </p>
+                </div>
+            </div>
+        `;
+    }
+    
+    async function loadConversationHistory(conversationId) {
+        try {
+            const response = await fetch(`${HISTORY_API_URL}?conversation_id=${conversationId}`, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const history = data.history || [];
+                
+                // Clear current messages
+                chatMessages.innerHTML = '';
+                
+                if (history.length === 0) {
+                    // Show welcome message for empty conversation
+                    showWelcomeMessage();
+                } else {
+                    // Add history messages
+                    history.forEach(item => {
+                        if (item.type === 'user') {
+                            addMessage(item.content, true);
+                        } else if (item.type === 'bot') {
+                            addMessage(item.content, false);
+                        }
+                    });
+                }
+                
+                // Scroll to bottom
+                setTimeout(() => {
+                    chatMessages.scrollTo({
+                        top: chatMessages.scrollHeight,
+                        behavior: 'instant'
+                    });
+                }, 200);
+            }
+        } catch (error) {
+            console.log('Could not load conversation history:', error);
+            addMessage("❌ Unable to load conversation history. Please try selecting a different conversation.", false);
+        }
+    }
+    
+    function renderConversations() {
+        // Don't render if still initializing
+        if (isInitializing) {
+            return;
+        }
+        
+        conversationsContainer.innerHTML = '';
+        
+        // Only show conversations that have actual messages
+        const conversationsWithMessages = conversations.filter(conv => conv.message_count > 0);
+        
+        if (conversations.length === 0 || conversationsWithMessages.length === 0) {
+            // Hide sidebar when no conversations to maximize chat area
+            sidebar.classList.add('hidden');
+            document.querySelector('.chat-app').classList.add('sidebar-hidden');
+            showHistoryBtn.style.display = 'block'; // Show history button when sidebar is hidden
+            return;
+        }
+        
+        // Show sidebar when there are conversations
+        sidebar.classList.remove('hidden');
+        document.querySelector('.chat-app').classList.remove('sidebar-hidden');
+        showHistoryBtn.style.display = 'none'; // Hide history button when sidebar is visible
+        
+        conversationsWithMessages.forEach(conv => {
+            const convElement = document.createElement('div');
+            convElement.className = `conversation-item ${conv.id === currentConversationId ? 'active' : ''}`;
+            
+            // Get meaningful title - use first user message or generated title
+            const displayTitle = conv.title && conv.title !== 'New Conversation' 
+                ? conv.title 
+                : (conv.message_count > 0 ? conv.title : 'New Conversation');
+            
+            convElement.innerHTML = `
+                <div class="conversation-content" data-conversation-id="${conv.id}">
+                    <div class="conversation-title">${displayTitle}</div>
+                    <div class="conversation-info">${conv.message_count} messages</div>
+                </div>
+                <button class="delete-conversation" data-conversation-id="${conv.id}">
+                    <svg width="16" height="16" fill="currentColor">
+                        <path d="M4 6h8v8a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM5.5 3V2a1 1 0 011-1h3a1 1 0 011 1v1H14a.5.5 0 010 1H2a.5.5 0 010-1h3.5z"/>
+                    </svg>
+                </button>
+            `;
+            
+            // Add click handlers
+            convElement.querySelector('.conversation-content').addEventListener('click', () => {
+                selectConversation(conv.id);
+            });
+            
+            convElement.querySelector('.delete-conversation').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteConversation(conv.id);
+            });
+            
+            conversationsContainer.appendChild(convElement);
+        });
+    }
+    
+    async function selectConversation(conversationId) {
+        if (conversationId === currentConversationId) return;
+        
+        currentConversationId = conversationId;
+        await loadConversationHistory(conversationId);
+        updateConversationTitle();
+        renderConversations(); // Re-render to update active state
+    }
+    
+    async function deleteConversation(conversationId) {
+        if (!confirm('Are you sure you want to delete this conversation?')) return;
+        
+        try {
+            const response = await fetch(HISTORY_API_URL, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    conversation_id: conversationId
+                })
+            });
+            
+            if (response.ok) {
+                // Remove from conversations list
+                conversations = conversations.filter(c => c.id !== conversationId);
+                
+                // If we deleted the current conversation, switch to another or create new
+                if (conversationId === currentConversationId) {
+                    if (conversations.length > 0) {
+                        currentConversationId = conversations[0].id;
+                        await loadConversationHistory(currentConversationId);
+                        updateConversationTitle();
+                    } else {
+                        await createNewConversation();
+                    }
+                }
+                
+                renderConversations();
+            }
+        } catch (error) {
+            console.log('Could not delete conversation:', error);
+            addMessage("❌ Unable to delete conversation. Please try again.", false);
+        }
+    }
+    
+    function updateConversationTitle() {
+        if (!currentConversationId) {
+            conversationTitle.textContent = '{% trans "Admin AI Assistant" %}';
+            return;
+        }
+        
+        const currentConv = conversations.find(c => c.id === currentConversationId);
+        if (currentConv) {
+            // Use meaningful title or default
+            const title = currentConv.title && currentConv.title !== 'New Conversation' 
+                ? currentConv.title 
+                : '{% trans "Admin AI Assistant" %}';
+            conversationTitle.textContent = title;
+        } else {
+            conversationTitle.textContent = '{% trans "Admin AI Assistant" %}';
+        }
+    }
+    
+    async function refreshConversationTitle(conversationId) {
+        try {
+            const response = await fetch(HISTORY_API_URL, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                const updatedConversations = data.conversations || [];
+                
+                // Find and update the conversation with new title
+                const updatedConv = updatedConversations.find(c => c.id === conversationId);
+                const localConv = conversations.find(c => c.id === conversationId);
+                
+                if (updatedConv && localConv && updatedConv.title !== localConv.title) {
+                    localConv.title = updatedConv.title;
+                    renderConversations(); // Re-render with new title
+                    updateConversationTitle(); // Update header title too
+                }
+            }
+        } catch (error) {
+            console.log('Could not refresh conversation title:', error);
+        }
+    }
+
+    // Updated saveChatMessage to work with conversations
+    async function saveChatMessage(message, response, metadata) {
+        try {
+            await fetch(HISTORY_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    action: 'save_message',
+                    conversation_id: currentConversationId,
+                    message: message,
+                    response: response,
+                    metadata: metadata || {}
+                })
+            });
+            
+            // Update conversation in local array
+            const conversation = conversations.find(c => c.id === currentConversationId);
+            if (conversation) {
+                conversation.message_count += 2; // User + bot message
+                conversation.updated_at = new Date().toISOString();
+                
+                // If this is the first message, fetch updated title from server
+                if (conversation.message_count === 2 && conversation.title === 'New Conversation') {
+                    setTimeout(async () => {
+                        await refreshConversationTitle(currentConversationId);
+                    }, 1000); // Wait a bit for title generation
+                }
+                
+                renderConversations(); // Re-render to show updated count
+            }
+        } catch (error) {
+            console.log('Could not save chat message:', error);
+            // Note: Don't show user message for save errors as message is already visible
+        }
+    }
+    
+    
+    async function sendMessage() {
+        const message = messageInput.value.trim();
+        if (!message) return;
+        
+        // If no current conversation or current conversation doesn't exist, create one
+        if (!currentConversationId || !conversations.find(c => c.id === currentConversationId)) {
+            await createActualNewConversation();
+        }
+        
+        const provider = providerSelect.value;
+        const useKB = useKnowledgeBase.checked;
+        
+        // Add user message
+        addMessage(message, true);
+        messageInput.value = '';
+        messageInput.style.height = 'auto';
+        
+        // Show typing indicator
+        showTypingIndicator();
+        
+        try {
+            const response = await fetch(CHAT_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    message: message,
+                    provider: provider,
+                    use_knowledge_base: useKB
+                })
+            });
+            
+            const data = await response.json();
+            hideTypingIndicator();
+            
+            if (response.ok) {
+                addMessage(data.response, false);
+                await saveChatMessage(message, data.response, data.metadata);
+            } else {
+                const errorMessage = `Error: ${data.error}`;
+                addMessage(errorMessage, false);
+                await saveChatMessage(message, errorMessage, {});
+            }
+        } catch (error) {
+            hideTypingIndicator();
+            const errorMessage = `Network Error: ${error.message}`;
+            addMessage(errorMessage, false);
+            await saveChatMessage(message, errorMessage, {});
+        }
+    }
+    
+    function showTypingIndicator() {
+        const typingDiv = document.createElement('div');
+        typingDiv.id = 'typing-indicator';
+        typingDiv.className = 'message assistant-message typing';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.textContent = 'AI';
+        
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content typing-content';
+        contentDiv.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+        
+        typingDiv.appendChild(avatar);
+        typingDiv.appendChild(contentDiv);
+        
+        chatMessages.appendChild(typingDiv);
+        
+        // Scroll to bottom
+        setTimeout(() => {
+            chatMessages.scrollTo({
+                top: chatMessages.scrollHeight,
+                behavior: 'smooth'
+            });
+        }, 100);
+    }
+    
+    function hideTypingIndicator() {
+        const typingIndicator = document.getElementById('typing-indicator');
+        if (typingIndicator) {
+            typingIndicator.remove();
+        }
+    }
+    
+    // Event listeners
+    sendButton.addEventListener('click', sendMessage);
+    
+    messageInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    
+    // Sidebar event handlers
+    newConversationBtn.addEventListener('click', createNewConversation);
+    
+    showHistoryBtn.addEventListener('click', function() {
+        // Show sidebar temporarily to access history
+        sidebar.classList.remove('hidden');
+        document.querySelector('.chat-app').classList.remove('sidebar-hidden');
+        showHistoryBtn.style.display = 'none';
+    });
+});
+</script>
+
+<style>
+/* Ensure Django admin navigation is visible */
+#header, #nav-sidebar {
+    position: relative !important;
+    z-index: 9999 !important;
+}
+
+/* Hide user avatar in admin sidebar on LLM chat page for consistency */
+#nav-sidebar .user-panel {
+    display: none !important;
+}
+
+/* Django Admin Compatible Chat Layout */
+.chat-app {
+    display: flex;
+    width: 100%;
+    height: calc(100vh - 120px); /* Account for Django admin header */
+    max-height: 800px;
+    background: #ffffff;
+    box-sizing: border-box;
+    overflow: hidden;
+    margin: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.chat-app.sidebar-hidden .sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+}
+
+/* Sidebar - Fixed Width for Stability */
+.sidebar {
+    width: 280px;
+    min-width: 280px;
+    background: #f7f7f8;
+    border-right: 1px solid #e5e5e5;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.sidebar.hidden {
+    border-right: none;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+
+.sidebar-header {
+    padding: 20px 16px;
+    border-bottom: 1px solid #e5e5e5;
+}
+
+.new-conversation-btn {
+    width: 100%;
+    padding: 12px 16px;
+    background: #10a37f;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.2s;
+}
+
+.new-conversation-btn:hover {
+    background: #0d8f6f;
+}
+
+.conversations-list {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+}
+
+.conversations-list h3 {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.conversations-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 200px; /* Maintain minimum height for consistent appearance */
+}
+
+.no-history-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px; /* Ensure consistent space even when empty */
+}
+
+.conversation-item {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    transition: all 0.2s;
+    cursor: pointer;
+}
+
+.conversation-item:hover {
+    border-color: #d1d5db;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.conversation-item.active {
+    background: #f0f9ff;
+    border-color: #10a37f;
+}
+
+.conversation-content {
+    flex: 1;
+    padding: 12px 16px;
+}
+
+.conversation-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #202123;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.conversation-info {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.delete-conversation {
+    padding: 8px;
+    background: none;
+    border: none;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-right: 8px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.delete-conversation:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+
+/* Main chat area - Flexbox Column Layout */
+.main-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+/* Chat Header */
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e5e5e5;
+    background: #f8f9fa;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.show-history-btn {
+    padding: 8px 12px;
+    background: #10a37f;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.2s;
+}
+
+.show-history-btn:hover {
+    background: #0d8f6f;
+}
+
+.chat-header h1 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 600;
+    color: #202123;
+}
+
+.chat-config {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.provider-select {
+    padding: 8px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    background: white;
+    font-size: 14px;
+    color: #374151;
+}
+
+.knowledge-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+}
+
+.knowledge-toggle input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+/* Chat Container - KEY: flex-grow takes all available space */
+.chat-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.chat-messages {
+    /* CRITICAL: flex-grow takes all space, overflow-y adds scroll when needed */
+    flex-grow: 1;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    padding: 24px;
+    background: #ffffff;
+    /* Consistent scrollbar styling to prevent layout jumps */
+    scrollbar-width: thin;
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 8px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Welcome Message - Simple flex centering */
+.welcome-message {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    text-align: center;
+}
+
+.welcome-content {
+    max-width: 600px;
+    color: #6b7280;
+}
+
+.welcome-content h2 {
+    color: #202123;
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.welcome-content p {
+    margin-bottom: 16px;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.welcome-content ul {
+    text-align: left;
+    margin: 16px 0;
+    padding-left: 20px;
+}
+
+.welcome-content li {
+    margin-bottom: 8px;
+    font-size: 15px;
+}
+
+.welcome-content .examples {
+    background: #f3f4f6;
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 24px;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.inline-new-conversation-btn {
+    margin-top: 20px;
+    padding: 12px 24px;
+    background: #10a37f;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: inline-block;
+}
+
+.inline-new-conversation-btn:hover {
+    background: #0d8f6f;
+}
+
+/* Individual Chat Messages */
+.message {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    align-items: flex-start;
+}
+
+/* User messages - no avatar, right-aligned */
+.user-message {
+    justify-content: flex-end;
+}
+
+/* AI messages - with avatar, left-aligned */
+.assistant-message {
+    justify-content: flex-start;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+    background: #8e8ea0;
+    color: white;
+}
+
+.message-content {
+    flex: 1;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #202123;
+    white-space: pre-wrap;
+    /* CRITICAL: Force word wrapping to prevent horizontal overflow */
+    word-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+.user-message .message-content {
+    background: #f7f7f8;
+    padding: 12px 16px;
+    border-radius: 16px;
+    border-top-right-radius: 4px;
+    max-width: 70%;
+}
+
+.assistant-message .message-content {
+    padding: 0;
+    max-width: 85%;
+}
+
+/* Typing indicator */
+.typing .message-content {
+    padding: 12px 0;
+}
+
+.typing-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.typing-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #8e8ea0;
+    animation: typing 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes typing {
+    0%, 60%, 100% {
+        transform: translateY(0);
+    }
+    30% {
+        transform: translateY(-10px);
+    }
+}
+
+/* Chat Input - CRITICAL: flex-shrink: 0 prevents size changes */
+.chat-input-container {
+    padding: 24px;
+    border-top: 1px solid #e5e5e5;
+    background: #ffffff;
+    flex-shrink: 0;
+    display: flex;
+}
+
+.input-wrapper {
+    position: relative;
+    flex-grow: 1;
+    max-width: 768px;
+    margin: 0 auto;
+}
+
+#message-input {
+    width: 100%;
+    min-height: 52px;
+    max-height: 120px;
+    padding: 16px 56px 16px 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    font-size: 16px;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    transition: border-color 0.2s;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+#message-input:focus {
+    border-color: #10a37f;
+    box-shadow: 0 0 0 3px rgba(16, 163, 127, 0.1);
+}
+
+.send-button {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: #10a37f;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s;
+}
+
+.send-button:hover:not(:disabled) {
+    background: #0d8f6f;
+}
+
+.send-button:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}
+
+/* Responsive Design - Mobile Flexbox Layout */
+@media (max-width: 768px) {
+    .chat-app {
+        flex-direction: column; /* Stack vertically on mobile */
+        /* Adjust for mobile within Django admin */
+        height: calc(100vh - 80px);
+        width: 100%;
+    }
+    
+    .sidebar {
+        width: 100% !important; /* Full width on mobile */
+        min-width: 100% !important;
+        max-height: 200px; /* Limit height on mobile */
+        border-right: none;
+        border-bottom: 1px solid #e5e5e5;
+        flex-shrink: 0; /* Prevent shrinking */
+    }
+    
+    .chat-app.sidebar-hidden .sidebar {
+        max-height: 0 !important;
+        width: 100% !important;
+        min-width: 100% !important;
+    }
+    
+    .sidebar.hidden {
+        max-height: 0;
+        border-bottom: none;
+        overflow: hidden;
+    }
+    
+    .conversations-list {
+        padding: 12px;
+        max-height: 140px; /* Limit scroll area */
+        overflow-y: auto;
+    }
+    
+    .conversations-container {
+        min-height: 80px; /* Smaller on mobile */
+    }
+    
+    .no-history-message {
+        min-height: 60px; /* Smaller on mobile */
+    }
+    
+    .main-chat {
+        flex: 1;
+        min-height: 0; /* Important for mobile flex */
+    }
+    
+    .header-left {
+        gap: 12px;
+    }
+    
+    .show-history-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+    }
+    
+    .chat-header {
+        padding: 16px;
+        flex-direction: column;
+        gap: 16px;
+        align-items: flex-start;
+    }
+    
+    .chat-header h1 {
+        font-size: 20px;
+    }
+    
+    .chat-config {
+        gap: 12px;
+    }
+    
+    .chat-messages {
+        padding: 16px;
+    }
+    
+    .message {
+        margin-bottom: 16px;
+    }
+    
+    .message-content {
+        font-size: 15px;
+    }
+    
+    .chat-input-container {
+        padding: 16px;
+    }
+    
+    #message-input {
+        font-size: 16px; /* Prevent zoom on iOS */
+    }
+}
+
+/* Loading States */
+.loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    text-align: center;
+}
+
+.loading-content {
+    max-width: 400px;
+    color: #6b7280;
+}
+
+.loading-content h2 {
+    color: #202123;
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.loading-content p {
+    margin-bottom: 16px;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #e5e5e5;
+    border-top: 4px solid #10a37f;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+.loading-conversations {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    color: #6b7280;
+}
+
+.loading-spinner-small {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e5e5e5;
+    border-top: 2px solid #10a37f;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Legacy scrollbar styling - now handled above in main chat-messages rule */
+</style>
+{% endblock %}

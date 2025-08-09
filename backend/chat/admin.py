@@ -239,3 +239,34 @@ class AdminPromptAdmin(admin.ModelAdmin):
         return obj.updated_at.strftime('%Y-%m-%d %H:%M')
     updated_at_display.short_description = _('Updated At')
     updated_at_display.admin_order_field = 'updated_at'
+
+
+# Customize admin site
+admin.site.site_header = _('🤖 Chatbot Administration')
+admin.site.site_title = _('Chatbot Admin')
+admin.site.index_title = _('Welcome to Chatbot Administration')
+
+# Add custom admin views
+from django.urls import path
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+
+def llm_chat_admin_view(request):
+    """LLM Chat Interface integrated into Django admin"""
+    from documents.models import Document
+    
+    context = {
+        'title': 'LLM Chat Interface',
+        'available_providers': ['openai', 'gemini', 'claude'],
+        'total_documents': Document.objects.filter(is_active=True).count(),
+        'processed_documents': Document.objects.filter(is_active=True, extracted_text__isnull=False).exclude(extracted_text='').count(),
+        'opts': None,  # No model options for custom view
+        'has_permission': True,
+        'site_title': admin.site.site_title,
+        'site_header': admin.site.site_header,
+        'site_url': '/',
+        'has_change_permission': True,
+    }
+    
+    return TemplateResponse(request, 'admin/chat/llm_chat.html', context)
+

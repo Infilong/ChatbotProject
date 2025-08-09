@@ -81,6 +81,38 @@ def my_view(request):
 - Use inline validation for form errors
 - Always provide clear actions users can take
 
+## CRITICAL: Backend Code Standards
+
+**NO EMOJIS OR NON-UNICODE CHARACTERS IN BACKEND CODE:**
+
+❌ **AVOID in Django backend code:**
+- Emojis in templates, admin interfaces, or Python code (🤖, 📊, 🔒, etc.)
+- Special Unicode characters that may cause encoding issues
+- Non-ASCII characters in user interface elements
+
+✅ **ALWAYS Use Standard ASCII Text:**
+- Plain text labels for admin interfaces
+- Standard Unicode-safe characters only
+- Professional, clean presentation without decorative characters
+- Focus on functionality over visual styling with characters
+
+**Examples:**
+```python
+# ❌ Wrong - Using emojis in admin/templates
+<h2>🤖 {% trans "LLM Features" %}</h2>
+<h2>📊 {% trans "Quick Statistics" %}</h2>
+
+# ✅ Correct - Clean text only
+<h2>{% trans "LLM Features" %}</h2>  
+<h2>{% trans "Quick Statistics" %}</h2>
+```
+
+**Rationale:**
+- Ensures consistent encoding across different systems
+- Maintains professional appearance in admin interfaces
+- Prevents potential Unicode-related issues in databases and templates
+- Keeps focus on functionality rather than decoration
+
 ## CRITICAL: Security Best Practices
 
 **ALWAYS IMPLEMENT SECURITY-FIRST DESIGN IN BACKEND SYSTEMS:**
@@ -351,6 +383,28 @@ uv run python manage.py test        # Run backend tests
 
 ## Development Notes
 
+**CRITICAL: Avoid Logical Errors and Unnatural Behaviors**
+
+When implementing features, always avoid logical errors and unnatural behaviors which will not be committed by human developers:
+
+❌ **Common Logical Errors to Avoid:**
+- Creating empty conversations without any user messages
+- Showing generic labels like "New Conversation" instead of meaningful titles
+- Displaying empty boxes when no data exists instead of proper "No Data" messages
+- Allowing duplicate or unnecessary operations (e.g., creating new conversation when current one is empty)
+- Inconsistent state management (e.g., creating conversations that don't get properly tracked)
+- Unnatural user flows that real humans wouldn't expect
+
+✅ **Natural Implementation Patterns:**
+- Only create conversations when user actually sends a message
+- Generate meaningful titles from conversation content
+- Show appropriate empty states ("No History", "No Messages", etc.)
+- Prevent unnecessary actions (don't create if current conversation is empty)
+- Follow expected user interaction patterns from popular apps (ChatGPT, WhatsApp, etc.)
+- Maintain consistent state across all operations
+
+**Testing Mindset:** Always think "Would a real user expect this behavior?" and "Does this match how popular apps work?"
+
 **Current State (Phase 1)**
 - Demo authentication accepts any username/password combination
 - Session persists in localStorage until logout
@@ -609,3 +663,184 @@ is_active_display.boolean = True  # For boolean fields
 4. Use `.boolean = True` for boolean field display
 5. Update translations in `backend/locale/ja/LC_MESSAGES/django.po`
 6. Run `uv run python manage.py compilemessages` to compile translations
+
+## CRITICAL: CSS Layout Best Practices for Consistent UI
+
+**CSS layout issues are extremely annoying and time-consuming. ALWAYS follow these principles to avoid content-dependent sizing problems:**
+
+### 🚫 **NEVER Use These Problematic CSS Patterns:**
+
+❌ **Content-Dependent Sizing:**
+```css
+/* Wrong - Container size changes based on content */
+.container {
+    height: auto; /* Dangerous - size depends on content */
+    min-height: 60%; /* Percentage-based minimums cause issues */
+}
+
+/* Wrong - Absolute positioning without proper constraints */
+.chat-messages {
+    position: absolute;
+    height: calc(100% - 120px); /* Fragile calculations */
+}
+
+/* Wrong - Flex without proper growth control */
+.flex-container {
+    display: flex;
+    /* Missing flex-grow/flex-shrink controls */
+}
+```
+
+❌ **Complex Layout Calculations:**
+```css
+/* Wrong - Complex height calculations that break */
+.main-area {
+    height: calc(100vh - 120px - 80px - 2em); /* Too many dependencies */
+}
+```
+
+### ✅ **ALWAYS Use Viewport + Flexbox Pattern:**
+
+**The ONLY reliable method for consistent UI sizing:**
+
+```css
+/* 1. Main container uses viewport units */
+.main-container {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;  /* 100% of viewport width */
+    height: 100vh; /* 100% of viewport height */
+    box-sizing: border-box;
+}
+
+/* 2. Header/footer with fixed height */
+.header, .footer {
+    flex-shrink: 0; /* CRITICAL: Never shrinks */
+    /* Fixed height content */
+}
+
+/* 3. Main content area grows to fill space */
+.content-area {
+    flex-grow: 1;      /* CRITICAL: Takes all available space */
+    overflow-y: auto;  /* CRITICAL: Scroll when needed, never resize */
+    display: flex;
+    flex-direction: column;
+}
+
+/* 4. Nested flex items with proper controls */
+.chat-messages {
+    flex-grow: 1;      /* Takes available space */
+    overflow-y: auto;  /* Scrolls instead of expanding */
+}
+
+.input-form {
+    flex-shrink: 0;    /* Never changes size */
+}
+```
+
+### 🎯 **CSS Layout Checklist - ALWAYS Verify:**
+
+**Before writing any layout CSS, ensure:**
+- [ ] **Main container uses `100vh/100vw`** - No `calc()` or percentage dependencies
+- [ ] **Flexbox with explicit `flex-grow: 1`** for main content areas
+- [ ] **`flex-shrink: 0`** for fixed elements (headers, inputs, toolbars)
+- [ ] **`overflow-y: auto`** on scrollable areas instead of height calculations
+- [ ] **`box-sizing: border-box`** to include padding in size calculations
+- [ ] **No `position: absolute`** unless absolutely necessary
+- [ ] **No `min-height` with percentages** - use viewport units only
+- [ ] **Test with different content lengths** - layout should never change
+
+### 🔧 **Implementation Pattern for Chat/Dashboard Layouts:**
+
+```css
+/* Root container - full viewport */
+.app-container {
+    display: flex;
+    width: 100vw;
+    height: 100vh;
+    box-sizing: border-box;
+}
+
+/* Sidebar - fixed width */
+.sidebar {
+    width: 280px;
+    min-width: 280px;
+    flex-shrink: 0;
+    /* Content here */
+}
+
+/* Main area - flexible */
+.main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header - fixed height */
+.header {
+    flex-shrink: 0;
+    /* Fixed header content */
+}
+
+/* Content area - grows to fill */
+.content {
+    flex-grow: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Messages area - scrollable */
+.messages {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 24px;
+}
+
+/* Input area - fixed height */
+.input-container {
+    flex-shrink: 0;
+    display: flex;
+    /* Input form content */
+}
+```
+
+### 🚨 **Common CSS Mistakes That ALWAYS Cause Problems:**
+
+1. **Height Calculations**: `height: calc(100% - Xpx)` - Always breaks
+2. **Percentage Min-Heights**: `min-height: 60%` - Causes content-dependent sizing
+3. **Missing Flex Controls**: Not specifying `flex-grow` and `flex-shrink`
+4. **Absolute Positioning**: Using `position: absolute` for layout instead of flexbox
+5. **Content-Based Heights**: Using `height: auto` or `height: max-content`
+6. **Mixed Units**: Mixing `vh`, `%`, and `px` in calculations
+
+### 📏 **Word Wrapping for Long Content:**
+
+**ALWAYS prevent horizontal overflow with:**
+```css
+.message-content {
+    /* Comprehensive word wrapping */
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+    white-space: pre-wrap; /* Preserve line breaks but wrap */
+}
+```
+
+### 🎯 **Testing Requirements:**
+
+**Every layout MUST be tested with:**
+- Empty content (welcome messages, no data states)
+- Short content (single line messages)
+- Long content (paragraph-length responses)
+- Very long content (multi-paragraph AI responses)
+- Dynamic content changes (adding/removing messages)
+
+**If the container size changes in ANY of these scenarios, the CSS is wrong.**
+
+### 💡 **Golden Rule:**
+
+> **Container size should NEVER depend on content. Use viewport units + flexbox with explicit growth controls. Test with different content lengths to verify consistency.**
+
+**Remember: CSS layout problems waste hours of debugging time. Get it right the first time by following these patterns.**

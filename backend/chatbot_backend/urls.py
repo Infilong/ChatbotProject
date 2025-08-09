@@ -25,5 +25,12 @@ def test_view(request):
 urlpatterns = [
     path('i18n/', include('django.conf.urls.i18n')),
     path('', test_view),  # Test view at root
+    path('admin/llm/', include('chat.admin_urls')),  # Custom admin URLs before main admin
     path('admin/', admin.site.urls),
+    
+    # API endpoints
+    path('api/chat/', include('chat.urls')),
+    path('api/documents/', include('documents.urls')),
+    path('api/analytics/', include('analytics.urls')),
+    path('api/auth/', include('authentication.urls')),
 ]

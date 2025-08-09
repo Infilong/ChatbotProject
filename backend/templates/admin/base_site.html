@@ -1,0 +1,27 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<!-- Add Font Awesome for user avatar in header only -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+<style>
+/* ONLY target the user avatar in the admin header, NOT panel options */
+#header .user-tools .fa-user-circle,
+#header .user-tools i.fas.fa-user-circle {
+    color: #10a37f !important;
+    font-size: 28px !important;
+    margin-right: 8px !important;
+    vertical-align: middle !important;
+}
+
+/* Ensure Font Awesome loads properly for header avatar only */
+#header .user-tools .fa::before,
+#header .user-tools .fas::before {
+    font-family: "Font Awesome 5 Free", "Font Awesome 5 Pro", FontAwesome !important;
+    font-weight: 900 !important;
+    display: inline-block !important;
+}
+</style>
+{% endblock %}

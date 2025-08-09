@@ -4,7 +4,13 @@
       "Bash(rm:*)",
       "Bash(uv run:*)",
       "Bash(timeout 5 uv run:*)",
-      "Bash(timeout 3 uv run:*)"
+      "Bash(timeout 3 uv run:*)",
+      "Bash(mkdir:*)",
+      "Bash(uv add:*)",
+      "Bash(uv pip install:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }

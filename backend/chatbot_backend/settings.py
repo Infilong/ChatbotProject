@@ -197,8 +197,8 @@ JAZZMIN_SETTINGS = {
     "order_with_respect_to": ["auth", "authentication", "chat", "analytics", "documents"],
     "show_ui_builder": False,
     "show_sidebar_user": False,
-    "navbar_user_avatar": True,
-    "user_avatar": "fas fa-user-shield",
+    "navbar_user_avatar": False,
+    "user_avatar": None,
     "language_chooser": True,
     "topmenu_links": [
         {}
