@@ -56,6 +56,7 @@ def validate_document_file(file):
 
 
 class Document(models.Model):
+    """Document model for knowledge base management with file deduplication"""
     """Simple document management system for file operations"""
     
     # Unique identifier for secure URLs

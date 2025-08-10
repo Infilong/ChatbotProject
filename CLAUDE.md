@@ -2,6 +2,199 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Code Maintainability Standards
+
+**ALWAYS FOLLOW ENTERPRISE-LEVEL CODING PRACTICES:**
+
+🏢 **Follow Google's Coding Standards and Top Company Best Practices**
+- Write clean, maintainable, and scalable code that can be easily understood by other developers
+- Follow SOLID principles, DRY (Don't Repeat Yourself), and KISS (Keep It Simple, Stupid)
+- Prioritize code readability, proper documentation, and consistent naming conventions
+- Structure code to be testable, modular, and loosely coupled
+
+### **🔧 Django Backend Architecture Standards**
+
+**File Organization & Structure:**
+```
+backend/
+├── apps/                     # Django apps organized by domain
+│   ├── authentication/       # User auth and profiles
+│   ├── chat/                # Chat and LLM functionality  
+│   ├── documents/           # Document management
+│   └── analytics/           # Analytics and reporting
+├── core/                    # Shared utilities and base classes
+│   ├── models.py           # Abstract base models
+│   ├── utils.py            # Shared utility functions
+│   ├── exceptions.py       # Custom exception classes
+│   └── validators.py       # Custom validators
+├── config/                 # Project configuration
+│   ├── settings/           # Split settings by environment
+│   │   ├── base.py        # Base settings
+│   │   ├── development.py # Development settings
+│   │   └── production.py  # Production settings
+│   ├── urls.py            # Root URL configuration
+│   └── wsgi.py            # WSGI configuration
+└── tests/                  # Centralized test directory
+    ├── factories/          # Model factories for testing
+    ├── integration/        # Integration tests
+    └── unit/              # Unit tests by app
+```
+
+**Code Quality Requirements:**
+
+✅ **Function and Class Design:**
+- **Single Responsibility**: Each function/class should have one clear purpose
+- **Max 20-25 lines per function** (Google standard)
+- **Descriptive names**: `calculate_user_subscription_fee()` not `calc_fee()`
+- **Type hints**: Always use Python type hints for function parameters and return types
+- **Docstrings**: Google-style docstrings for all public methods
+
+✅ **Django Model Standards:**
+```python
+class UserProfile(models.Model):
+    """User profile information and preferences.
+    
+    This model extends Django's User model with additional
+    user-specific data and preferences.
+    """
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE,
+        help_text=_("Associated Django user account")
+    )
+    
+    class Meta:
+        verbose_name = _("User Profile")
+        verbose_name_plural = _("User Profiles")
+        db_table = 'user_profiles'  # Explicit table naming
+        
+    def __str__(self) -> str:
+        return f"Profile for {self.user.username}"
+    
+    def get_absolute_url(self) -> str:
+        """Return the canonical URL for this profile."""
+        return reverse('profile:detail', kwargs={'pk': self.pk})
+```
+
+✅ **View Organization:**
+- **Class-based views preferred** for complex logic
+- **Function-based views** only for simple, single-purpose operations
+- **Separate concerns**: Authentication, validation, business logic, presentation
+- **Use mixins** for shared functionality across views
+
+✅ **Service Layer Pattern:**
+```python
+# services/chat_service.py
+class ChatService:
+    """Service layer for chat operations."""
+    
+    @staticmethod
+    def create_conversation(user: User, title: str) -> Conversation:
+        """Create a new conversation for the given user."""
+        pass
+    
+    @staticmethod  
+    def send_message(conversation: Conversation, content: str) -> Message:
+        """Send a message in the conversation."""
+        pass
+```
+
+✅ **Error Handling Hierarchy:**
+```python
+# core/exceptions.py
+class ChatbotBaseException(Exception):
+    """Base exception for all chatbot-related errors."""
+    pass
+
+class LLMServiceException(ChatbotBaseException):
+    """Exception raised when LLM service fails."""
+    pass
+
+class DocumentProcessingException(ChatbotBaseException):
+    """Exception raised during document processing."""
+    pass
+```
+
+**File Size and Complexity Limits:**
+- **Max 300 lines per Python file** (excluding tests)
+- **Split large models/views** into multiple files using Django's app structure
+- **Extract complex business logic** into separate service classes
+- **Use managers and querysets** for complex database operations
+
+**Testing Requirements:**
+- **Minimum 80% test coverage** for all new code
+- **Unit tests** for all service methods and model methods
+- **Integration tests** for API endpoints and user workflows
+- **Factory classes** for test data generation instead of fixtures
+
+### **🎨 Frontend Architecture Standards**
+
+**React Component Organization:**
+```
+frontend/src/
+├── components/           # Reusable UI components
+│   ├── common/          # Generic components (Button, Modal, etc.)
+│   ├── forms/           # Form-specific components
+│   └── layout/          # Layout components (Header, Sidebar)
+├── pages/               # Page-level components
+├── hooks/               # Custom React hooks
+├── services/            # API service functions
+├── utils/               # Utility functions
+├── types/               # TypeScript type definitions
+└── constants/           # Application constants
+```
+
+**Component Standards:**
+- **Max 150 lines per component** (excluding styles)
+- **Single responsibility** - one component, one purpose
+- **Props interfaces** with clear TypeScript definitions
+- **Custom hooks** for shared stateful logic
+- **Meaningful component names** that describe their purpose
+
+### **📚 Documentation Requirements**
+
+**Code Documentation:**
+- **README.md** for each major component/app explaining its purpose
+- **Inline comments** for complex business logic only
+- **API documentation** using Django REST framework's built-in tools
+- **Architecture Decision Records (ADRs)** for significant design decisions
+
+**Git Commit Standards:**
+- **Conventional commits** format: `feat:`, `fix:`, `refactor:`, etc.
+- **Clear, descriptive messages** explaining the "why" not just "what"
+- **Small, focused commits** that can be easily reviewed and reverted
+
+### **⚡ Performance Standards**
+
+**Database Optimization:**
+- **Always use select_related/prefetch_related** to avoid N+1 queries
+- **Database indexes** on frequently queried fields
+- **Pagination** for all list views
+- **Query optimization** - avoid unnecessary database hits
+
+**Caching Strategy:**
+- **Redis caching** for expensive operations
+- **Template fragment caching** for dynamic content
+- **API response caching** for frequently accessed data
+
+### **🔒 Security Standards**
+
+**Django Security:**
+- **Never bypass Django's security features** without extensive documentation
+- **Input validation and sanitization** at multiple layers
+- **HTTPS enforcement** in production
+- **Secret management** using environment variables or secure vaults
+- **SQL injection prevention** through ORM usage
+
+**Code Review Requirements:**
+- **All code must be reviewed** before merging to main branch
+- **Security review** for any authentication or authorization changes
+- **Performance review** for database-heavy operations
+
+This ensures the codebase remains maintainable, scalable, and follows industry best practices used by top technology companies.
+
+---
+
 ## CRITICAL: Multilingual GUI Support
 
 **BEFORE WRITING ANY NEW CODE, ALWAYS CONSIDER MULTILINGUAL SUPPORT:**

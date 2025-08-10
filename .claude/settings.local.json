@@ -10,7 +10,8 @@
       "Bash(uv pip install:*)",
       "Bash(python test:*)",
       "Bash(python:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(find:*)"
     ],
     "deny": []
   }

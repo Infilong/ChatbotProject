@@ -315,7 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
-                    action: 'new_conversation'
+                    action: 'create'
                 })
             });
             
@@ -626,7 +626,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     message: message,
                     provider: provider,
-                    use_knowledge_base: useKB
+                    use_knowledge_base: useKB,
+                    conversation_id: currentConversationId
                 })
             });
             
@@ -634,18 +635,42 @@ document.addEventListener('DOMContentLoaded', function() {
             hideTypingIndicator();
             
             if (response.ok) {
+                // Update current conversation ID if it was created
+                if (data.conversation_id && !currentConversationId) {
+                    currentConversationId = data.conversation_id;
+                }
+                
                 addMessage(data.response, false);
-                await saveChatMessage(message, data.response, data.metadata);
+                // Messages are already saved in the backend, just update local conversation list
+                await refreshConversationsList();
             } else {
                 const errorMessage = `Error: ${data.error}`;
                 addMessage(errorMessage, false);
-                await saveChatMessage(message, errorMessage, {});
             }
         } catch (error) {
             hideTypingIndicator();
             const errorMessage = `Network Error: ${error.message}`;
             addMessage(errorMessage, false);
-            await saveChatMessage(message, errorMessage, {});
+        }
+    }
+    
+    async function refreshConversationsList() {
+        try {
+            const response = await fetch(HISTORY_API_URL, {
+                method: 'GET',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                conversations = data.conversations || [];
+                renderConversations();
+                updateConversationTitle();
+            }
+        } catch (error) {
+            console.log('Could not refresh conversations:', error);
         }
     }
     
@@ -706,10 +731,12 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <style>
-/* Ensure Django admin navigation is visible */
-#header, #nav-sidebar {
-    position: relative !important;
-    z-index: 9999 !important;
+/* Reset default margins and paddings for consistent layout */
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #f0f2f5;
 }
 
 /* Hide user avatar in admin sidebar on LLM chat page for consistency */
@@ -717,18 +744,18 @@ document.addEventListener('DOMContentLoaded', function() {
     display: none !important;
 }
 
-/* Django Admin Compatible Chat Layout */
+/* Django Admin Compatible Chat Layout - FLEXBOX METHOD */
 .chat-app {
     display: flex;
-    width: 100%;
-    height: calc(100vh - 120px); /* Account for Django admin header */
-    max-height: 800px;
+    flex-direction: row;
+    width: calc(100vw - 40px);  /* Account for body padding */
+    height: calc(100vh - 160px); /* Account for Django admin header */
     background: #ffffff;
     box-sizing: border-box;
     overflow: hidden;
-    margin: 0;
-    position: relative;
-    z-index: 1;
+    margin: 20px;
+    padding: 20px;
+    border-radius: 8px;
 }
 
 .chat-app.sidebar-hidden .sidebar {
@@ -746,6 +773,7 @@ document.addEventListener('DOMContentLoaded', function() {
     flex-direction: column;
     overflow: hidden;
     transition: all 0.3s ease;
+    flex-shrink: 0;  /* KEY: Prevent sidebar from shrinking */
 }
 
 .sidebar.hidden {
@@ -868,16 +896,18 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 
-/* Main chat area - Flexbox Column Layout */
+/* Main chat area - KEY: flex-grow takes all available space */
 .main-chat {
-    flex: 1;
+    flex-grow: 1;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     min-width: 0;
+    background: #ffffff;
+    border-radius: 8px;
 }
 
-/* Chat Header */
+/* Chat Header - Fixed height, no flex grow */
 .chat-header {
     display: flex;
     justify-content: space-between;
@@ -885,6 +915,9 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 20px 24px;
     border-bottom: 1px solid #e5e5e5;
     background: #f8f9fa;
+    flex-shrink: 0;  /* KEY: Prevent header from shrinking */
+    height: 80px;    /* Fixed header height */
+    box-sizing: border-box;
 }
 
 .header-left {
@@ -954,6 +987,7 @@ document.addEventListener('DOMContentLoaded', function() {
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    padding-top: 0;  /* No padding needed here since header is in flex flow */
 }
 
 .chat-messages {
@@ -963,6 +997,7 @@ document.addEventListener('DOMContentLoaded', function() {
     scroll-behavior: smooth;
     padding: 24px;
     background: #ffffff;
+    box-sizing: border-box;  /* Include padding in height calculations */
     /* Consistent scrollbar styling to prevent layout jumps */
     scrollbar-width: thin;
 }
@@ -985,13 +1020,14 @@ document.addEventListener('DOMContentLoaded', function() {
     background: #a8a8a8;
 }
 
-/* Welcome Message - Simple flex centering */
+/* Welcome Message - Simple flex centering with proper positioning */
 .welcome-message {
     display: flex;
     justify-content: center;
-    align-items: center;
+    align-items: flex-start;  /* Changed from center to flex-start */
     height: 100%;
     text-align: center;
+    padding-top: 60px;  /* KEY FIX: Add padding to push content down */
 }
 
 .welcome-content {
