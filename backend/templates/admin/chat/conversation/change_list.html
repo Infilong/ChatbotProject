@@ -1,0 +1,375 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script type="text/javascript">
+document.addEventListener('DOMContentLoaded', function() {
+    // Replace the default "----------" option with a more descriptive placeholder
+    const actionSelect = document.querySelector('select[name="action"]');
+    if (actionSelect) {
+        const firstOption = actionSelect.querySelector('option[value=""]');
+        if (firstOption && firstOption.textContent.trim() === '---------') {
+            firstOption.textContent = 'Choose an action';
+        }
+    }
+    
+    // Add progress indicator for LangExtract analysis
+    const actionForm = document.querySelector('#changelist-action-form');
+    const goButton = document.querySelector('button[title="Run the selected action"]');
+    
+    if (actionForm && goButton) {
+        actionForm.addEventListener('submit', function(e) {
+            const selectedAction = actionSelect.value;
+            
+            // Only show progress for LangExtract analysis
+            if (selectedAction === 'analyze_with_langextract') {
+                // Prevent default form submission temporarily
+                e.preventDefault();
+                
+                // Show immediate progress feedback
+                showProgressNotification();
+                
+                // Submit the form after a short delay to show the progress
+                setTimeout(() => {
+                    actionForm.submit();
+                }, 100);
+            }
+        });
+    }
+    
+    function showProgressNotification() {
+        // Create progress notification element
+        const progressDiv = document.createElement('div');
+        progressDiv.id = 'langextract-progress';
+        progressDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            border: 2px solid #0073aa;
+            border-radius: 8px;
+            padding: 20px 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 10000;
+            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+        
+        progressDiv.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div class="spinner" style="
+                    width: 24px; 
+                    height: 24px; 
+                    border: 3px solid #f3f3f3; 
+                    border-top: 3px solid #0073aa; 
+                    border-radius: 50%; 
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div>
+                    <div style="font-weight: bold; color: #0073aa; margin-bottom: 5px;">
+                        LangExtract Analysis in Progress
+                    </div>
+                    <div style="color: #666; font-size: 14px;" id="progress-status">
+                        Connecting to Gemini API...
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add CSS animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Add overlay
+        const overlay = document.createElement('div');
+        overlay.id = 'progress-overlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+        `;
+        
+        document.body.appendChild(overlay);
+        document.body.appendChild(progressDiv);
+        
+        // Start real-time progress polling
+        startProgressPolling();
+        
+        // Auto-remove after timeout (fallback)
+        setTimeout(() => {
+            if (document.getElementById('langextract-progress')) {
+                removeProgressNotification();
+            }
+        }, 30000);
+    }
+    
+    function removeProgressNotification() {
+        const progress = document.getElementById('langextract-progress');
+        const overlay = document.getElementById('progress-overlay');
+        if (progress) progress.remove();
+        if (overlay) overlay.remove();
+    }
+    
+    // Remove progress notification when page loads (after form submission)
+    window.addEventListener('load', function() {
+        setTimeout(removeProgressNotification, 500);
+    });
+    
+    function startProgressPolling() {
+        let pollCount = 0;
+        const maxPolls = 60; // Maximum 60 seconds of polling
+        
+        const pollInterval = setInterval(async () => {
+            pollCount++;
+            
+            try {
+                // Poll the progress API
+                const response = await fetch('/api/chat/api/admin/langextract-progress/', {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateProgressDisplay(data);
+                    
+                    // Stop polling when complete and refresh page immediately
+                    if (data.status === 'completed' || data.status === 'error') {
+                        clearInterval(pollInterval);
+                        handleAnalysisComplete(data.status === 'completed');
+                        return;
+                    }
+                }
+                
+                // Stop polling after maximum attempts
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    console.warn('Polling stopped after maximum attempts');
+                    handleAnalysisComplete(false, 'Polling timeout');
+                }
+                
+            } catch (error) {
+                console.error('Progress polling error:', error);
+                
+                // Stop polling after multiple consecutive errors
+                if (pollCount % 5 === 0) { // Every 5 attempts
+                    console.warn(`Polling attempt ${pollCount}/${maxPolls} failed`);
+                }
+                
+                if (pollCount >= maxPolls) {
+                    clearInterval(pollInterval);
+                    handleAnalysisComplete(false, 'Network error');
+                }
+            }
+        }, 1000); // Poll every second
+        
+        // Cleanup function
+        return () => clearInterval(pollInterval);
+    }
+    
+    function handleAnalysisComplete(success, errorMessage = null) {
+        const statusDiv = document.getElementById('progress-status');
+        const spinner = document.querySelector('.spinner');
+        
+        if (success) {
+            // Success case
+            if (statusDiv) statusDiv.textContent = 'Analysis completed! Refreshing page...';
+            
+            if (spinner) {
+                spinner.innerHTML = '✓';
+                spinner.style.animation = 'none';
+                spinner.style.background = '#28a745';
+                spinner.style.color = 'white';
+                spinner.style.display = 'flex';
+                spinner.style.alignItems = 'center';
+                spinner.style.justifyContent = 'center';
+                spinner.style.fontSize = '16px';
+                spinner.style.fontWeight = 'bold';
+            }
+            
+            // Refresh page to show updated results
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+            
+        } else {
+            // Error case
+            const message = errorMessage ? `Analysis failed: ${errorMessage}` : 'Analysis failed';
+            if (statusDiv) statusDiv.textContent = `${message}. Refreshing page...`;
+            
+            if (spinner) {
+                spinner.innerHTML = '✗';
+                spinner.style.animation = 'none';
+                spinner.style.background = '#dc3545';
+                spinner.style.color = 'white';
+                spinner.style.display = 'flex';
+                spinner.style.alignItems = 'center';
+                spinner.style.justifyContent = 'center';
+                spinner.style.fontSize = '16px';
+                spinner.style.fontWeight = 'bold';
+            }
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        }
+    }
+    
+    function updateProgressDisplay(data) {
+        const statusDiv = document.getElementById('progress-status');
+        const progressDiv = document.getElementById('langextract-progress');
+        
+        if (!statusDiv || !progressDiv) return;
+        
+        // Update status text based on current step
+        let statusText = data.current_step || 'Processing...';
+        
+        if (data.total > 0) {
+            statusText += ` (${data.processed}/${data.total})`;
+        }
+        
+        statusDiv.textContent = statusText;
+        
+        // Update progress indicator if we have totals
+        if (data.total > 0) {
+            const percentage = Math.round((data.processed / data.total) * 100);
+            
+            // Add progress bar if it doesn't exist
+            if (!document.getElementById('progress-bar')) {
+                const progressBar = document.createElement('div');
+                progressBar.id = 'progress-bar';
+                progressBar.style.cssText = `
+                    width: 200px;
+                    height: 6px;
+                    background: #f0f0f0;
+                    border-radius: 3px;
+                    margin-top: 10px;
+                    overflow: hidden;
+                `;
+                
+                const progressFill = document.createElement('div');
+                progressFill.id = 'progress-fill';
+                progressFill.style.cssText = `
+                    height: 100%;
+                    background: #0073aa;
+                    width: 0%;
+                    transition: width 0.3s ease;
+                `;
+                
+                progressBar.appendChild(progressFill);
+                statusDiv.parentNode.appendChild(progressBar);
+            }
+            
+            // Update progress bar
+            const progressFill = document.getElementById('progress-fill');
+            if (progressFill) {
+                progressFill.style.width = percentage + '%';
+            }
+        }
+        
+        // Show completion status
+        if (data.status === 'completed') {
+            statusDiv.textContent = `Analysis completed! ${data.success_count} successful, ${data.error_count} failed.`;
+            // Change spinner to checkmark
+            const spinner = progressDiv.querySelector('.spinner');
+            if (spinner) {
+                spinner.innerHTML = '✓';
+                spinner.style.animation = 'none';
+                spinner.style.background = '#28a745';
+                spinner.style.color = 'white';
+                spinner.style.display = 'flex';
+                spinner.style.alignItems = 'center';
+                spinner.style.justifyContent = 'center';
+                spinner.style.fontSize = '16px';
+                spinner.style.fontWeight = 'bold';
+            }
+        } else if (data.status === 'error') {
+            statusDiv.textContent = 'Analysis failed. Check error messages above.';
+            // Change spinner to error
+            const spinner = progressDiv.querySelector('.spinner');
+            if (spinner) {
+                spinner.innerHTML = '✗';
+                spinner.style.animation = 'none';
+                spinner.style.background = '#dc3545';
+                spinner.style.color = 'white';
+                spinner.style.display = 'flex';
+                spinner.style.alignItems = 'center';
+                spinner.style.justifyContent = 'center';
+                spinner.style.fontSize = '16px';
+                spinner.style.fontWeight = 'bold';
+            }
+        }
+    }
+    
+    function showCompletionNotification(title, message) {
+        // Create completion notification
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #28a745;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            z-index: 10001;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 400px;
+            animation: slideIn 0.3s ease-out;
+        `;
+        
+        notification.innerHTML = `
+            <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
+            <div style="font-size: 14px; opacity: 0.9;">${message}</div>
+            <button onclick="this.parentElement.remove()" style="
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: none;
+                border: none;
+                color: white;
+                font-size: 18px;
+                cursor: pointer;
+                opacity: 0.8;
+            ">×</button>
+        `;
+        
+        // Add slide-in animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 8000);
+    }
+});
+</script>
+{% endblock %}

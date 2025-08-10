@@ -278,33 +278,45 @@ def my_view(request):
 
 **NO EMOJIS OR NON-UNICODE CHARACTERS IN BACKEND CODE:**
 
-❌ **AVOID in Django backend code:**
+❌ **STRICTLY FORBIDDEN in Django backend code:**
 - Emojis in templates, admin interfaces, or Python code (🤖, 📊, 🔒, etc.)
 - Special Unicode characters that may cause encoding issues
 - Non-ASCII characters in user interface elements
+- Emojis in admin action descriptions, success messages, or any user-facing text
+- Decorative characters in Django admin interfaces
 
 ✅ **ALWAYS Use Standard ASCII Text:**
 - Plain text labels for admin interfaces
 - Standard Unicode-safe characters only
 - Professional, clean presentation without decorative characters
 - Focus on functionality over visual styling with characters
+- Clean, professional admin action names and messages
 
 **Examples:**
 ```python
 # ❌ Wrong - Using emojis in admin/templates
 <h2>🤖 {% trans "LLM Features" %}</h2>
 <h2>📊 {% trans "Quick Statistics" %}</h2>
+def some_action.short_description = "🔍 Analyze Data"
 
 # ✅ Correct - Clean text only
 <h2>{% trans "LLM Features" %}</h2>  
 <h2>{% trans "Quick Statistics" %}</h2>
+def some_action.short_description = _("Analyze Data")
 ```
+
+**Django Admin Standards:**
+- All admin action descriptions must be plain text
+- Success/error messages must be professional without emojis
+- Use Django's translation system with _() for all user-facing text
+- Admin interfaces should be clean and professional
 
 **Rationale:**
 - Ensures consistent encoding across different systems
 - Maintains professional appearance in admin interfaces
 - Prevents potential Unicode-related issues in databases and templates
 - Keeps focus on functionality rather than decoration
+- Professional business software appearance
 
 ## CRITICAL: Security Best Practices
 
@@ -476,6 +488,62 @@ class DocumentAdmin(admin.ModelAdmin):
 - [ ] **HTTPS enforced** in production (SSL/TLS)
 
 **Remember: Security is not optional - it must be built in from the start, not added later.**
+
+## KNOWN ISSUES - TO BE RESOLVED
+
+### 🔄 **Issue 1: Admin Page Status Not Auto-Updating After Background Analysis**
+
+**Problem**: 
+When running "Analyze with LangExtract" admin action, the analysis completes successfully in the background (confirmed in Django logs), but the "Analysis Status" column in the admin list doesn't update automatically. Users must manually refresh the page to see the updated analysis results ([POSITIVE], [NEGATIVE], etc.).
+
+**Current Implementation**:
+- Background analysis works correctly (API calls successful, data saved to database)
+- JavaScript polling mechanism implemented to check `/api/chat/api/admin/langextract-progress/`
+- Progress modal shows during analysis
+- Page refresh happens after completion but status may not reflect immediately
+
+**Root Cause Analysis Needed**:
+- Verify progress API endpoint authentication and response format
+- Check if session context is maintained correctly in background threads
+- Confirm database transaction isolation and timing issues
+- Test polling mechanism with browser developer tools
+
+**Temporary Workaround**: Manual page refresh shows correct analysis status
+
+---
+
+### 🕐 **Issue 2: Timestamp Display Not Showing User's Local Timezone**
+
+**Problem**: 
+The "Created At" column in the Django admin shows timestamps that don't match the admin user's local system timezone. Despite implementing `timezone.localtime()`, timestamps may still appear in UTC or incorrect timezone.
+
+**Current Implementation**:
+```python
+def created_at_local(self, obj):
+    """Display created_at converted from UTC to user's local timezone"""
+    if not obj.created_at:
+        return None
+    # Convert the stored UTC time to the current user's local time
+    return timezone.localtime(obj.created_at)
+```
+
+**Expected Behavior**: 
+- Database stores in UTC (✅ working correctly)
+- Admin interface should display in user's local timezone (❌ not working)
+- Should automatically detect system timezone without hardcoding
+
+**Investigation Needed**:
+- Verify Django timezone middleware configuration
+- Check browser timezone detection mechanisms
+- Test with different system timezone settings
+- Consider implementing client-side timezone detection via JavaScript
+
+**Temporary Workaround**: Manually calculate timezone offset for display
+
+---
+
+### 📝 **Development Priority**: Medium Priority
+These issues don't affect core functionality but impact admin user experience. Both relate to proper handling of asynchronous updates and timezone conversion in Django admin interface.
 
 ## Common Development Tasks
 

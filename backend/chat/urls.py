@@ -5,7 +5,7 @@ Comprehensive API coverage for frontend integration
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import api_views, admin_views as views
+from . import api_views, admin_views, views
 
 app_name = 'chat'
 
@@ -26,6 +26,10 @@ urlpatterns = [
     path('api/search/', api_views.conversation_search, name='conversation-search'),
     path('api/bulk-messages/', api_views.bulk_message_create, name='bulk-message-create'),
     path('api/health/', api_views.health_check, name='health-check'),
+    
+    # Admin progress tracking endpoints
+    path('api/admin/langextract-progress/', views.langextract_progress, name='langextract-progress'),
+    path('api/admin/clear-langextract-progress/', views.clear_langextract_progress, name='clear-langextract-progress'),
     
     # Legacy admin views (keep for backward compatibility)
     # Note: Admin views are accessible through Django admin interface

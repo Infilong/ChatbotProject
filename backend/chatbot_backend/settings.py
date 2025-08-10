@@ -122,7 +122,9 @@ LANGUAGES = [
     ('ja', _('Japanese')),
 ]
 
-TIME_ZONE = 'UTC'
+# Use system timezone - Django will automatically use the admin's browser timezone
+# for displaying dates in the admin interface when USE_TZ = True
+TIME_ZONE = 'UTC'  # Server stores everything in UTC
 
 USE_I18N = True
 
@@ -165,6 +167,44 @@ CORS_ALLOWED_ORIGINS = config(
 ).split(',')
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Logging Configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'analytics.langextract_service': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
 
 # Django Channels Configuration
 ASGI_APPLICATION = 'chatbot_backend.asgi.application'

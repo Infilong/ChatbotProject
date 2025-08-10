@@ -384,3 +384,34 @@ def end_conversation(request, conversation_id):
             {'error': 'Conversation not found'},
             status=status.HTTP_404_NOT_FOUND
         )
+
+
+# Admin Progress Tracking Views
+@api_view(['GET'])
+@permission_classes([permissions.IsAdminUser])
+def langextract_progress(request):
+    """
+    Get progress updates for LangExtract analysis
+    Uses session to store progress information
+    """
+    progress_data = request.session.get('langextract_progress', {
+        'status': 'idle',
+        'current_step': '',
+        'processed': 0,
+        'total': 0,
+        'errors': [],
+        'success_count': 0,
+        'error_count': 0
+    })
+    
+    return Response(progress_data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAdminUser])
+def clear_langextract_progress(request):
+    """Clear progress tracking data"""
+    if 'langextract_progress' in request.session:
+        del request.session['langextract_progress']
+    
+    return Response({'status': 'cleared'})

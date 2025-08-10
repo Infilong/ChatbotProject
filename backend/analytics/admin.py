@@ -8,13 +8,14 @@ from .models import ConversationAnalysis, UserFeedback, AnalyticsSummary, Docume
 
 @admin.register(ConversationAnalysis)
 class ConversationAnalysisAdmin(admin.ModelAdmin):
-    list_display = ['id', 'conversation_link', 'sentiment_display', 'satisfaction_level', 'confidence_score', 'analyzed_at']
+    list_display = ['id', 'conversation_link', 'sentiment_display', 'satisfaction_level', 'confidence_score', 'langextract_model_display', 'analyzed_at']
     list_filter = ['sentiment', 'satisfaction_level', 'resolution_status', 'analyzed_at', 'langextract_model_used']
     search_fields = ['conversation__user__username', 'customer_intent', 'issues_raised']
     readonly_fields = ['analyzed_at', 'processing_time', 'confidence_score']
     list_per_page = 25
     date_hierarchy = 'analyzed_at'
     ordering = ['-analyzed_at']
+    actions = ['reanalyze_selected']
     
     fieldsets = (
         (_('Analysis Results'), {
@@ -55,6 +56,46 @@ class ConversationAnalysisAdmin(admin.ModelAdmin):
         return format_html('<span style="color: {};">{} {}</span>', color, icon, obj.sentiment.title())
     sentiment_display.short_description = _('Sentiment')
     sentiment_display.admin_order_field = 'sentiment'
+    
+    def langextract_model_display(self, obj):
+        if obj.langextract_model_used:
+            if 'simulated' in obj.langextract_model_used or obj.langextract_model_used == 'fallback_v1.0':
+                return format_html('<span style="color: orange;">🤖 Simulated</span>')
+            else:
+                return format_html('<span style="color: green;">⚡ {}</span>', obj.langextract_model_used)
+        return '-'
+    langextract_model_display.short_description = _('Model Used')
+    langextract_model_display.admin_order_field = 'langextract_model_used'
+    
+    def reanalyze_selected(self, request, queryset):
+        """Admin action to re-analyze selected conversations"""
+        from analytics.langextract_service import LangExtractService
+        
+        service = LangExtractService()
+        if not service.is_configured():
+            self.message_user(
+                request,
+                _('LangExtract not configured. Please set up API keys first.'),
+                level='ERROR'
+            )
+            return
+        
+        conversation_ids = list(queryset.values_list('conversation_id', flat=True))
+        result = service.bulk_analyze_conversations(conversation_ids)
+        
+        if result['success'] > 0:
+            self.message_user(
+                request,
+                f"Successfully re-analyzed {result['success']} conversations. {result['failed']} failed.",
+                level='SUCCESS' if result['failed'] == 0 else 'WARNING'
+            )
+        else:
+            self.message_user(
+                request,
+                f"Re-analysis failed: {result.get('error', 'Unknown error')}",
+                level='ERROR'
+            )
+    reanalyze_selected.short_description = _('Re-analyze with LangExtract')
 
 
 @admin.register(UserFeedback)
