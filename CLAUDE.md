@@ -555,7 +555,7 @@ uv run python manage.py test        # Run backend tests
 
 **Phase 2: Backend & API Integration** (Next)
 - Django REST API setup with uv python environment
-- PostgreSQL database with Django models for users, conversations, messages
+- SQLite database with Django models for users, conversations, messages
 - Django REST Framework for standard API endpoints
 - Django Channels for WebSocket real-time communication
 - OpenAI/Gemini/Claude API integration for intelligent responses

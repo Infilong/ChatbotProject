@@ -21,34 +21,49 @@ class ConversationSerializer(serializers.ModelSerializer):
     
     user = UserSerializer(read_only=True)
     title = serializers.CharField(read_only=True)
+    message_count = serializers.SerializerMethodField()
+    last_message_time = serializers.SerializerMethodField()
     
     class Meta:
         model = Conversation
         fields = [
-            'id', 'user', 'title', 'created_at', 'updated_at',
-            'is_active', 'total_messages', 'satisfaction_score'
+            'id', 'uuid', 'user', 'title', 'created_at', 'updated_at',
+            'is_active', 'language', 'tags', 'metadata', 'message_count', 
+            'last_message_time'
         ]
         read_only_fields = [
-            'id', 'user', 'created_at', 'updated_at', 'total_messages'
+            'id', 'uuid', 'user', 'created_at', 'updated_at', 'message_count'
         ]
     
     def get_title(self, obj):
         """Get generated title for conversation"""
         return obj.get_title()
+    
+    def get_message_count(self, obj):
+        """Get total message count"""
+        return obj.messages.count()
+    
+    def get_last_message_time(self, obj):
+        """Get last message timestamp"""
+        last_msg = obj.messages.order_by('-timestamp').first()
+        return last_msg.timestamp if last_msg else obj.created_at
 
 
 class MessageSerializer(serializers.ModelSerializer):
     """Serializer for Message model"""
     
+    conversation_title = serializers.CharField(source='conversation.get_title', read_only=True)
+    
     class Meta:
         model = Message
         fields = [
-            'id', 'conversation', 'content', 'sender_type', 
-            'timestamp', 'feedback', 'file_attachment',
-            'metadata', 'response_time', 'llm_model_used'
+            'id', 'uuid', 'conversation', 'conversation_title', 'content', 
+            'sender_type', 'timestamp', 'feedback', 'file_attachment',
+            'metadata', 'response_time', 'llm_model_used', 'tokens_used'
         ]
         read_only_fields = [
-            'id', 'timestamp', 'response_time', 'llm_model_used'
+            'id', 'uuid', 'timestamp', 'response_time', 'llm_model_used', 
+            'tokens_used', 'conversation_title'
         ]
 
 
@@ -147,8 +162,13 @@ class LLMChatResponseSerializer(serializers.Serializer):
     """Serializer for LLM chat responses"""
     
     response = serializers.CharField()
-    conversation_id = serializers.IntegerField()
-    message_id = serializers.IntegerField()
+    conversation_id = serializers.UUIDField()
+    message_id = serializers.UUIDField()
+    timestamp = serializers.DateTimeField()
+    provider = serializers.CharField()
+    model = serializers.CharField()
+    response_time = serializers.FloatField()
+    tokens_used = serializers.IntegerField(required=False)
     metadata = serializers.DictField()
 
 
@@ -169,3 +189,66 @@ class LLMTestResponseSerializer(serializers.Serializer):
     response = serializers.CharField(required=False)
     response_time = serializers.FloatField(required=False)
     error = serializers.CharField(required=False)
+
+
+class ConversationListSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for conversation lists"""
+    
+    preview_text = serializers.SerializerMethodField()
+    message_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Conversation
+        fields = ['id', 'uuid', 'title', 'preview_text', 'message_count', 'updated_at']
+    
+    def get_preview_text(self, obj):
+        """Get preview from first user message"""
+        first_msg = obj.messages.filter(sender_type='user').first()
+        if first_msg and first_msg.content:
+            return first_msg.content[:100] + '...' if len(first_msg.content) > 100 else first_msg.content
+        return "New conversation"
+    
+    def get_message_count(self, obj):
+        """Get message count"""
+        return obj.messages.count()
+
+
+class ConversationStatsSerializer(serializers.Serializer):
+    """Serializer for conversation statistics"""
+    
+    total_conversations = serializers.IntegerField()
+    active_conversations = serializers.IntegerField()
+    total_messages = serializers.IntegerField()
+    avg_messages_per_conversation = serializers.FloatField()
+    user_satisfaction_rating = serializers.FloatField()
+    popular_providers = serializers.ListField()
+    recent_activity = serializers.ListField()
+
+
+class BulkMessageCreateSerializer(serializers.Serializer):
+    """Serializer for bulk message operations"""
+    
+    messages = MessageCreateSerializer(many=True)
+    conversation_id = serializers.UUIDField(required=False)
+    
+    def validate_messages(self, value):
+        """Validate messages list"""
+        if len(value) > 50:
+            raise serializers.ValidationError("Cannot create more than 50 messages at once")
+        return value
+
+
+class ConversationExportSerializer(serializers.Serializer):
+    """Serializer for conversation export"""
+    
+    format = serializers.ChoiceField(choices=['json', 'csv', 'txt'], default='json')
+    include_metadata = serializers.BooleanField(default=True)
+    date_from = serializers.DateTimeField(required=False)
+    date_to = serializers.DateTimeField(required=False)
+    
+    def validate(self, data):
+        """Cross-field validation"""
+        if data.get('date_from') and data.get('date_to'):
+            if data['date_from'] >= data['date_to']:
+                raise serializers.ValidationError("date_from must be before date_to")
+        return data

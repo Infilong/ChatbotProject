@@ -1,30 +1,32 @@
 """
-URL patterns for chat application API endpoints
+URL patterns for chat application REST API endpoints
+Comprehensive API coverage for frontend integration
 """
 
-from django.urls import path
-from . import views
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from . import api_views, admin_views as views
 
 app_name = 'chat'
 
+# Create router and register ViewSets
+router = DefaultRouter()
+router.register(r'conversations', api_views.ConversationViewSet, basename='conversation')
+router.register(r'messages', api_views.MessageViewSet, basename='message')
+router.register(r'sessions', api_views.UserSessionViewSet, basename='session')
+
 urlpatterns = [
-    # Chat API endpoints
-    path('conversations/', views.ConversationListCreateView.as_view(), name='conversation-list'),
-    path('conversations/<int:pk>/', views.ConversationDetailView.as_view(), name='conversation-detail'),
-    path('conversations/<int:conversation_id>/messages/', views.MessageListCreateView.as_view(), name='message-list'),
-    path('messages/<int:pk>/', views.MessageDetailView.as_view(), name='message-detail'),
-    path('messages/<int:pk>/feedback/', views.MessageFeedbackView.as_view(), name='message-feedback'),
+    # Include router URLs
+    path('api/', include(router.urls)),
     
-    # LLM API management
-    path('llm/configs/', views.APIConfigurationListView.as_view(), name='llm-config-list'),
-    path('llm/test/', views.LLMTestView.as_view(), name='llm-test'),
-    path('llm/chat/', views.LLMChatView.as_view(), name='llm-chat'),
+    # Direct LLM chat endpoint
+    path('api/chat/', api_views.LLMChatAPIView.as_view(), name='llm-chat'),
     
-    # System prompts
-    path('prompts/', views.AdminPromptListView.as_view(), name='prompt-list'),
-    path('prompts/<int:pk>/', views.AdminPromptDetailView.as_view(), name='prompt-detail'),
+    # Search and utility endpoints
+    path('api/search/', api_views.conversation_search, name='conversation-search'),
+    path('api/bulk-messages/', api_views.bulk_message_create, name='bulk-message-create'),
+    path('api/health/', api_views.health_check, name='health-check'),
     
-    # User sessions
-    path('sessions/', views.UserSessionListView.as_view(), name='session-list'),
-    path('sessions/<int:pk>/', views.UserSessionDetailView.as_view(), name='session-detail'),
+    # Legacy admin views (keep for backward compatibility)
+    # Note: Admin views are accessible through Django admin interface
 ]

@@ -85,16 +85,48 @@ class LLMAdminService:
                     } for doc in knowledge_docs]
                 }
             
-            # For now, provide a test response until we fix the async context issue
-            # TODO: Fix async context issue with LLM service
-            response = cls._generate_test_response(message, provider, use_knowledge, knowledge_context)
-            metadata = {
-                'admin_test': True,
-                'provider_used': provider,
-                'tokens_used': len(response.split()) * 1.3,  # Approximate token count
-                'knowledge_base_used': use_knowledge,
-                'response_type': 'test_mode'
-            }
+            # Try real LLM service, fallback to test response if it fails
+            try:
+                # Use asyncio.run to create a new event loop in a thread-safe way
+                import asyncio
+                import threading
+                from concurrent.futures import ThreadPoolExecutor
+                
+                def run_async_llm():
+                    # Create new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        return loop.run_until_complete(
+                            LLMManager.generate_chat_response(
+                                user_message=message,
+                                provider=provider,
+                                use_knowledge_base=use_knowledge
+                            )
+                        )
+                    finally:
+                        loop.close()
+                
+                # Run in thread pool to avoid Django async context issues
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(run_async_llm)
+                    response, metadata = future.result(timeout=30)  # 30 second timeout
+                    
+                # Mark as real LLM response
+                metadata['admin_test'] = False
+                metadata['real_llm_used'] = True
+                
+            except Exception as llm_error:
+                # Fallback to test response if LLM fails
+                response = cls._generate_test_response(message, provider, use_knowledge, knowledge_context)
+                metadata = {
+                    'admin_test': True,
+                    'provider_used': provider,
+                    'tokens_used': len(response.split()) * 1.3,
+                    'knowledge_base_used': use_knowledge,
+                    'response_type': 'test_mode_fallback',
+                    'llm_error': str(llm_error)
+                }
             
             # Save bot response to session
             ConversationService.save_message_to_session(

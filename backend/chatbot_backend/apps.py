@@ -6,5 +6,8 @@ class ChatbotBackendConfig(AppConfig):
     name = 'chatbot_backend'
     
     def ready(self):
-        # Import admin customizations
-        from . import admin
+    # Import admin customizations if they exist
+        try:
+            from . import admin
+        except ImportError:
+            pass
