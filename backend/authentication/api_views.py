@@ -104,23 +104,28 @@ class LoginAPIView(APIView):
     
     def post(self, request):
         """Authenticate user and return token"""
-        username = request.data.get('username')
-        password = request.data.get('password')
-        
-        if not username or not password:
-            return Response(
-                {'error': 'Username and password are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
         try:
+            username = request.data.get('username')
+            password = request.data.get('password')
+            
+            logger.info(f"Login attempt for username: {username}")
+            
+            if not username or not password:
+                logger.warning("Missing username or password")
+                return Response(
+                    {'error': 'Username and password are required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             # Authenticate user
             user = authenticate(request, username=username, password=password)
+            logger.info(f"Authentication result: {user}")
             
             if user is not None:
                 if user.is_active:
                     # Login user
                     login(request, user)
+                    logger.info(f"User {username} logged in successfully")
                     
                     # Get or create token
                     token, created = Token.objects.get_or_create(user=user)
@@ -142,20 +147,22 @@ class LoginAPIView(APIView):
                         'login_time': timezone.now().isoformat()
                     })
                 else:
+                    logger.warning(f"User {username} account is disabled")
                     return Response(
                         {'error': 'Account is disabled'},
                         status=status.HTTP_403_FORBIDDEN
                     )
             else:
+                logger.warning(f"Authentication failed for username: {username}")
                 return Response(
                     {'error': 'Invalid username or password'},
                     status=status.HTTP_401_UNAUTHORIZED
                 )
                 
         except Exception as e:
-            logger.error(f"Login error: {e}")
+            logger.error(f"Login error: {e}", exc_info=True)
             return Response(
-                {'error': 'Login failed'},
+                {'error': 'Login failed', 'debug': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

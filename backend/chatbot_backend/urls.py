@@ -45,14 +45,14 @@ urlpatterns = [
     path('admin/llm/', include('chat.admin_urls')),  # Custom admin URLs before main admin
     path('admin/', admin.site.urls),
     
-    # JWT Authentication endpoints
-    path('api/auth/login/', TokenObtainPairView.as_view(), name='login'),
-    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    
     # API endpoints
     path('api/timezone/detect/', timezone_detect_view, name='timezone_detect'),
     path('api/chat/', include('chat.urls')),
     path('api/documents/', include('documents.urls')),
     path('api/analytics/', include('analytics.urls')),
     path('api/auth/', include('authentication.urls')),
+    
+    # JWT Authentication endpoints (for future use)
+    path('api/jwt/login/', TokenObtainPairView.as_view(), name='jwt_login'),
+    path('api/jwt/refresh/', TokenRefreshView.as_view(), name='jwt_token_refresh'),
 ]

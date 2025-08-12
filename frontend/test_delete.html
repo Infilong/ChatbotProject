@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Delete Conversation Test</title>
+</head>
+<body>
+    <h1>Delete Conversation Test</h1>
+    <button onclick="testDelete()">Test Delete</button>
+    <div id="result"></div>
+
+    <script>
+    async function testDelete() {
+        const conversationId = '39'; // Use ID 39 from our earlier query
+        const API_BASE_URL = 'http://localhost:8000';
+        const url = `${API_BASE_URL}/api/chat/api/conversations/${conversationId}/`;
+        
+        console.log('Deleting URL:', url);
+        
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+
+            console.log('Response status:', response.status);
+            console.log('Response statusText:', response.statusText);
+            console.log('Response ok:', response.ok);
+
+            // Log all response headers
+            console.log('Response headers:');
+            for (let [key, value] of response.headers.entries()) {
+                console.log(`  ${key}: ${value}`);
+            }
+
+            if (!response.ok) {
+                const responseText = await response.text();
+                console.error('Delete response body:', responseText);
+                throw new Error(`Failed to delete conversation: ${response.statusText}`);
+            }
+            
+            console.log('Conversation deleted successfully');
+            document.getElementById('result').innerHTML = '<p style="color: green;">SUCCESS: Conversation deleted</p>';
+            
+        } catch (error) {
+            console.error('Error deleting conversation:', error);
+            document.getElementById('result').innerHTML = `<p style="color: red;">ERROR: ${error.message}</p>`;
+        }
+    }
+    </script>
+</body>
+</html>

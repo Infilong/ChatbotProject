@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Conversation, ConversationSummary, ConversationFilter, ConversationHistoryState } from '../types/Conversation';
 import { Message } from '../types/Message';
+import conversationService from '../services/conversationService';
+import authService from '../services/authService';
 
 interface ConversationHistoryContextType {
   state: ConversationHistoryState;
@@ -14,6 +16,8 @@ interface ConversationHistoryContextType {
   searchConversations: (query: string) => ConversationSummary[];
   setCurrentConversation: (conversationId: string | null) => void;
   startNewConversation: () => void;
+  clearLocalStorage: () => void;
+  syncWithBackend: () => Promise<void>;
 }
 
 const ConversationHistoryContext = createContext<ConversationHistoryContextType | undefined>(undefined);
@@ -30,39 +34,108 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
     filter: {},
   });
 
-  // Load conversations from localStorage on mount
+  // Load conversations based on authentication status
   useEffect(() => {
-    const loadConversations = () => {
-      try {
-        const stored = localStorage.getItem('conversationHistory');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          const conversations = parsed.map((conv: any) => ({
-            ...conv,
-            createdAt: new Date(conv.createdAt),
-            updatedAt: new Date(conv.updatedAt),
-            messages: conv.messages.map((msg: any) => ({
-              ...msg,
-              timestamp: new Date(msg.timestamp),
-            })),
+    const loadConversations = async () => {
+      setState(prev => ({ ...prev, isLoading: true }));
+
+      if (authService.isAuthenticated()) {
+        try {
+          console.log('User authenticated, loading from backend');
+          const response = await conversationService.getConversations(1, 100);
+          
+          const conversations = response.results.map((backendConv: any) => 
+            conversationService.convertToFrontendFormat(backendConv)
+          );
+
+          setState(prev => ({ 
+            ...prev, 
+            conversations,
+            isLoading: false 
           }));
-          setState(prev => ({ ...prev, conversations }));
+          
+          console.log(`Loaded ${conversations.length} conversations from backend`);
+          
+          // Clear localStorage when using backend to avoid confusion
+          try {
+            localStorage.removeItem('conversationHistory');
+            console.log('Cleared localStorage after loading from backend');
+          } catch (error) {
+            console.error('Error clearing localStorage:', error);
+          }
+        } catch (error) {
+          console.error('Error loading conversation history from backend:', error);
+          setState(prev => ({ ...prev, isLoading: false }));
         }
-      } catch (error) {
-        console.error('Error loading conversation history:', error);
+      } else {
+        try {
+          console.log('User not authenticated, loading from localStorage');
+          const stored = localStorage.getItem('conversationHistory');
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            const conversations = parsed.map((conv: any) => ({
+              ...conv,
+              createdAt: new Date(conv.createdAt),
+              updatedAt: new Date(conv.updatedAt),
+              messages: conv.messages.map((msg: any) => ({
+                ...msg,
+                timestamp: new Date(msg.timestamp),
+              })),
+            }));
+            setState(prev => ({ 
+              ...prev, 
+              conversations,
+              isLoading: false 
+            }));
+            console.log(`Loaded ${conversations.length} conversations from localStorage`);
+          } else {
+            setState(prev => ({ ...prev, isLoading: false }));
+          }
+        } catch (error) {
+          console.error('Error loading from localStorage:', error);
+          setState(prev => ({ ...prev, isLoading: false }));
+        }
       }
     };
 
     loadConversations();
-  }, []);
-
-  // Save conversations to localStorage whenever conversations change
+  }, []); // Run once on mount
+  
+  // Auto-refresh conversations from backend periodically when authenticated
   useEffect(() => {
-    if (state.conversations.length > 0) {
+    if (!authService.isAuthenticated()) return;
+    
+    const refreshInterval = setInterval(async () => {
       try {
+        console.log('Auto-refreshing conversations from backend');
+        const response = await conversationService.getConversations(1, 100);
+        
+        const backendConversations = response.results.map((backendConv: any) => 
+          conversationService.convertToFrontendFormat(backendConv)
+        );
+
+        setState(prev => ({ 
+          ...prev, 
+          conversations: backendConversations
+        }));
+        
+        console.log(`Auto-refresh: ${backendConversations.length} conversations from backend`);
+      } catch (error) {
+        console.error('Error during auto-refresh:', error);
+      }
+    }, 30000); // Refresh every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, []); // Set up once on mount
+
+  // Keep localStorage as backup only (deprecated - now using backend)
+  useEffect(() => {
+    if (state.conversations.length > 0 && !authService.isAuthenticated()) {
+      try {
+        // Only save to localStorage for unauthenticated users as fallback
         localStorage.setItem('conversationHistory', JSON.stringify(state.conversations));
       } catch (error) {
-        console.error('Error saving conversation history:', error);
+        console.error('Error saving conversation history to localStorage:', error);
       }
     }
   }, [state.conversations]);
@@ -87,7 +160,68 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
   }, []);
 
   const saveConversation = useCallback(async (messages: Message[], username: string, language: 'en' | 'ja'): Promise<string> => {
-    return new Promise((resolve) => {
+    try {
+      const title = generateConversationTitle(messages, language);
+      
+      if (!authService.isAuthenticated()) {
+        // Fallback to localStorage for unauthenticated users
+        const conversationId = Date.now().toString();
+        const lastMessage = messages.length > 0 ? messages[messages.length - 1].text : undefined;
+
+        const conversation: Conversation = {
+          id: conversationId,
+          title,
+          messages: [...messages],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          username,
+          language,
+          messageCount: messages.length,
+          lastMessage,
+        };
+
+        setState(prev => ({
+          ...prev,
+          conversations: [conversation, ...prev.conversations],
+          currentConversationId: conversationId,
+        }));
+
+        return conversationId;
+      }
+
+      // Create conversation in backend
+      const backendConv = await conversationService.createConversation({
+        title,
+        is_active: true,
+      });
+
+      // Add messages to the conversation
+      for (const message of messages) {
+        await conversationService.addMessage(
+          backendConv.id,
+          message.text,
+          message.sender === 'user' ? 'user' : 'bot'
+        );
+      }
+
+      // Get the full conversation with messages
+      const fullConversation = await conversationService.getConversation(backendConv.id);
+      const frontendConv = conversationService.convertToFrontendFormat(fullConversation);
+      frontendConv.username = username;
+      frontendConv.language = language;
+
+      setState(prev => ({
+        ...prev,
+        conversations: [frontendConv, ...prev.conversations],
+        currentConversationId: backendConv.id,
+      }));
+
+      console.log(`Saved conversation to backend: ${backendConv.id}`);
+      return backendConv.id;
+    } catch (error) {
+      console.error('Error saving conversation to backend:', error);
+      
+      // Fallback to localStorage
       const conversationId = Date.now().toString();
       const title = generateConversationTitle(messages, language);
       const lastMessage = messages.length > 0 ? messages[messages.length - 1].text : undefined;
@@ -110,8 +244,8 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
         currentConversationId: conversationId,
       }));
 
-      resolve(conversationId);
-    });
+      return conversationId;
+    }
   }, [generateConversationTitle]);
 
   const updateCurrentConversation = useCallback(async (messages: Message[], username: string, language: 'en' | 'ja'): Promise<string> => {
@@ -162,15 +296,71 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
   }, [state.conversations]);
 
   const deleteConversation = useCallback(async (conversationId: string): Promise<void> => {
-    return new Promise((resolve) => {
+    try {
+      console.log(`Attempting to delete conversation with ID: ${conversationId}`);
+      
+      // Find the conversation to check its origin
+      const conversation = state.conversations.find(conv => conv.id === conversationId);
+      console.log('Conversation to delete:', conversation);
+      
+      if (authService.isAuthenticated()) {
+        // Check if this is a timestamp-based ID (localStorage conversation)
+        const isTimestampId = /^\d{13}$/.test(conversationId); // 13-digit timestamp
+        
+        if (isTimestampId) {
+          console.log('Detected localStorage conversation (timestamp ID), skipping backend delete');
+        } else {
+          console.log('Deleting from backend with ID:', conversationId);
+          // Delete from backend - handle both UUID strings and integer IDs
+          await conversationService.deleteConversation(conversationId);
+          console.log(`Deleted conversation from backend: ${conversationId}`);
+          
+          // Immediately refresh conversations from backend after successful deletion
+          try {
+            const response = await conversationService.getConversations(1, 100);
+            const updatedConversations = response.results.map((backendConv: any) => 
+              conversationService.convertToFrontendFormat(backendConv)
+            );
+            console.log(`Refreshed conversations after deletion: ${updatedConversations.length} total`);
+            
+            // Update state with fresh backend data
+            setState(prev => ({
+              ...prev,
+              conversations: updatedConversations,
+              currentConversationId: prev.currentConversationId === conversationId ? null : prev.currentConversationId,
+            }));
+            
+            return; // Exit early since we've updated state with fresh data
+          } catch (refreshError) {
+            console.error('Failed to refresh conversations after deletion:', refreshError);
+            // Fall through to manual state update as fallback
+          }
+        }
+      } else {
+        // For unauthenticated users, only handle localStorage conversations
+        console.log('User not authenticated, only deleting from localStorage');
+      }
+      
+      // Update local state
       setState(prev => ({
         ...prev,
         conversations: prev.conversations.filter(conv => conv.id !== conversationId),
         currentConversationId: prev.currentConversationId === conversationId ? null : prev.currentConversationId,
       }));
-      resolve();
-    });
-  }, []);
+    } catch (error) {
+      console.error('Error deleting conversation from backend:', error);
+      console.error('Failed conversation ID:', conversationId);
+      
+      // Still update local state even if backend fails
+      setState(prev => ({
+        ...prev,
+        conversations: prev.conversations.filter(conv => conv.id !== conversationId),
+        currentConversationId: prev.currentConversationId === conversationId ? null : prev.currentConversationId,
+      }));
+      
+      throw error; // Let the UI handle the error
+    }
+  }, [state.conversations]);
 
   const getConversationSummaries = useCallback((): ConversationSummary[] => {
     let filtered = state.conversations;
@@ -266,6 +456,42 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
     }));
   }, []);
 
+  const clearLocalStorage = useCallback(() => {
+    try {
+      localStorage.removeItem('conversationHistory');
+      console.log('Cleared localStorage conversation history');
+    } catch (error) {
+      console.error('Error clearing localStorage:', error);
+    }
+  }, []);
+
+  const syncWithBackend = useCallback(async () => {
+    if (!authService.isAuthenticated()) {
+      console.log('User not authenticated, cannot sync with backend');
+      return;
+    }
+
+    try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      const response = await conversationService.getConversations(1, 100);
+      
+      const conversations = response.results.map((backendConv: any) => 
+        conversationService.convertToFrontendFormat(backendConv)
+      );
+
+      setState(prev => ({ 
+        ...prev, 
+        conversations,
+        isLoading: false 
+      }));
+      
+      console.log(`Synced ${conversations.length} conversations with backend`);
+    } catch (error) {
+      console.error('Error syncing with backend:', error);
+      setState(prev => ({ ...prev, isLoading: false }));
+    }
+  }, []);
+
   const contextValue: ConversationHistoryContextType = {
     state,
     saveConversation,
@@ -278,6 +504,8 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
     searchConversations,
     setCurrentConversation,
     startNewConversation,
+    clearLocalStorage,
+    syncWithBackend,
   };
 
   return (

@@ -9,19 +9,22 @@ import {
   Container,
   Alert,
   InputAdornment,
+  CircularProgress,
 } from '@mui/material';
 import { Person, Lock } from '@mui/icons-material';
 import LanguageSelector from './LanguageSelector';
 import { useLanguage } from '../contexts/LanguageContext';
+import authService, { AuthError } from '../services/authService';
 
 interface LoginPageProps {
-  onLogin: (username: string, password: string) => void;
+  onLogin: (username: string, userData: any) => void;
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const { language, setLanguage } = useLanguage();
 
   // Language translations
@@ -32,8 +35,10 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       username: 'Username',
       password: 'Password',
       signIn: 'Sign In',
-      demo: 'Demo credentials: admin / password',
-      validation: 'Please enter both username and password'
+      demo: 'Register an account or contact admin for access',
+      validation: 'Please enter both username and password',
+      loginError: 'Login failed. Please check your credentials and try again.',
+      networkError: 'Network error. Please check your connection and try again.'
     },
     ja: {
       title: 'DataProソリューション',
@@ -41,14 +46,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       username: 'ユーザー名',
       password: 'パスワード',
       signIn: 'サインイン',
-      demo: 'デモ認証情報: admin / password',
-      validation: 'ユーザー名とパスワードの両方を入力してください'
+      demo: 'アカウントを登録するか、管理者にお問い合わせください',
+      validation: 'ユーザー名とパスワードの両方を入力してください',
+      loginError: 'ログインに失敗しました。認証情報を確認して再度お試しください。',
+      networkError: 'ネットワークエラーです。接続を確認して再度お試しください。'
     }
   };
 
   const t = translations[language];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Basic validation
@@ -57,9 +64,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       return;
     }
 
-    // Clear error and call onLogin
     setError('');
-    onLogin(username, password);
+    setLoading(true);
+
+    try {
+      // Use real authentication service
+      const result = await authService.login({ username, password });
+      
+      if (result.success && result.user) {
+        // Pass user data to parent component
+        onLogin(result.user.username, result.user);
+      } else {
+        setError(result.message || t.loginError);
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Handle different types of errors
+      if (error.error) {
+        setError(error.error);
+      } else if (error.message) {
+        setError(error.message);
+      } else {
+        setError(t.networkError);
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -158,6 +189,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 fullWidth
                 variant="contained"
                 size="large"
+                disabled={loading}
                 sx={{
                   py: 1.5,
                   fontSize: '1.1rem',
@@ -171,9 +203,21 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                     transform: 'translateY(-2px)',
                     boxShadow: '0 4px 15px rgba(21, 101, 192, 0.3)',
                   },
+                  '&:disabled': {
+                    backgroundColor: '#f5f5f5',
+                    color: '#999',
+                    border: '2px solid #ccc',
+                  },
                 }}
               >
-                {t.signIn}
+                {loading ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={20} />
+                    <span>Signing in...</span>
+                  </Box>
+                ) : (
+                  t.signIn
+                )}
               </Button>
             </form>
 

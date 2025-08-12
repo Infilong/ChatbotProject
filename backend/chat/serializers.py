@@ -83,7 +83,6 @@ class ConversationSerializer(serializers.ModelSerializer):
     """Serializer for Conversation model"""
     
     user = UserSerializer(read_only=True)
-    title = serializers.CharField(read_only=True)
     message_count = serializers.SerializerMethodField()
     last_message_time = serializers.SerializerMethodField()
     
@@ -91,16 +90,13 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'id', 'uuid', 'user', 'title', 'created_at', 'updated_at',
-            'is_active', 'language', 'tags', 'metadata', 'message_count', 
-            'last_message_time'
+            'is_active', 'total_messages', 'satisfaction_score', 'langextract_analysis', 
+            'message_count', 'last_message_time'
         ]
         read_only_fields = [
-            'id', 'uuid', 'user', 'created_at', 'updated_at', 'message_count'
+            'id', 'uuid', 'user', 'created_at', 'updated_at', 'message_count', 'total_messages'
         ]
     
-    def get_title(self, obj):
-        """Get generated title for conversation"""
-        return obj.get_title()
     
     def get_message_count(self, obj):
         """Get total message count"""

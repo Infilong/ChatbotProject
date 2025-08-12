@@ -139,9 +139,17 @@ const ConversationHistoryPanel: React.FC<ConversationHistoryPanelProps> = ({
 
   const handleDeleteConfirm = useCallback(async () => {
     if (conversationToDelete) {
-      await deleteConversation(conversationToDelete);
-      setDeleteDialogOpen(false);
-      setConversationToDelete(null);
+      try {
+        await deleteConversation(conversationToDelete);
+        setDeleteDialogOpen(false);
+        setConversationToDelete(null);
+        // Success - conversation deleted successfully
+      } catch (error) {
+        console.error('Failed to delete conversation:', error);
+        // Keep dialog open to allow user to retry or cancel
+        // Could add toast notification here for better UX
+        alert('Failed to delete conversation. Please try again.');
+      }
     }
   }, [conversationToDelete, deleteConversation]);
 

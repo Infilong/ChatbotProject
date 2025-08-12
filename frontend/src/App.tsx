@@ -8,44 +8,57 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ConversationHistoryProvider } from './contexts/ConversationHistoryContext';
-import { storageUtils } from './utils/storageUtils';
+import authService from './services/authService';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState('');
+  const [userData, setUserData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Check for existing session on app load
+  // Check for existing authentication on app load
   useEffect(() => {
-    const sessionData = storageUtils.getSession();
-    if (sessionData?.isLoggedIn && sessionData.username) {
-      setIsLoggedIn(true);
-      setUsername(sessionData.username);
-    }
-    setIsLoading(false);
+    const checkAuth = async () => {
+      try {
+        if (authService.isAuthenticated()) {
+          // Validate token with backend
+          const validation = await authService.validateToken();
+          if (validation.valid && validation.user) {
+            setIsLoggedIn(true);
+            setUsername(validation.user.username);
+            setUserData(validation.user);
+          } else {
+            // Token is invalid, clear it
+            await authService.logout();
+          }
+        }
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        await authService.logout();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
-  const handleLogin = (inputUsername: string, password: string) => {
-    // Simple demo authentication - in real app, this would call an API
-    if (inputUsername && password) {
-      setUsername(inputUsername);
-      setIsLoggedIn(true);
-      
-      // Save session to localStorage
-      storageUtils.saveSession({
-        isLoggedIn: true,
-        username: inputUsername,
-        loginTime: new Date().toISOString()
-      });
-    }
+  const handleLogin = (inputUsername: string, user: any) => {
+    setUsername(inputUsername);
+    setUserData(user);
+    setIsLoggedIn(true);
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUsername('');
-    
-    // Clear session data
-    storageUtils.clearSession();
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setIsLoggedIn(false);
+      setUsername('');
+      setUserData(null);
+    }
   };
 
   // Show loading screen while checking for existing session

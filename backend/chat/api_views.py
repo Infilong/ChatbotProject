@@ -16,6 +16,7 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from asgiref.sync import sync_to_async, async_to_sync
@@ -307,19 +308,34 @@ class ConversationViewSet(ModelViewSet):
             )
 
 
-class MessageViewSet(ReadOnlyModelViewSet):
+class MessageViewSet(ModelViewSet):
     """
-    ViewSet for reading messages
-    Provides read-only access to messages with filtering
+    ViewSet for managing messages
+    Provides CRUD operations for messages with filtering
     """
     
     serializer_class = MessageSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # For development
     pagination_class = StandardResultsSetPagination
     
     def get_queryset(self):
         """Filter messages by user's conversations"""
-        user_conversations = Conversation.objects.filter(user=self.request.user)
+        # Get user (demo user for anonymous requests)
+        if self.request.user.is_authenticated:
+            user = self.request.user
+        else:
+            from django.contrib.auth.models import User
+            user, created = User.objects.get_or_create(
+                username='demo_user',
+                defaults={
+                    'email': 'demo@datapro.solutions',
+                    'first_name': 'Demo',
+                    'last_name': 'User',
+                    'is_active': True,
+                }
+            )
+        
+        user_conversations = Conversation.objects.filter(user=user)
         queryset = Message.objects.filter(
             conversation__in=user_conversations
         ).order_by('-timestamp')
@@ -344,13 +360,68 @@ class MessageViewSet(ReadOnlyModelViewSet):
         
         return queryset
     
+    def get_serializer_class(self):
+        """Use different serializers for create vs other actions"""
+        if self.action == 'create':
+            return MessageCreateSerializer
+        return MessageSerializer
+    
+    def perform_create(self, serializer):
+        """Handle message creation"""
+        # Get the conversation from the request data
+        conversation_id = self.request.data.get('conversation')
+        if not conversation_id:
+            raise ValidationError("Conversation ID is required")
+        
+        # Get conversation and verify user access
+        try:
+            conversation = Conversation.objects.get(id=conversation_id)
+        except Conversation.DoesNotExist:
+            raise ValidationError("Conversation not found")
+        
+        # Get current user (demo user for anonymous requests)
+        if self.request.user.is_authenticated:
+            current_user = self.request.user
+        else:
+            from django.contrib.auth.models import User
+            current_user, created = User.objects.get_or_create(
+                username='demo_user',
+                defaults={
+                    'email': 'demo@datapro.solutions',
+                    'first_name': 'Demo',
+                    'last_name': 'User',
+                    'is_active': True,
+                }
+            )
+        
+        # Verify user owns the conversation
+        if conversation.user != current_user:
+            raise PermissionDenied("You don't have permission to add messages to this conversation")
+        
+        # Save the message
+        serializer.save(conversation=conversation)
+    
     @action(detail=True, methods=['post'])
     def feedback(self, request, pk=None):
         """Submit feedback for a message"""
         message = self.get_object()
         
-        # Check if message belongs to user's conversation
-        if message.conversation.user != request.user:
+        # Check if message belongs to user's conversation (handle anonymous users)
+        if request.user.is_authenticated:
+            current_user = request.user
+        else:
+            from django.contrib.auth.models import User
+            current_user, created = User.objects.get_or_create(
+                username='demo_user',
+                defaults={
+                    'email': 'demo@datapro.solutions',
+                    'first_name': 'Demo',
+                    'last_name': 'User',
+                    'is_active': True,
+                }
+            )
+        
+        if message.conversation.user != current_user:
             return Response(
                 {'error': 'Permission denied'},
                 status=status.HTTP_403_FORBIDDEN
