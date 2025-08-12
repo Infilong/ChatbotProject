@@ -2,11 +2,13 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+import uuid
 
 
 
 
 class Conversation(models.Model):
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True, verbose_name=_('UUID'))
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', verbose_name=_('User'))
     title = models.CharField(max_length=200, blank=True, verbose_name=_('Title'))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
@@ -48,6 +50,7 @@ class Message(models.Model):
         ('negative', _('Negative')),
     ]
     
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True, verbose_name=_('UUID'))
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', verbose_name=_('Conversation'))
     content = models.TextField(verbose_name=_('Content'))
     sender_type = models.CharField(max_length=10, choices=SENDER_CHOICES, verbose_name=_('Sender Type'))
@@ -61,6 +64,7 @@ class Message(models.Model):
     # Bot response metadata
     response_time = models.FloatField(null=True, blank=True, verbose_name=_('Response Time'))
     llm_model_used = models.CharField(max_length=50, null=True, blank=True, verbose_name=_('LLM Model Used'))
+    tokens_used = models.IntegerField(null=True, blank=True, verbose_name=_('Tokens Used'))
     
     class Meta:
         ordering = ['timestamp']

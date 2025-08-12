@@ -1,12 +1,214 @@
 """
-REST API views for chat application
+Secure Chat API Views with JWT Authentication
 """
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status, permissions
+from rest_framework.decorators import permission_classes
+from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 
+from .models import Conversation, Message
+from .serializers import ChatRequestSerializer, ChatResponseSerializer
+from .llm_services import LLMManager, LLMError
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class ChatAPIView(APIView):
+    """
+    Secure Chat API endpoint with JWT authentication
+    Handles user messages and returns LLM responses
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        """
+        Send a message and get LLM response
+        Requires valid JWT token in Authorization header
+        """
+        try:
+            # Validate request data
+            serializer = ChatRequestSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {'error': 'Invalid request data', 'details': serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            user_message = serializer.validated_data['message']
+            conversation_id = serializer.validated_data.get('conversation_id')
+            provider = serializer.validated_data.get('provider', 'gemini')
+            language = serializer.validated_data.get('language', 'en')
+            
+            # Get authenticated user
+            user = request.user
+            logger.info(f"Chat request from user: {user.username}")
+            
+            # Get or create conversation
+            if conversation_id:
+                try:
+                    conversation = get_object_or_404(
+                        Conversation,
+                        uuid=conversation_id,
+                        user=user
+                    )
+                except:
+                    # If conversation doesn't exist or doesn't belong to user, create new one
+                    conversation = Conversation.objects.create(
+                        user=user,
+                        title=user_message[:50] + "..." if len(user_message) > 50 else user_message
+                    )
+            else:
+                # Create new conversation
+                conversation = Conversation.objects.create(
+                    user=user,
+                    title=user_message[:50] + "..." if len(user_message) > 50 else user_message
+                )
+            
+            # Save user message
+            user_msg = Message.objects.create(
+                conversation=conversation,
+                content=user_message,
+                sender_type='user'
+            )
+            
+            # Get conversation history (last 10 messages for context)
+            history = list(conversation.messages.all().order_by('-timestamp')[:10])
+            history.reverse()  # Reverse to get chronological order
+            
+            # Generate LLM response
+            llm_manager = LLMManager()
+            
+            try:
+                llm_response = llm_manager.generate_response(
+                    message=user_message,
+                    provider=provider,
+                    language=language,
+                    conversation_history=[
+                        {'role': msg.sender_type, 'content': msg.content} 
+                        for msg in history[:-1]  # Exclude the current user message
+                    ]
+                )
+                
+                # Save bot response
+                bot_msg = Message.objects.create(
+                    conversation=conversation,
+                    content=llm_response['response'],
+                    sender_type='bot',
+                    llm_model_used=llm_response.get('model', provider),
+                    response_time=llm_response.get('response_time', 0),
+                    tokens_used=llm_response.get('tokens_used', 0)
+                )
+                
+                # Prepare response
+                response_data = {
+                    'conversation_id': str(conversation.uuid),
+                    'message_id': str(bot_msg.uuid),
+                    'response': llm_response['response'],
+                    'timestamp': bot_msg.timestamp.isoformat(),
+                    'provider': provider,
+                    'model': llm_response.get('model', provider),
+                    'response_time': llm_response.get('response_time', 0),
+                    'tokens_used': llm_response.get('tokens_used', 0),
+                    'metadata': {
+                        'user_message_id': str(user_msg.uuid),
+                        'conversation_title': conversation.title,
+                        'message_count': conversation.messages.count()
+                    }
+                }
+                
+                response_serializer = ChatResponseSerializer(data=response_data)
+                if response_serializer.is_valid():
+                    return Response(response_serializer.data, status=status.HTTP_200_OK)
+                else:
+                    logger.error(f"Response serialization error: {response_serializer.errors}")
+                    return Response(response_data, status=status.HTTP_200_OK)
+                
+            except LLMError as e:
+                logger.error(f"LLM error: {e}")
+                return Response(
+                    {'error': 'LLM service error', 'message': str(e)},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
+                
+        except Exception as e:
+            logger.error(f"Chat API error: {e}")
+            return Response(
+                {'error': 'Internal server error', 'message': 'Please try again later'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class ConversationHistoryAPIView(APIView):
+    """
+    Get conversation history for authenticated user
+    """
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, conversation_id=None):
+        """Get conversation history"""
+        try:
+            user = request.user
+            
+            if conversation_id:
+                # Get specific conversation
+                conversation = get_object_or_404(
+                    Conversation,
+                    uuid=conversation_id,
+                    user=user
+                )
+                messages = conversation.messages.all().order_by('timestamp')
+                
+                return Response({
+                    'conversation_id': str(conversation.uuid),
+                    'title': conversation.title,
+                    'created_at': conversation.created_at.isoformat(),
+                    'updated_at': conversation.updated_at.isoformat(),
+                    'messages': [
+                        {
+                            'id': str(msg.uuid),
+                            'content': msg.content,
+                            'sender': msg.sender_type,
+                            'timestamp': msg.timestamp.isoformat(),
+                            'tokens_used': msg.tokens_used,
+                            'model': msg.llm_model_used
+                        }
+                        for msg in messages
+                    ]
+                })
+            else:
+                # Get all conversations for user
+                conversations = Conversation.objects.filter(user=user).order_by('-updated_at')
+                
+                return Response({
+                    'conversations': [
+                        {
+                            'id': str(conv.uuid),
+                            'title': conv.title,
+                            'created_at': conv.created_at.isoformat(),
+                            'updated_at': conv.updated_at.isoformat(),
+                            'message_count': conv.messages.count(),
+                            'last_message': conv.messages.last().content[:100] if conv.messages.exists() else None
+                        }
+                        for conv in conversations
+                    ]
+                })
+                
+        except Exception as e:
+            logger.error(f"Conversation history error: {e}")
+            return Response(
+                {'error': 'Failed to fetch conversation history'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+# Legacy functions for backward compatibility
 import asyncio
 import logging
 from typing import Dict, Any
 
-from django.contrib.auth.models import User
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import generics, status, permissions

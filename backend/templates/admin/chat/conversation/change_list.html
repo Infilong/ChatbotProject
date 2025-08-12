@@ -188,7 +188,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (success) {
             // Success case
-            if (statusDiv) statusDiv.textContent = 'Analysis completed! Refreshing page...';
+            if (statusDiv) statusDiv.textContent = 'Analysis completed! Updating results...';
             
             if (spinner) {
                 spinner.innerHTML = '✓';
@@ -202,15 +202,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 spinner.style.fontWeight = 'bold';
             }
             
-            // Refresh page to show updated results
+            // Update status cells instead of full page refresh
             setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+                updateAnalysisStatusCells();
+                removeProgressNotification();
+                showCompletionNotification('Analysis Complete', 'Conversation analysis results have been updated.');
+            }, 1000);
             
         } else {
             // Error case
             const message = errorMessage ? `Analysis failed: ${errorMessage}` : 'Analysis failed';
-            if (statusDiv) statusDiv.textContent = `${message}. Refreshing page...`;
+            if (statusDiv) statusDiv.textContent = message;
             
             if (spinner) {
                 spinner.innerHTML = '✗';
@@ -225,7 +227,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             setTimeout(() => {
-                window.location.reload();
+                removeProgressNotification();
+                showCompletionNotification('Analysis Failed', message, 'error');
             }, 2000);
         }
     }
@@ -284,7 +287,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show completion status
         if (data.status === 'completed') {
-            statusDiv.textContent = `Analysis completed! ${data.success_count} successful, ${data.error_count} failed.`;
+            statusDiv.textContent = `Analysis completed! ${data.success_count} successful, ${data.error_count} failed. Updating results...`;
             // Change spinner to checkmark
             const spinner = progressDiv.querySelector('.spinner');
             if (spinner) {
@@ -316,14 +319,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function showCompletionNotification(title, message) {
+    function showCompletionNotification(title, message, type = 'success') {
         // Create completion notification
         const notification = document.createElement('div');
+        const backgroundColor = type === 'error' ? '#dc3545' : '#28a745';
+        
         notification.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: #28a745;
+            background: ${backgroundColor};
             color: white;
             padding: 15px 20px;
             border-radius: 8px;
@@ -369,6 +374,90 @@ document.addEventListener('DOMContentLoaded', function() {
                 setTimeout(() => notification.remove(), 300);
             }
         }, 8000);
+    }
+    
+    function updateAnalysisStatusCells() {
+        // Find all analysis status cells and update them with fresh data
+        fetch(window.location.href, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.text())
+        .then(html => {
+            // Create temporary DOM to parse the response
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            // Find the results table in both current page and response
+            const currentTable = document.querySelector('#result_list');
+            const newTable = tempDiv.querySelector('#result_list');
+            
+            if (currentTable && newTable) {
+                // Get all current rows with conversation IDs
+                const currentRows = currentTable.querySelectorAll('tbody tr[data-conversation-id]');
+                const newRows = newTable.querySelectorAll('tbody tr[data-conversation-id]');
+                
+                // Create a map of conversation ID to new row for efficient lookup
+                const newRowMap = new Map();
+                newRows.forEach(row => {
+                    const conversationId = row.getAttribute('data-conversation-id');
+                    if (conversationId) {
+                        newRowMap.set(conversationId, row);
+                    }
+                });
+                
+                // Update each current row's analysis status using conversation ID matching
+                let updatedCount = 0;
+                currentRows.forEach(currentRow => {
+                    const conversationId = currentRow.getAttribute('data-conversation-id');
+                    const newRow = newRowMap.get(conversationId);
+                    
+                    if (newRow) {
+                        // Find analysis status column (6th column: ID, User, Title, Messages, Score, Status, Date, Active)
+                        const currentStatusCell = currentRow.querySelector('td:nth-child(6)');
+                        const newStatusCell = newRow.querySelector('td:nth-child(6)');
+                        
+                        if (currentStatusCell && newStatusCell) {
+                            // Only update if content has actually changed
+                            if (currentStatusCell.innerHTML.trim() !== newStatusCell.innerHTML.trim()) {
+                                // Smoothly update the cell content with animation
+                                currentStatusCell.style.transition = 'background-color 0.5s ease';
+                                currentStatusCell.style.backgroundColor = '#e8f5e8';
+                                currentStatusCell.innerHTML = newStatusCell.innerHTML;
+                                updatedCount++;
+                                
+                                // Remove highlight after animation
+                                setTimeout(() => {
+                                    currentStatusCell.style.backgroundColor = '';
+                                }, 1500);
+                            }
+                        }
+                    }
+                });
+                
+                console.log(`Analysis status update completed: ${updatedCount} cells updated`);
+                
+                if (updatedCount === 0) {
+                    console.log('No status changes detected - all analysis status cells are already up to date');
+                }
+            } else {
+                console.warn('Could not find result table for status update');
+                // Fall back to page refresh if we can't find the table
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            }
+        })
+        .catch(error => {
+            console.error('Failed to update analysis status:', error);
+            // Fall back to page refresh if targeted update fails
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        });
     }
 });
 </script>

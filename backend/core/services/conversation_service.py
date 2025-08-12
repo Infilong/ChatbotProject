@@ -3,7 +3,9 @@ import uuid
 from typing import Dict, List, Any, Optional, Tuple
 from django.http import JsonResponse
 from django.contrib.auth.models import User
+from django.utils import timezone
 from datetime import datetime
+from chat.models import Conversation, Message
 
 
 class ConversationService:
@@ -37,53 +39,90 @@ class ConversationService:
     
     @classmethod
     def save_message_to_session(cls, request, conversation_id: str, role: str, 
-                              content: str, metadata: Optional[Dict] = None) -> None:
-        """Save a message to session storage"""
-        session_key, conversations_key = cls.get_session_keys(request.user.id, conversation_id)
-        
-        # Get or create conversation history
-        history = request.session.get(session_key, [])
-        
-        # Create message object
-        message = {
-            'role': role,
-            'content': content,
-            'timestamp': datetime.now().isoformat(),
-            'metadata': metadata or {}
-        }
-        
-        history.append(message)
-        request.session[session_key] = history
-        
-        # Update conversation metadata
-        conversations = request.session.get(conversations_key, [])
-        conversation_exists = False
-        
-        for conv in conversations:
-            if conv['id'] == conversation_id:
-                conv['last_updated'] = datetime.now().isoformat()
-                conv['message_count'] = len(history)
-                # Update title from first user message if not set
-                if not conv.get('title') or conv['title'] == 'New Conversation':
-                    first_user_message = next((msg for msg in history if msg['role'] == 'user'), None)
-                    if first_user_message:
-                        conv['title'] = first_user_message['content'][:40] + (
-                            '...' if len(first_user_message['content']) > 40 else ''
-                        )
-                conversation_exists = True
-                break
-        
-        if not conversation_exists:
-            conversations.append({
-                'id': conversation_id,
-                'title': content[:40] + ('...' if len(content) > 40 else '') if role == 'user' else 'New Conversation',
-                'created_at': datetime.now().isoformat(),
-                'last_updated': datetime.now().isoformat(),
-                'message_count': len(history)
-            })
-        
-        request.session[conversations_key] = conversations
-        request.session.modified = True
+                              content: str, metadata: Optional[Dict] = None) -> Message:
+        """Save a message to database and return the Message instance"""
+        try:
+            # Get or create conversation
+            conversation, created = Conversation.objects.get_or_create(
+                uuid=conversation_id,
+                defaults={'user': request.user}
+            )
+            
+            # Convert role to sender_type format
+            sender_type = 'user' if role == 'user' else 'bot'
+            
+            # Create message
+            message = Message.objects.create(
+                conversation=conversation,
+                content=content,
+                sender_type=sender_type,
+                metadata=metadata or {},
+                llm_model_used=metadata.get('model') if metadata else None,
+                response_time=metadata.get('response_time') if metadata else None
+            )
+            
+            # Update conversation title if needed
+            if not conversation.title and sender_type == 'user':
+                conversation.title = content[:50] + ('...' if len(content) > 50 else '')
+                conversation.save()
+            
+            return message
+            
+        except Exception as e:
+            # Fallback to session-based storage for backward compatibility
+            session_key, conversations_key = cls.get_session_keys(request.user.id, conversation_id)
+            
+            # Get or create conversation history
+            history = request.session.get(session_key, [])
+            
+            # Create message object
+            message = {
+                'role': role,
+                'content': content,
+                'timestamp': timezone.now().isoformat(),
+                'metadata': metadata or {}
+            }
+            
+            history.append(message)
+            request.session[session_key] = history
+            
+            # Update conversation metadata
+            conversations = request.session.get(conversations_key, [])
+            conversation_exists = False
+            
+            for conv in conversations:
+                if conv['id'] == conversation_id:
+                    conv['last_updated'] = timezone.now().isoformat()
+                    conv['message_count'] = len(history)
+                    # Update title from first user message if not set
+                    if not conv.get('title') or conv['title'] == 'New Conversation':
+                        first_user_message = next((msg for msg in history if msg['role'] == 'user'), None)
+                        if first_user_message:
+                            conv['title'] = first_user_message['content'][:40] + (
+                                '...' if len(first_user_message['content']) > 40 else ''
+                            )
+                    conversation_exists = True
+                    break
+            
+            if not conversation_exists:
+                conversations.append({
+                    'id': conversation_id,
+                    'title': content[:40] + ('...' if len(content) > 40 else '') if role == 'user' else 'New Conversation',
+                    'created_at': timezone.now().isoformat(),
+                    'last_updated': timezone.now().isoformat(),
+                    'message_count': len(history)
+                })
+            
+            request.session[conversations_key] = conversations
+            request.session.modified = True
+            
+            # Return a mock message object for session-based fallback
+            class MockMessage:
+                def __init__(self):
+                    self.uuid = str(uuid.uuid4())
+                    self.timestamp = timezone.now()
+                    
+            return MockMessage()
     
     @classmethod
     def create_new_conversation(cls, request) -> str:

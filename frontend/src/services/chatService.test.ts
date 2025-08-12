@@ -20,7 +20,7 @@ describe('chatService', () => {
         timestamp: new Date(),
       };
 
-      const response = await chatService.generateResponse(userMessage);
+      const response = await chatService.generateResponse(userMessage, 'en', {});
 
       expect(response).toHaveProperty('message');
       expect(response.message.sender).toBe('bot');
@@ -36,7 +36,7 @@ describe('chatService', () => {
         timestamp: new Date(),
       };
 
-      const response = await chatService.generateResponse(userMessage, 'ja');
+      const response = await chatService.generateResponse(userMessage, 'ja', {});
 
       expect(response).toHaveProperty('message');
       expect(response.message.sender).toBe('bot');
@@ -58,7 +58,7 @@ describe('chatService', () => {
       let errorOccurred = false;
       for (let i = 0; i < 50; i++) {
         try {
-          await chatService.generateResponse(userMessage);
+          await chatService.generateResponse(userMessage, 'en', {});
         } catch (error) {
           errorOccurred = true;
           expect(error).toHaveProperty('code', 'NETWORK_ERROR');
@@ -83,14 +83,14 @@ describe('chatService', () => {
     };
 
     it('successfully retries message within retry limit', async () => {
-      const response = await chatService.retryMessage(userMessage, 'en', 1);
+      const response = await chatService.retryMessage(userMessage, 'en', {}, 1);
 
       expect(response).toHaveProperty('message');
       expect(response.message.sender).toBe('bot');
     });
 
     it('throws error when retry count exceeds maximum', async () => {
-      await expect(chatService.retryMessage(userMessage, 'en', 3)).rejects.toEqual({
+      await expect(chatService.retryMessage(userMessage, 'en', {}, 3)).rejects.toEqual({
         code: 'MAX_RETRIES_EXCEEDED',
         message: 'Maximum retry attempts exceeded. Please try again later.',
         retryable: false,
@@ -102,7 +102,7 @@ describe('chatService', () => {
       const startTime = Date.now();
       
       try {
-        await chatService.retryMessage(userMessage, 'en', 2);
+        await chatService.retryMessage(userMessage, 'en', {}, 2);
       } catch (error) {
         // Error might occur, but we're testing timing
       }

@@ -4,7 +4,70 @@ Serializers for chat application REST API
 
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.utils.translation import gettext_lazy as _
 from .models import Conversation, Message, UserSession, APIConfiguration, AdminPrompt
+
+
+# Secure Chat API Serializers
+class ChatRequestSerializer(serializers.Serializer):
+    """Validates incoming chat requests"""
+    message = serializers.CharField(
+        max_length=2000,
+        min_length=1,
+        required=True,
+        help_text=_("User message content")
+    )
+    conversation_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text=_("Optional conversation UUID to continue existing conversation")
+    )
+    provider = serializers.ChoiceField(
+        choices=['openai', 'gemini', 'claude'],
+        default='gemini',
+        required=False,
+        help_text=_("LLM provider to use")
+    )
+    language = serializers.ChoiceField(
+        choices=['en', 'ja'],
+        default='en',
+        required=False,
+        help_text=_("Response language")
+    )
+
+
+class ChatResponseSerializer(serializers.Serializer):
+    """Formats chat response data"""
+    conversation_id = serializers.UUIDField(
+        help_text=_("Conversation UUID")
+    )
+    message_id = serializers.UUIDField(
+        help_text=_("Message UUID")
+    )
+    response = serializers.CharField(
+        help_text=_("LLM response content")
+    )
+    timestamp = serializers.DateTimeField(
+        help_text=_("Response timestamp")
+    )
+    provider = serializers.CharField(
+        help_text=_("LLM provider used")
+    )
+    model = serializers.CharField(
+        help_text=_("Specific model used")
+    )
+    response_time = serializers.FloatField(
+        help_text=_("Response time in seconds")
+    )
+    tokens_used = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text=_("Tokens consumed")
+    )
+    metadata = serializers.DictField(
+        required=False,
+        help_text=_("Additional response metadata")
+    )
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -144,7 +207,7 @@ class LLMChatRequestSerializer(serializers.Serializer):
     """Serializer for LLM chat requests"""
     
     message = serializers.CharField(max_length=2000)
-    conversation_id = serializers.IntegerField(required=False, allow_null=True)
+    conversation_id = serializers.UUIDField(required=False, allow_null=True)
     provider = serializers.ChoiceField(
         choices=['openai', 'gemini', 'claude'],
         required=False,

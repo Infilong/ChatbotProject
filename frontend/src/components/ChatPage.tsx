@@ -117,7 +117,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       setIsTyping(true);
 
       // Generate bot response
-      const response = await chatService.generateResponse(userMessage, language);
+      const response = await chatService.generateResponse(userMessage, language, {});
       
       // Hide typing indicator and add bot message
       setIsTyping(false);
@@ -147,7 +147,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     try {
       setIsTyping(true);
       
-      const response = await chatService.retryMessage(message, language, message.retryCount || 0);
+      const response = await chatService.retryMessage(message, language, {}, message.retryCount || 0);
       
       setIsTyping(false);
       

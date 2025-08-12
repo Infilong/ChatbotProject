@@ -16,11 +16,28 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.conf.urls.i18n import i18n_patterns
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.auth.decorators import login_required
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+import json
 
 def test_view(request):
     return HttpResponse("Django server is working! Go to <a href='/admin/'>/admin/</a>")
+
+@csrf_exempt
+@login_required
+def timezone_detect_view(request):
+    """API endpoint for timezone detection - handled by middleware."""
+    # This view should never be reached as middleware intercepts the request
+    return JsonResponse({
+        'success': False,
+        'error': 'Timezone detection should be handled by middleware'
+    })
 
 urlpatterns = [
     path('i18n/', include('django.conf.urls.i18n')),
@@ -28,7 +45,12 @@ urlpatterns = [
     path('admin/llm/', include('chat.admin_urls')),  # Custom admin URLs before main admin
     path('admin/', admin.site.urls),
     
+    # JWT Authentication endpoints
+    path('api/auth/login/', TokenObtainPairView.as_view(), name='login'),
+    path('api/auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
     # API endpoints
+    path('api/timezone/detect/', timezone_detect_view, name='timezone_detect'),
     path('api/chat/', include('chat.urls')),
     path('api/documents/', include('documents.urls')),
     path('api/analytics/', include('analytics.urls')),

@@ -120,7 +120,11 @@ class ConversationAdmin(admin.ModelAdmin):
         if not obj.created_at:
             return None
         # Convert the stored UTC time to the current user's local time
-        return timezone.localtime(obj.created_at)
+        # The middleware will have activated the correct timezone for this request
+        localized_time = timezone.localtime(obj.created_at)
+        
+        # Format with timezone info for clarity
+        return localized_time.strftime('%Y-%m-%d %H:%M:%S %Z')
     
     created_at_local.admin_order_field = 'created_at'
     created_at_local.short_description = _('Created At')
@@ -488,9 +492,9 @@ class MessageAdmin(admin.ModelAdmin):
     
     def feedback_display(self, obj):
         if obj.feedback == 'positive':
-            return format_html('<span style="color: green;">👍 Positive</span>')
+            return format_html('<span style="color: green; font-weight: bold;">+ Positive</span>')
         elif obj.feedback == 'negative':
-            return format_html('<span style="color: red;">👎 Negative</span>')
+            return format_html('<span style="color: red; font-weight: bold;">- Negative</span>')
         return _('-')
     feedback_display.short_description = _('Feedback')
 
@@ -573,7 +577,11 @@ class APIConfigurationAdmin(admin.ModelAdmin):
     is_active_display.boolean = True
     
     def updated_at_display(self, obj):
-        return obj.updated_at.strftime('%Y-%m-%d %H:%M')
+        if not obj.updated_at:
+            return None
+        # Use timezone-aware formatting with middleware-activated timezone
+        localized_time = timezone.localtime(obj.updated_at)
+        return localized_time.strftime('%Y-%m-%d %H:%M %Z')
     updated_at_display.short_description = _('Updated At')
     updated_at_display.admin_order_field = 'updated_at'
     
@@ -674,13 +682,17 @@ class AdminPromptAdmin(admin.ModelAdmin):
     created_by_display.admin_order_field = 'created_by__username'
     
     def updated_at_display(self, obj):
-        return obj.updated_at.strftime('%Y-%m-%d %H:%M')
+        if not obj.updated_at:
+            return None
+        # Use timezone-aware formatting with middleware-activated timezone
+        localized_time = timezone.localtime(obj.updated_at)
+        return localized_time.strftime('%Y-%m-%d %H:%M %Z')
     updated_at_display.short_description = _('Updated At')
     updated_at_display.admin_order_field = 'updated_at'
 
 
 # Customize admin site
-admin.site.site_header = _('🤖 Chatbot Administration')
+admin.site.site_header = _('Chatbot Administration')
 admin.site.site_title = _('Chatbot Admin')
 admin.site.index_title = _('Welcome to Chatbot Administration')
 

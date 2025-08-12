@@ -6,6 +6,11 @@ type LanguageType = 'en' | 'ja';
 export interface ChatResponse {
   message: Message;
   delay?: number;
+  provider?: string;
+  model?: string;
+  responseTime?: number;
+  tokensUsed?: number;
+  conversationId?: string;
 }
 
 export interface ChatError {
@@ -14,67 +19,136 @@ export interface ChatError {
   retryable: boolean;
 }
 
-class ChatService {
-  private readonly DEMO_RESPONSES = {
-    en: [
-      "Thank you for your message! I'm processing your request. In the real system, this would connect to our AI backend to provide intelligent responses based on your needs.",
-      "I understand your concern. Let me help you with that. Our support team is here to assist you with any questions you might have.",
-      "That's a great question! I'm analyzing your request and will provide you with the most accurate information available.",
-      "I appreciate you reaching out to us. Let me gather the relevant information to give you the best possible assistance.",
-    ],
-    ja: [
-      "メッセージをありがとうございます！リクエストを処理中です。実際のシステムでは、AIバックエンドに接続してお客様のニーズに基づいたインテリジェントな回答を提供いたします。",
-      "ご心配をお察しいたします。その件についてお手伝いさせていただきます。サポートチームがお客様のご質問にお答えいたします。",
-      "素晴らしいご質問ですね！リクエストを分析中で、最も正確な情報をご提供いたします。",
-      "お問い合わせいただき、ありがとうございます。最適なサポートを提供するため、関連情報を収集いたします。",
-    ]
-  };
+export interface ChatConfig {
+  provider?: 'openai' | 'gemini' | 'claude';
+  language?: LanguageType;
+  maxTokens?: number;
+  temperature?: number;
+}
 
+export interface ApiResponse {
+  response: string;
+  conversation_id: string;
+  message_id: string;
+  timestamp: string;
+  provider: string;
+  model: string;
+  response_time: number;
+  tokens_used?: number;
+  metadata: Record<string, any>;
+}
+
+class ChatService {
+  private readonly API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
   private readonly MAX_RETRY_ATTEMPTS = 3;
   private readonly RETRY_DELAY_BASE = 1000; // 1 second
+  
+  // Current conversation ID for session management
+  private currentConversationId: string | null = null;
 
-  private getRandomResponse(language: LanguageType = 'en'): string {
-    const responses = this.DEMO_RESPONSES[language];
-    return responses[Math.floor(Math.random() * responses.length)];
-  }
-
-  private simulateNetworkError(): boolean {
-    // Simulate 10% chance of network error for testing
-    return Math.random() < 0.1;
-  }
-
-  // Simulate bot response with error handling
-  async generateResponse(userMessage: Message, language: LanguageType = 'en', retryCount: number = 0): Promise<ChatResponse> {
-    const delay = 1000 + Math.random() * 1000; // 1-2 seconds delay
+  private async makeApiCall(endpoint: string, data: Record<string, any>): Promise<ApiResponse> {
+    // Simplified API call for demo environment
+    // Backend has AllowAny permissions and csrf_exempt
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
     
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        // Simulate network error for testing
-        if (this.simulateNetworkError() && retryCount === 0) {
-          const error: ChatError = {
-            code: 'NETWORK_ERROR',
-            message: 'Failed to connect to chat service. Please check your internet connection.',
-            retryable: true,
-          };
-          reject(error);
-          return;
-        }
-
-        const botMessage = messageUtils.createMessage(
-          this.getRandomResponse(language),
-          'bot'
-        );
-        
-        resolve({
-          message: botMessage,
-          delay,
-        });
-      }, delay);
+    const response = await fetch(`${this.API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
     });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        const error: ChatError = {
+          code: 'AUTH_ERROR',
+          message: 'Authentication required. Please log in.',
+          retryable: false,
+        };
+        throw error;
+      } else if (response.status === 503) {
+        const error: ChatError = {
+          code: 'SERVICE_UNAVAILABLE',
+          message: 'LLM service is currently unavailable. Please try again later.',
+          retryable: true,
+        };
+        throw error;
+      } else {
+        const error: ChatError = {
+          code: 'API_ERROR',
+          message: `API request failed with status ${response.status}`,
+          retryable: true,
+        };
+        throw error;
+      }
+    }
+
+    return await response.json();
+  }
+
+  // Generate real LLM response using backend API
+  async generateResponse(
+    userMessage: Message, 
+    language: LanguageType = 'en', 
+    config: ChatConfig = {},
+    retryCount: number = 0
+  ): Promise<ChatResponse> {
+    try {
+      const requestData = {
+        message: userMessage.text,
+        conversation_id: this.currentConversationId,
+        provider: config.provider,
+        language,
+        max_tokens: config.maxTokens || 1000,
+        temperature: config.temperature || 0.7,
+      };
+
+      console.log('Making API call with data:', requestData);
+      const apiResponse = await this.makeApiCall('/api/chat/chat/', requestData);
+      
+      // Store conversation ID for future messages
+      this.currentConversationId = apiResponse.conversation_id;
+      
+      // Create bot message from API response
+      const botMessage = messageUtils.createMessage(
+        apiResponse.response,
+        'bot'
+      );
+
+      return {
+        message: botMessage,
+        delay: Math.round(apiResponse.response_time * 1000), // Convert to milliseconds
+        provider: apiResponse.provider,
+        model: apiResponse.model,
+        responseTime: apiResponse.response_time,
+        tokensUsed: apiResponse.tokens_used,
+        conversationId: apiResponse.conversation_id,
+      };
+
+    } catch (error) {
+      console.error('LLM API call failed:', error);
+      
+      if (error && typeof error === 'object' && 'code' in error) {
+        throw error;
+      }
+      
+      const chatError: ChatError = {
+        code: 'NETWORK_ERROR',
+        message: 'Failed to connect to chat service. Please check your internet connection.',
+        retryable: true,
+      };
+      throw chatError;
+    }
   }
 
   // Retry failed message with exponential backoff
-  async retryMessage(userMessage: Message, language: LanguageType = 'en', retryCount: number): Promise<ChatResponse> {
+  async retryMessage(
+    userMessage: Message, 
+    language: LanguageType = 'en', 
+    config: ChatConfig = {},
+    retryCount: number = 0
+  ): Promise<ChatResponse> {
     if (retryCount >= this.MAX_RETRY_ATTEMPTS) {
       const error: ChatError = {
         code: 'MAX_RETRIES_EXCEEDED',
@@ -89,7 +163,7 @@ class ChatService {
     // Wait for exponential backoff delay
     await new Promise(resolve => setTimeout(resolve, retryDelay));
     
-    return this.generateResponse(userMessage, language, retryCount);
+    return this.generateResponse(userMessage, language, config, retryCount + 1);
   }
 
   // Create human service escalation message
@@ -105,31 +179,85 @@ class ChatService {
     );
   }
 
-  // Future API integration methods (stubs for now)
+  // Provider-specific API calls
   async sendToOpenAI(message: string): Promise<string> {
-    // TODO: Implement OpenAI API integration
-    throw new Error('OpenAI integration not yet implemented');
+    const userMsg = messageUtils.createMessage(message, 'user');
+    const response = await this.generateResponse(userMsg, 'en', { provider: 'openai' });
+    return response.message.text;
   }
 
   async sendToGemini(message: string): Promise<string> {
-    // TODO: Implement Gemini API integration
-    throw new Error('Gemini integration not yet implemented');
+    const userMsg = messageUtils.createMessage(message, 'user');
+    const response = await this.generateResponse(userMsg, 'en', { provider: 'gemini' });
+    return response.message.text;
   }
 
   async sendToClaude(message: string): Promise<string> {
-    // TODO: Implement Claude API integration
-    throw new Error('Claude integration not yet implemented');
+    const userMsg = messageUtils.createMessage(message, 'user');
+    const response = await this.generateResponse(userMsg, 'en', { provider: 'claude' });
+    return response.message.text;
   }
 
-  // Future conversation analysis methods
+  // Conversation analysis using LangExtract backend
   async analyzeConversation(messages: Message[]): Promise<{
     sentiment: 'positive' | 'neutral' | 'negative';
     urgency: 'low' | 'medium' | 'high';
     categories: string[];
     insights: string[];
   }> {
-    // TODO: Implement conversation analysis using LLM APIs
-    throw new Error('Conversation analysis not yet implemented');
+    if (!this.currentConversationId) {
+      throw new Error('No active conversation to analyze');
+    }
+
+    try {
+      const response = await fetch(`${this.API_BASE_URL}/api/chat/api/conversations/${this.currentConversationId}/analyze/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Analysis failed with status ${response.status}`);
+      }
+
+      const analysisData = await response.json();
+      
+      return {
+        sentiment: analysisData.analysis.sentiment || 'neutral',
+        urgency: analysisData.analysis.urgency || 'low',
+        categories: analysisData.analysis.categories || [],
+        insights: analysisData.analysis.insights || [],
+      };
+    } catch (error) {
+      console.error('Conversation analysis failed:', error);
+      throw new Error('Failed to analyze conversation');
+    }
+  }
+
+  // Conversation management methods
+  async startNewConversation(): Promise<string> {
+    this.currentConversationId = null;
+    return 'new-conversation';
+  }
+
+  getCurrentConversationId(): string | null {
+    return this.currentConversationId;
+  }
+
+  // Submit feedback for a bot message
+  async submitFeedback(messageId: string, feedback: 'positive' | 'negative'): Promise<void> {
+    try {
+      await fetch(`${this.API_BASE_URL}/api/chat/api/messages/${messageId}/feedback/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ feedback }),
+      });
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+    }
   }
 }
 

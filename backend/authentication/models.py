@@ -16,6 +16,7 @@ class UserProfile(models.Model):
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='customer', verbose_name=_('Role'))
     
     # Profile information
+    display_name = models.CharField(max_length=100, blank=True, verbose_name=_('Display Name'))
     phone_number = models.CharField(max_length=20, blank=True, verbose_name=_('Phone Number'))
     company = models.CharField(max_length=100, blank=True, verbose_name=_('Company'))
     job_title = models.CharField(max_length=100, blank=True, verbose_name=_('Job Title'))
@@ -46,9 +47,9 @@ class UserProfile(models.Model):
     def is_admin(self):
         return self.role in ['admin', 'support']
     
-    @property
-    def display_name(self):
-        return self.user.get_full_name() or self.user.username
+    def get_display_name(self):
+        """Get display name with fallback"""
+        return self.display_name or self.user.get_full_name() or self.user.username
 
 
 @receiver(post_save, sender=User)

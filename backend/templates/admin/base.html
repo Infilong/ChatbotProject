@@ -1,0 +1,153 @@
+{% extends "admin/base.html" %}
+
+{% block extrahead %}
+{{ block.super }}
+<script type="text/javascript">
+document.addEventListener('DOMContentLoaded', function() {
+    // Timezone detection for Django admin
+    function detectAndSetTimezone() {
+        // Check if timezone is already detected in this session
+        if (sessionStorage.getItem('timezone_detected')) {
+            return;
+        }
+        
+        try {
+            // Use Intl API to detect browser timezone
+            const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            
+            if (detectedTimezone) {
+                console.log('Detected browser timezone:', detectedTimezone);
+                
+                // Send timezone to server
+                fetch('/api/timezone/detect/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || '',
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        timezone: detectedTimezone
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        console.log('Timezone successfully set on server:', data.timezone);
+                        
+                        // Mark timezone as detected in session storage
+                        sessionStorage.setItem('timezone_detected', 'true');
+                        sessionStorage.setItem('user_timezone', data.timezone);
+                        
+                        // Show subtle notification if timezone was updated
+                        showTimezoneNotification(data.timezone);
+                        
+                        // Optionally refresh the page to apply timezone immediately
+                        // Only if we're on a page that shows timestamps
+                        if (isTimestampPage()) {
+                            console.log('Refreshing page to apply timezone changes');
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1500);
+                        }
+                    } else {
+                        console.warn('Failed to set timezone:', data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error setting timezone:', error);
+                });
+            } else {
+                console.warn('Could not detect browser timezone');
+            }
+        } catch (error) {
+            console.error('Timezone detection failed:', error);
+        }
+    }
+    
+    function isTimestampPage() {
+        // Check if current page likely contains timestamps that would benefit from refresh
+        const path = window.location.pathname;
+        
+        // Admin changelist pages often show timestamps
+        if (path.includes('/admin/') && (
+            path.includes('/conversation/') ||
+            path.includes('/message/') ||
+            path.includes('/usersession/') ||
+            path.includes('/conversationanalysis/')
+        )) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    function showTimezoneNotification(timezone) {
+        // Create a subtle notification about timezone detection
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #e8f5e8;
+            color: #2d5a2d;
+            border: 1px solid #b8d8b8;
+            padding: 12px 16px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 9999;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            max-width: 350px;
+            animation: slideInFromRight 0.3s ease-out;
+        `;
+        
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: #28a745; font-weight: bold;">✓</span>
+                <div>
+                    <div style="font-weight: bold; margin-bottom: 2px;">Timezone Detected</div>
+                    <div style="opacity: 0.8;">Admin times will display in ${timezone}</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" style="
+                    background: none;
+                    border: none;
+                    color: #666;
+                    font-size: 16px;
+                    cursor: pointer;
+                    padding: 0;
+                    margin-left: auto;
+                ">×</button>
+            </div>
+        `;
+        
+        // Add slide-in animation
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInFromRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+        `;
+        document.head.appendChild(style);
+        
+        document.body.appendChild(notification);
+        
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.style.animation = 'slideInFromRight 0.3s ease-out reverse';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }
+        }, 8000);
+    }
+    
+    // Run timezone detection after a short delay to ensure page is fully loaded
+    setTimeout(detectAndSetTimezone, 500);
+});
+</script>
+{% endblock %}

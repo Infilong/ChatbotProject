@@ -16,6 +16,9 @@ from django.shortcuts import get_object_or_404
 
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes, action
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
+from asgiref.sync import sync_to_async, async_to_sync
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet, ReadOnlyModelViewSet
 from rest_framework.views import APIView
@@ -35,6 +38,7 @@ from analytics.langextract_service import LangExtractService
 logger = logging.getLogger(__name__)
 
 
+
 class StandardResultsSetPagination(PageNumberPagination):
     """Standard pagination for API endpoints"""
     page_size = 20
@@ -49,12 +53,26 @@ class ConversationViewSet(ModelViewSet):
     """
     
     serializer_class = ConversationSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]  # For development
     pagination_class = StandardResultsSetPagination
+    
+    def get_demo_user(self):
+        """Get or create a demo user for anonymous access"""
+        demo_user, created = User.objects.get_or_create(
+            username='demo_user',
+            defaults={
+                'email': 'demo@datapro.solutions',
+                'first_name': 'Demo',
+                'last_name': 'User',
+                'is_active': True,
+            }
+        )
+        return demo_user
     
     def get_queryset(self):
         """Filter conversations by current user"""
-        return Conversation.objects.filter(user=self.request.user).order_by('-updated_at')
+        user = self.request.user if self.request.user.is_authenticated else self.get_demo_user()
+        return Conversation.objects.filter(user=user).order_by('-updated_at')
     
     def get_serializer_class(self):
         """Use different serializers for list vs detail views"""
@@ -64,7 +82,8 @@ class ConversationViewSet(ModelViewSet):
     
     def perform_create(self, serializer):
         """Set user when creating conversation"""
-        serializer.save(user=self.request.user)
+        user = self.request.user if self.request.user.is_authenticated else self.get_demo_user()
+        serializer.save(user=user)
     
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
@@ -102,29 +121,17 @@ class ConversationViewSet(ModelViewSet):
                 content=user_message
             )
             
-            # Generate LLM response (using sync wrapper for DRF compatibility)
-            from concurrent.futures import ThreadPoolExecutor
-            import asyncio
+            # Get conversation history (last 10 messages)
+            history = list(conversation.messages.all().order_by('-timestamp')[:10])
+            history.reverse()  # Reverse to get chronological order
             
-            def run_async_llm():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    history = list(conversation.messages.all().order_by('timestamp')[-10:])
-                    return loop.run_until_complete(
-                        LLMManager.generate_chat_response(
-                            user_message=user_message,
-                            conversation_history=history,
-                            provider=provider,
-                            language=language
-                        )
-                    )
-                finally:
-                    loop.close()
-            
-            with ThreadPoolExecutor() as executor:
-                future = executor.submit(run_async_llm)
-                bot_response, metadata = future.result(timeout=30)
+            # Generate LLM response using Django's async_to_sync
+            bot_response, metadata = async_to_sync(LLMManager.generate_chat_response)(
+                user_message=user_message,
+                conversation_history=history,
+                provider=provider,
+                language=language
+            )
             
             # Save bot message
             bot_message = ConversationService.save_message_to_session(
@@ -356,61 +363,69 @@ class MessageViewSet(ReadOnlyModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@method_decorator(csrf_exempt, name='dispatch')
 class LLMChatAPIView(APIView):
     """
     API endpoint for direct LLM chat
     Handles single message interactions without conversation context
     """
     
-    permission_classes = [permissions.IsAuthenticated]
+    # For development: allow anonymous access, in production should be IsAuthenticated
+    permission_classes = [permissions.AllowAny]
     
+    def get_or_create_demo_user(self):
+        print("333")
+        """Get or create a demo user for anonymous access"""
+        demo_user, created = User.objects.get_or_create(
+            username='demo_user',
+            defaults={
+                'email': 'demo@datapro.solutions',
+                'first_name': 'Demo',
+                'last_name': 'User',
+                'is_active': True,
+            }
+        )
+        return demo_user
+
     def post(self, request):
         """Send message to LLM and get response"""
+        print("123")
         serializer = LLMChatRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         user_message = serializer.validated_data['message']
+        print(user_message);
         conversation_id = serializer.validated_data.get('conversation_id')
         provider = serializer.validated_data.get('provider')
         language = serializer.validated_data.get('language', 'en')
         
+        
         try:
+            # Get user (use demo user for anonymous requests)
+            user = request.user if request.user.is_authenticated else self.get_or_create_demo_user()
+            
             # Get or create conversation
             if conversation_id:
                 conversation = get_object_or_404(
                     Conversation,
                     uuid=conversation_id,
-                    user=request.user
+                    user=user
                 )
             else:
-                conversation = Conversation.objects.create(user=request.user)
+                conversation = Conversation.objects.create(user=user)
             
-            # Get conversation history
-            history = list(conversation.messages.all().order_by('timestamp')[-10:])
+            # Get conversation history (last 10 messages)
+            history = list(conversation.messages.all().order_by('-timestamp')[:10])
+            history.reverse()  # Reverse to get chronological order
             
-            # Generate LLM response (using sync wrapper for DRF compatibility)
-            from concurrent.futures import ThreadPoolExecutor
-            import asyncio
-            
-            def run_async_llm():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(
-                        LLMManager.generate_chat_response(
-                            user_message=user_message,
-                            conversation_history=history,
-                            provider=provider,
-                            language=language
-                        )
-                    )
-                finally:
-                    loop.close()
-            
-            with ThreadPoolExecutor() as executor:
-                future = executor.submit(run_async_llm)
-                bot_response, metadata = future.result(timeout=30)
+            # Generate LLM response using Django's async_to_sync
+            bot_response, metadata = async_to_sync(LLMManager.generate_chat_response)(
+                user_message=user_message,
+                conversation_history=history,
+                provider=provider,
+                language=language
+            )
             
             # Save messages
             user_msg = Message.objects.create(

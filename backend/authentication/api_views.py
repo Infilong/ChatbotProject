@@ -5,14 +5,94 @@ REST API views for authentication application
 import logging
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.utils import timezone
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.authtoken.models import Token
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from .models import UserProfile
+from .serializers import UserRegistrationSerializer, LoginSerializer
 
 logger = logging.getLogger(__name__)
+
+
+class RegisterAPIView(APIView):
+    """
+    User registration endpoint
+    Creates new user account with profile
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        """Register a new user"""
+        try:
+            serializer = UserRegistrationSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    {'error': 'Invalid registration data', 'details': serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            username = serializer.validated_data['username']
+            email = serializer.validated_data['email']
+            password = serializer.validated_data['password']
+            first_name = serializer.validated_data.get('first_name', '')
+            last_name = serializer.validated_data.get('last_name', '')
+            
+            # Create user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            # Create user profile
+            profile, created = UserProfile.objects.get_or_create(
+                user=user,
+                defaults={
+                    'display_name': f"{first_name} {last_name}".strip() or username
+                }
+            )
+            
+            # Generate JWT tokens for immediate login
+            refresh = RefreshToken.for_user(user)
+            access_token = refresh.access_token
+            
+            logger.info(f"New user registered: {username}")
+            
+            return Response({
+                'message': 'User registered successfully',
+                'access': str(access_token),
+                'refresh': str(refresh),
+                'user': {
+                    'id': user.id,
+                    'username': user.username,
+                    'email': user.email,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'display_name': profile.display_name
+                }
+            }, status=status.HTTP_201_CREATED)
+            
+        except IntegrityError:
+            return Response(
+                {'error': 'User with this information already exists'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            logger.error(f"Registration error: {e}")
+            return Response(
+                {'error': 'Registration failed', 'message': 'Please try again'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class LoginAPIView(APIView):
