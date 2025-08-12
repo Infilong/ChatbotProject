@@ -24,8 +24,8 @@ urlpatterns = [
     path('history/', views.ConversationHistoryAPIView.as_view(), name='conversation-history'),
     path('history/<uuid:conversation_id>/', views.ConversationHistoryAPIView.as_view(), name='conversation-detail'),
     
-    # Direct LLM chat endpoint - this becomes /api/chat/chat/
-    path('chat/', api_views.LLMChatAPIView.as_view(), name='llm-chat'),
+    # Direct LLM chat endpoint - this becomes /api/chat/
+    path('', api_views.LLMChatAPIView.as_view(), name='llm-chat'),
     
     # Search and utility endpoints
     path('search/', api_views.conversation_search, name='conversation-search'),

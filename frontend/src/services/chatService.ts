@@ -105,7 +105,7 @@ class ChatService {
       };
 
       console.log('Making API call with data:', requestData);
-      const apiResponse = await this.makeApiCall('/api/chat/chat/', requestData);
+      const apiResponse = await this.makeApiCall('/api/chat/', requestData);
       
       // Store conversation ID for future messages
       this.currentConversationId = apiResponse.conversation_id;

@@ -53,7 +53,7 @@ class ConversationAdmin(admin.ModelAdmin):
     list_per_page = 25
     date_hierarchy = 'created_at'
     ordering = ['-updated_at']
-    actions = ['add_sample_messages', 'analyze_with_langextract', 'verify_api_connection', 'bulk_analyze_langextract']
+    actions = ['add_sample_messages', 'analyze_with_langextract', 'bulk_analyze_langextract']
     actions_selection_counter = True
     actions_on_top = True
     actions_on_bottom = False

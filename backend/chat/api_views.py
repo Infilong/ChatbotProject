@@ -374,7 +374,6 @@ class LLMChatAPIView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def get_or_create_demo_user(self):
-        print("333")
         """Get or create a demo user for anonymous access"""
         demo_user, created = User.objects.get_or_create(
             username='demo_user',
@@ -389,7 +388,6 @@ class LLMChatAPIView(APIView):
 
     def post(self, request):
         """Send message to LLM and get response"""
-        print("123")
         serializer = LLMChatRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
