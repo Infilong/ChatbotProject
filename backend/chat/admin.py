@@ -46,10 +46,13 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user_link', 'title_display', 'total_messages', 'satisfaction_score', 'analysis_status', 'created_at_local', 'is_active']
+    list_display = ['uuid_short', 'user_link', 'title_display', 'total_messages', 'satisfaction_score', 'analysis_status', 'created_at_local', 'is_active']
     list_filter = ['is_active', 'created_at', 'updated_at', 'satisfaction_score']
     search_fields = ['user__username', 'user__email', 'title']
-    readonly_fields = ['created_at', 'updated_at', 'total_messages']
+    readonly_fields = [
+        'uuid', 'created_at', 'updated_at', 'total_messages',
+        'user_display_info', 'conversation_stats', 'technical_details'
+    ]
     list_per_page = 25
     date_hierarchy = 'created_at'
     ordering = ['-updated_at']
@@ -69,10 +72,23 @@ class ConversationAdmin(admin.ModelAdmin):
             'description': _('Analytics data will be populated automatically after analysis')
         }),
         (_('Metadata'), {
-            'fields': ('created_at', 'updated_at', 'total_messages'),
-            'classes': ('collapse',)
+            'fields': (
+                'uuid',
+                ('created_at', 'updated_at'),
+                'total_messages',
+                'user_display_info',
+                'conversation_stats',
+                'technical_details'
+            ),
+            'description': _('Essential conversation metadata and technical information')
         })
     )
+    
+    def uuid_short(self, obj):
+        """Display first 4 characters of UUID followed by ..."""
+        return f"{str(obj.uuid)[:4]}..."
+    uuid_short.short_description = _('ID')
+    uuid_short.admin_order_field = 'uuid'
     
     def user_link(self, obj):
         url = reverse('admin:auth_user_change', args=[obj.user.id])
@@ -128,6 +144,95 @@ class ConversationAdmin(admin.ModelAdmin):
     
     created_at_local.admin_order_field = 'created_at'
     created_at_local.short_description = _('Created At')
+    
+    def user_display_info(self, obj):
+        """Display comprehensive user information"""
+        user = obj.user
+        user_info = [
+            f"<strong>Username:</strong> {user.username}",
+            f"<strong>Email:</strong> {user.email or 'Not provided'}",
+            f"<strong>Full Name:</strong> {user.get_full_name() or 'Not provided'}",
+            f"<strong>User ID:</strong> {user.id}",
+            f"<strong>Active:</strong> {'Yes' if user.is_active else 'No'}",
+            f"<strong>Staff:</strong> {'Yes' if user.is_staff else 'No'}",
+            f"<strong>Last Login:</strong> {user.last_login.strftime('%Y-%m-%d %H:%M:%S') if user.last_login else 'Never'}",
+            f"<strong>Date Joined:</strong> {user.date_joined.strftime('%Y-%m-%d %H:%M:%S')}"
+        ]
+        return format_html('<br>'.join(user_info))
+    user_display_info.short_description = _('User Information')
+    
+    def conversation_stats(self, obj):
+        """Display conversation statistics and metrics"""
+        messages = obj.messages.all()
+        user_messages = messages.filter(sender_type='user')
+        bot_messages = messages.filter(sender_type='bot')
+        
+        # Calculate conversation duration
+        if messages.exists():
+            first_message = messages.order_by('timestamp').first()
+            last_message = messages.order_by('timestamp').last()
+            duration = last_message.timestamp - first_message.timestamp
+            duration_hours = duration.total_seconds() / 3600
+        else:
+            duration_hours = 0
+        
+        # Calculate average response times
+        response_times = [msg.response_time for msg in bot_messages if msg.response_time]
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        
+        # Calculate feedback stats
+        positive_feedback = messages.filter(feedback='positive').count()
+        negative_feedback = messages.filter(feedback='negative').count()
+        
+        stats_info = [
+            f"<strong>Total Messages:</strong> {messages.count()}",
+            f"<strong>User Messages:</strong> {user_messages.count()}",
+            f"<strong>Bot Messages:</strong> {bot_messages.count()}",
+            f"<strong>Conversation Duration:</strong> {duration_hours:.2f} hours",
+            f"<strong>Average Response Time:</strong> {avg_response_time:.2f}s",
+            f"<strong>Positive Feedback:</strong> {positive_feedback}",
+            f"<strong>Negative Feedback:</strong> {negative_feedback}",
+            f"<strong>Satisfaction Score:</strong> {obj.satisfaction_score or 'Not calculated'}",
+        ]
+        return format_html('<br>'.join(stats_info))
+    conversation_stats.short_description = _('Conversation Statistics')
+    
+    def technical_details(self, obj):
+        """Display technical metadata and system information"""
+        # Get latest message metadata for LLM info
+        latest_bot_message = obj.messages.filter(sender_type='bot').order_by('-timestamp').first()
+        
+        # Calculate total tokens if available
+        total_tokens = sum(msg.tokens_used for msg in obj.messages.all() if msg.tokens_used)
+        
+        technical_info = [
+            f"<strong>Conversation UUID:</strong> <code>{obj.uuid}</code>",
+            f"<strong>Database ID:</strong> {obj.id}",
+            f"<strong>Status:</strong> {'Active' if obj.is_active else 'Inactive'}",
+            f"<strong>Title Generated:</strong> {obj.get_title()}",
+            f"<strong>Last Updated:</strong> {obj.updated_at.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+            f"<strong>Created:</strong> {obj.created_at.strftime('%Y-%m-%d %H:%M:%S %Z')}",
+            f"<strong>Total Tokens Used:</strong> {total_tokens or 'Not tracked'}",
+        ]
+        
+        if latest_bot_message:
+            technical_info.extend([
+                f"<strong>Latest LLM Model:</strong> {latest_bot_message.llm_model_used or 'Not recorded'}",
+                f"<strong>Latest Response Time:</strong> {latest_bot_message.response_time or 0}s",
+                f"<strong>Latest Message Tokens:</strong> {latest_bot_message.tokens_used or 'Not tracked'}"
+            ])
+        
+        # Add LangExtract analysis info if available
+        if obj.langextract_analysis:
+            technical_info.extend([
+                "<strong>LangExtract Analysis:</strong> Available",
+                f"<strong>Analysis Data Size:</strong> {len(str(obj.langextract_analysis))} characters"
+            ])
+        else:
+            technical_info.append("<strong>LangExtract Analysis:</strong> Not analyzed")
+        
+        return format_html('<br>'.join(technical_info))
+    technical_details.short_description = _('Technical Details')
     
     def add_sample_messages(self, request, queryset):
         """Admin action to quickly add sample messages to empty conversations"""
@@ -472,13 +577,19 @@ class ConversationAdmin(admin.ModelAdmin):
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ['id', 'conversation_link', 'sender_type', 'content_preview', 'feedback_display', 'timestamp']
+    list_display = ['uuid_short', 'conversation_link', 'sender_type', 'content_preview', 'feedback_display', 'timestamp']
     list_filter = ['sender_type', 'feedback', 'timestamp', 'llm_model_used']
     search_fields = ['content', 'conversation__user__username']
     readonly_fields = ['timestamp', 'response_time']
     list_per_page = 50
     date_hierarchy = 'timestamp'
     ordering = ['-timestamp']
+    
+    def uuid_short(self, obj):
+        """Display first 4 characters of UUID followed by ..."""
+        return f"{str(obj.uuid)[:4]}..."
+    uuid_short.short_description = _('ID')
+    uuid_short.admin_order_field = 'uuid'
     
     def conversation_link(self, obj):
         url = reverse('admin:chat_conversation_change', args=[obj.conversation.id])
@@ -501,12 +612,18 @@ class MessageAdmin(admin.ModelAdmin):
 
 @admin.register(UserSession)
 class UserSessionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'user_link', 'session_id_short', 'total_conversations', 'total_messages_sent', 'duration', 'started_at', 'is_active']
+    list_display = ['uuid_short', 'user_link', 'session_id_short', 'total_conversations', 'total_messages_sent', 'duration', 'started_at', 'is_active']
     list_filter = ['is_active', 'started_at', 'ended_at']
     search_fields = ['user__username', 'session_id']
     readonly_fields = ['started_at', 'ended_at']
     date_hierarchy = 'started_at'
     ordering = ['-started_at']
+    
+    def uuid_short(self, obj):
+        """Display first 4 characters of UUID followed by ..."""
+        return f"{str(obj.uuid)[:4]}..."
+    uuid_short.short_description = _('ID')
+    uuid_short.admin_order_field = 'uuid'
     
     def user_link(self, obj):
         url = reverse('admin:auth_user_change', args=[obj.user.id])

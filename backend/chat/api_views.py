@@ -50,12 +50,13 @@ class StandardResultsSetPagination(PageNumberPagination):
 class ConversationViewSet(ModelViewSet):
     """
     ViewSet for managing conversations
-    Provides CRUD operations for conversations
+    Provides CRUD operations for conversations with UUID-based lookup
     """
     
     serializer_class = ConversationSerializer
     permission_classes = [permissions.AllowAny]  # For development
     pagination_class = StandardResultsSetPagination
+    lookup_field = 'uuid'  # Use UUID for URL lookups instead of pk
     
     def get_demo_user(self):
         """Get or create a demo user for anonymous access"""
@@ -311,12 +312,13 @@ class ConversationViewSet(ModelViewSet):
 class MessageViewSet(ModelViewSet):
     """
     ViewSet for managing messages
-    Provides CRUD operations for messages with filtering
+    Provides CRUD operations for messages with UUID-based lookup
     """
     
     serializer_class = MessageSerializer
     permission_classes = [permissions.AllowAny]  # For development
     pagination_class = StandardResultsSetPagination
+    lookup_field = 'uuid'  # Use UUID for URL lookups instead of pk
     
     def get_queryset(self):
         """Filter messages by user's conversations"""
@@ -375,7 +377,7 @@ class MessageViewSet(ModelViewSet):
         
         # Get conversation and verify user access
         try:
-            conversation = Conversation.objects.get(id=conversation_id)
+            conversation = Conversation.objects.get(uuid=conversation_id)
         except Conversation.DoesNotExist:
             raise ValidationError("Conversation not found")
         
@@ -474,15 +476,24 @@ class LLMChatAPIView(APIView):
             # Get user (use demo user for anonymous requests)
             user = request.user if request.user.is_authenticated else self.get_or_create_demo_user()
             
-            # Get or create conversation
+            # Get or create conversation using UUID (industry best practice)
             if conversation_id:
-                conversation = get_object_or_404(
-                    Conversation,
-                    uuid=conversation_id,
-                    user=user
-                )
+                try:
+                    # Try to get existing conversation by UUID
+                    conversation = Conversation.objects.get(
+                        uuid=conversation_id,
+                        user=user
+                    )
+                    print(f"Continuing existing conversation: {conversation.uuid}")
+                except Conversation.DoesNotExist:
+                    print(f"Conversation {conversation_id} not found, creating new one")
+                    # If provided UUID doesn't exist, create new conversation
+                    conversation = Conversation.objects.create(user=user)
+                    print(f"Created new conversation: {conversation.uuid}")
             else:
+                # Create new conversation only if no conversation_id provided
                 conversation = Conversation.objects.create(user=user)
+                print(f"Created new conversation: {conversation.uuid}")
             
             # Get conversation history (last 10 messages)
             history = list(conversation.messages.all().order_by('-timestamp')[:10])

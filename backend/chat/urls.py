@@ -9,7 +9,7 @@ from . import api_views, admin_views, views
 
 app_name = 'chat'
 
-# Create router and register ViewSets
+# Create router and register ViewSets with UUID-based lookup
 router = DefaultRouter()
 router.register(r'conversations', api_views.ConversationViewSet, basename='conversation')
 router.register(r'messages', api_views.MessageViewSet, basename='message')

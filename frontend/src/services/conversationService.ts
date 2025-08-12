@@ -173,17 +173,17 @@ class ConversationService {
   }
 
   /**
-   * Delete a conversation
+   * Delete a conversation by UUID
    */
-  async deleteConversation(conversationId: string): Promise<void> {
+  async deleteConversation(conversationUuid: string): Promise<void> {
     try {
-      console.log(`ConversationService: Deleting conversation ${conversationId}`);
-      console.log(`Request URL: ${CONVERSATION_API_URL}/${conversationId}/`);
+      console.log(`ConversationService: Deleting conversation ${conversationUuid}`);
+      console.log(`Request URL: ${CONVERSATION_API_URL}/${conversationUuid}/`);
       
       const headers = authService.getAuthHeaders();
       console.log('Request headers:', headers);
       
-      const response = await fetch(`${CONVERSATION_API_URL}/${conversationId}/`, {
+      const response = await fetch(`${CONVERSATION_API_URL}/${conversationUuid}/`, {
         method: 'DELETE',
         headers,
       });
@@ -194,7 +194,7 @@ class ConversationService {
       if (!response.ok) {
         // Handle 404 - conversation already deleted or doesn't exist
         if (response.status === 404) {
-          console.warn(`Conversation ${conversationId} not found in backend (already deleted)`);
+          console.warn(`Conversation ${conversationUuid} not found in backend (already deleted)`);
           return; // Treat as success since the goal (deletion) is achieved
         }
         
@@ -286,10 +286,10 @@ class ConversationService {
    */
   convertToFrontendFormat(backendConv: BackendConversation): any {
     return {
-      id: backendConv.id,
+      id: backendConv.uuid,  // Use UUID as primary identifier
       title: backendConv.title,
       messages: backendConv.messages?.map(msg => ({
-        id: msg.id,
+        id: msg.id,  // Messages still use ID for now, UUID later
         text: msg.content,
         sender: msg.sender_type === 'user' ? 'user' : 'bot',
         timestamp: new Date(msg.timestamp),

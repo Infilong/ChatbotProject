@@ -8,7 +8,7 @@ import uuid
 
 
 class Conversation(models.Model):
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True, verbose_name=_('UUID'))
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, verbose_name=_('UUID'))
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='conversations', verbose_name=_('User'))
     title = models.CharField(max_length=200, blank=True, verbose_name=_('Title'))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
@@ -50,7 +50,7 @@ class Message(models.Model):
         ('negative', _('Negative')),
     ]
     
-    uuid = models.UUIDField(default=uuid.uuid4, editable=False, null=True, blank=True, verbose_name=_('UUID'))
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, verbose_name=_('UUID'))
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', verbose_name=_('Conversation'))
     content = models.TextField(verbose_name=_('Content'))
     sender_type = models.CharField(max_length=10, choices=SENDER_CHOICES, verbose_name=_('Sender Type'))

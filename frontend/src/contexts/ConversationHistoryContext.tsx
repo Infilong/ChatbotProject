@@ -195,17 +195,17 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
         is_active: true,
       });
 
-      // Add messages to the conversation
+      // Add messages to the conversation using UUID
       for (const message of messages) {
         await conversationService.addMessage(
-          backendConv.id,
+          backendConv.uuid,  // Use UUID instead of id
           message.text,
           message.sender === 'user' ? 'user' : 'bot'
         );
       }
 
-      // Get the full conversation with messages
-      const fullConversation = await conversationService.getConversation(backendConv.id);
+      // Get the full conversation with messages using UUID
+      const fullConversation = await conversationService.getConversation(backendConv.uuid);
       const frontendConv = conversationService.convertToFrontendFormat(fullConversation);
       frontendConv.username = username;
       frontendConv.language = language;
@@ -213,11 +213,11 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
       setState(prev => ({
         ...prev,
         conversations: [frontendConv, ...prev.conversations],
-        currentConversationId: backendConv.id,
+        currentConversationId: backendConv.uuid,
       }));
 
-      console.log(`Saved conversation to backend: ${backendConv.id}`);
-      return backendConv.id;
+      console.log(`Saved conversation to backend: ${backendConv.uuid}`);
+      return backendConv.uuid;
     } catch (error) {
       console.error('Error saving conversation to backend:', error);
       
