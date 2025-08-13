@@ -1,5 +1,6 @@
 """
 Knowledge base service for document retrieval and LLM integration
+Modern RAG implementation with hybrid search (BM25 + Vector Embeddings)
 """
 
 import logging
@@ -8,6 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Document
+from .hybrid_search import hybrid_search_service, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -20,17 +22,43 @@ class KnowledgeBase:
         cls, 
         query: str, 
         limit: int = 5,
-        min_score: float = 0.05  # Lower threshold for broader matching
+        min_score: float = 0.1
     ) -> List[Document]:
         """
-        Async version - simple document search
-        LLM handles all query understanding and semantic processing
+        Async version with modern hybrid search (BM25 + Vector Embeddings)
         """
         if not query.strip():
             return []
         
         try:
-            # Get active documents with content
+            # Use hybrid search service
+            from asgiref.sync import sync_to_async
+            
+            # Run hybrid search in thread pool to avoid blocking
+            search_func = sync_to_async(hybrid_search_service.hybrid_search)
+            search_results = await search_func(query, top_k=limit, min_score=min_score)
+            
+            if search_results:
+                logger.info(f"Hybrid search for '{query}' found {len(search_results)} results:")
+                for i, result in enumerate(search_results[:3]):
+                    logger.info(f"  {i+1}. {result.document.name} (hybrid: {result.hybrid_score:.3f}, "
+                              f"bm25: {result.bm25_score:.3f}, vector: {result.vector_score:.3f})")
+                
+                # Return documents from search results
+                return [result.document for result in search_results]
+            else:
+                logger.info(f"Hybrid search for '{query}' found no relevant documents")
+                return []
+            
+        except Exception as e:
+            logger.error(f"Error in async hybrid search: {e}")
+            # Fallback to traditional search
+            return await cls._fallback_search_async(query, limit, min_score)
+    
+    @classmethod
+    async def _fallback_search_async(cls, query: str, limit: int, min_score: float) -> List[Document]:
+        """Fallback search method if hybrid search fails"""
+        try:
             from asgiref.sync import sync_to_async
             get_docs = sync_to_async(list)
             active_docs = await get_docs(Document.objects.filter(
@@ -39,32 +67,21 @@ class KnowledgeBase:
             ).exclude(extracted_text=''))
             
             if not active_docs:
-                logger.info("No active documents with extracted text found")
                 return []
             
-            # Simple relevance scoring - let LLM handle semantic understanding
             scored_docs = []
             for doc in active_docs:
                 score = doc.get_relevance_score(query)
                 if score >= min_score:
                     scored_docs.append((doc, score))
             
-            # Sort by relevance score (descending)
             scored_docs.sort(key=lambda x: x[1], reverse=True)
+            logger.info(f"Fallback search for '{query}' found {len(scored_docs)} documents")
             
-            # Log search results for debugging
-            if scored_docs:
-                logger.info(f"Query '{query}' found {len(scored_docs)} relevant documents")
-                for doc, score in scored_docs[:3]:  # Log top 3
-                    logger.info(f"  - {doc.name}: {score:.2f}")
-            else:
-                logger.info(f"Query '{query}' found no relevant documents above threshold {min_score}")
-            
-            # Return just the documents (not the scores)
             return [doc for doc, score in scored_docs[:limit]]
             
         except Exception as e:
-            logger.error(f"Error searching documents: {e}")
+            logger.error(f"Error in fallback search: {e}")
             return []
     
     @classmethod
@@ -231,65 +248,129 @@ Corrected keywords:"""
         max_context_length: int = 2000
     ) -> Tuple[str, List[Document]]:
         """
-        Get knowledge context for LLM from relevant documents
+        Get knowledge context for LLM using hybrid search results
         
         Returns:
             Tuple of (formatted_context, list_of_referenced_documents)
         """
-        relevant_docs = cls.search_relevant_documents(query, limit=max_documents)
-        
-        if not relevant_docs:
-            return "", []
-        
-        # Preprocess query for excerpt generation too
-        processed_query = cls._preprocess_query(query)
-        
-        context_parts = []
-        referenced_docs = []
-        current_length = 0
-        
-        for doc in relevant_docs:
-            # Get relevant excerpt from document using processed query for better matching
-            excerpt = doc.get_excerpt(processed_query, max_length=600)
+        try:
+            # Use hybrid search for better relevance
+            search_results = hybrid_search_service.hybrid_search(
+                query, top_k=max_documents, min_score=0.1
+            )
             
-            # If processed query doesn't yield good results, try original query
-            if not excerpt or len(excerpt) < 50:
+            if not search_results:
+                logger.info(f"No hybrid search results for query: {query}")
+                return "", []
+            
+            context_parts = []
+            referenced_docs = []
+            current_length = 0
+            
+            for result in search_results:
+                doc = result.document
+                chunk_text = result.chunk_text
+                
+                # Use the specific chunk that was found relevant
+                if len(chunk_text) > 800:
+                    # Truncate very long chunks but preserve important parts
+                    chunk_text = chunk_text[:800] + "..."
+                
+                # Format document context with hybrid search metadata
+                doc_context = f"""
+[Document: {doc.name}]
+Category: {doc.category or 'General'}  
+Relevance: {result.hybrid_score:.2f} (BM25: {result.bm25_score:.2f}, Vector: {result.vector_score:.2f})
+Content: {chunk_text}
+---
+"""
+                
+                # Check if adding this document would exceed length limit
+                if current_length + len(doc_context) > max_context_length:
+                    if not referenced_docs:  # Always include at least one document
+                        # Truncate the content to fit
+                        available_length = max_context_length - current_length
+                        truncated_content = chunk_text[:available_length - 200] + "..."
+                        doc_context = f"""
+[Document: {doc.name}]
+Category: {doc.category or 'General'}
+Relevance: {result.hybrid_score:.2f}
+Content: {truncated_content}
+---
+"""
+                        context_parts.append(doc_context)
+                        referenced_docs.append(doc)
+                    break
+                
+                context_parts.append(doc_context)
+                referenced_docs.append(doc)
+                current_length += len(doc_context)
+            
+            formatted_context = ''.join(context_parts)
+            
+            logger.info(f"Generated knowledge context with {len(referenced_docs)} documents, "
+                       f"total length: {len(formatted_context)} characters")
+            
+            return formatted_context, referenced_docs
+            
+        except Exception as e:
+            logger.error(f"Error generating knowledge context: {e}")
+            # Fallback to traditional method
+            return cls._get_knowledge_context_fallback(query, max_documents, max_context_length)
+    
+    @classmethod
+    def _get_knowledge_context_fallback(
+        cls, 
+        query: str, 
+        max_documents: int,
+        max_context_length: int
+    ) -> Tuple[str, List[Document]]:
+        """Fallback knowledge context generation"""
+        try:
+            relevant_docs = cls.search_relevant_documents(query, limit=max_documents)
+            
+            if not relevant_docs:
+                return "", []
+            
+            context_parts = []
+            referenced_docs = []
+            current_length = 0
+            
+            for doc in relevant_docs:
                 excerpt = doc.get_excerpt(query, max_length=600)
-            
-            if not excerpt:
-                continue
-            
-            # Format document context
-            doc_context = f"""
+                if not excerpt:
+                    continue
+                
+                doc_context = f"""
 [Document: {doc.name}]
 Category: {doc.category or 'General'}
 Content: {excerpt}
 ---
 """
-            
-            # Check if adding this document would exceed length limit
-            if current_length + len(doc_context) > max_context_length:
-                if not referenced_docs:  # Always include at least one document
-                    # Truncate the excerpt to fit
-                    available_length = max_context_length - current_length
-                    truncated_excerpt = excerpt[:available_length - 100] + "..."
-                    doc_context = f"""
+                
+                if current_length + len(doc_context) > max_context_length:
+                    if not referenced_docs:
+                        available_length = max_context_length - current_length
+                        truncated_excerpt = excerpt[:available_length - 100] + "..."
+                        doc_context = f"""
 [Document: {doc.name}]
 Category: {doc.category or 'General'}
 Content: {truncated_excerpt}
 ---
 """
-                    context_parts.append(doc_context)
-                    referenced_docs.append(doc)
-                break
+                        context_parts.append(doc_context)
+                        referenced_docs.append(doc)
+                    break
+                
+                context_parts.append(doc_context)
+                referenced_docs.append(doc)
+                current_length += len(doc_context)
             
-            context_parts.append(doc_context)
-            referenced_docs.append(doc)
-            current_length += len(doc_context)
-        
-        formatted_context = ''.join(context_parts)
-        
-        return formatted_context, referenced_docs
+            return ''.join(context_parts), referenced_docs
+            
+        except Exception as e:
+            logger.error(f"Error in fallback context generation: {e}")
+            return "", []
     
     @classmethod
     def record_document_usage(cls, documents: List[Document], feedback_positive: bool = True):

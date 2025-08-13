@@ -150,6 +150,33 @@ class Document(models.Model):
         help_text=_('Preprocessed text for fast searching')
     )
     
+    # Vector embeddings and hybrid search fields
+    chunks_json = models.TextField(
+        blank=True,
+        default='[]',
+        verbose_name=_('Document Chunks JSON'),
+        help_text=_('Text chunks for vector embeddings (JSON array)')
+    )
+    
+    embeddings_generated = models.BooleanField(
+        default=False,
+        verbose_name=_('Embeddings Generated'),
+        help_text=_('Whether vector embeddings have been generated for this document')
+    )
+    
+    embedding_model = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_('Embedding Model'),
+        help_text=_('Name of the embedding model used')
+    )
+    
+    chunks_count = models.IntegerField(
+        default=0,
+        verbose_name=_('Chunks Count'),
+        help_text=_('Number of text chunks generated')
+    )
+    
     # Usage analytics
     reference_count = models.IntegerField(
         default=0,
@@ -228,6 +255,26 @@ class Document(models.Model):
             self.ai_keywords_json = json.dumps(value)
         else:
             self.ai_keywords_json = '[]'
+    
+    @property
+    def chunks(self):
+        """Get document chunks as Python list from JSON string"""
+        if not self.chunks_json:
+            return []
+        try:
+            return json.loads(self.chunks_json)
+        except (json.JSONDecodeError, TypeError):
+            return []
+    
+    @chunks.setter
+    def chunks(self, value):
+        """Set document chunks as JSON string from Python list"""
+        if isinstance(value, list):
+            self.chunks_json = json.dumps(value)
+            self.chunks_count = len(value)
+        else:
+            self.chunks_json = '[]'
+            self.chunks_count = 0
     
     def save(self, *args, **kwargs):
         # Set file metadata on save

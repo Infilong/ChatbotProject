@@ -66,3 +66,11 @@ django-jazzmin==3.1.0
 google-generativeai==0.8.3
 anthropic==0.35.0
 rapidfuzz==3.10.0
+# Vector search and embeddings
+sentence-transformers==2.7.0
+faiss-cpu==1.8.0
+scikit-learn==1.5.1
+# BM25 for keyword search  
+rank-bm25==0.2.2
+# Text processing
+nltk==3.9.1
