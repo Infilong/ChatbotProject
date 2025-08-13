@@ -20,18 +20,16 @@ class KnowledgeBase:
         cls, 
         query: str, 
         limit: int = 5,
-        min_score: float = 0.1
+        min_score: float = 0.05  # Lower threshold for broader matching
     ) -> List[Document]:
         """
-        Async version with LLM-powered query preprocessing
+        Async version - simple document search
+        LLM handles all query understanding and semantic processing
         """
         if not query.strip():
             return []
         
         try:
-            # Use LLM-powered preprocessing for better understanding
-            processed_query = await cls._preprocess_query_with_llm(query)
-            
             # Get active documents with content
             from asgiref.sync import sync_to_async
             get_docs = sync_to_async(list)
@@ -44,20 +42,10 @@ class KnowledgeBase:
                 logger.info("No active documents with extracted text found")
                 return []
             
-            # Score documents by relevance using both original and processed query
+            # Simple relevance scoring - let LLM handle semantic understanding
             scored_docs = []
             for doc in active_docs:
-                # Try original query first
                 score = doc.get_relevance_score(query)
-                
-                # Always try processed query if it's different
-                if processed_query != query.lower().strip():
-                    processed_score = doc.get_relevance_score(processed_query)
-                    # Use the higher score but mark it as LLM-processed
-                    if processed_score > score:
-                        score = processed_score * 0.98  # Slight penalty for processed match
-                        logger.info(f"LLM preprocessing improved query '{query}' → '{processed_query}' (score: {score:.2f})")
-                
                 if score >= min_score:
                     scored_docs.append((doc, score))
             
@@ -84,26 +72,16 @@ class KnowledgeBase:
         cls, 
         query: str, 
         limit: int = 5,
-        min_score: float = 0.1
+        min_score: float = 0.05  # Lower threshold for broader matching
     ) -> List[Document]:
         """
-        Search for documents relevant to a query with typo tolerance and query preprocessing
-        
-        Returns:
-            List of documents sorted by relevance
+        Search for documents relevant to a query - basic matching only
+        LLM handles all query understanding and semantic processing
         """
         if not query.strip():
             return []
         
         try:
-            # Try LLM-powered preprocessing first, fallback to simple preprocessing
-            try:
-                import asyncio
-                processed_query = await cls._preprocess_query_with_llm(query)
-            except Exception as e:
-                logger.warning(f"LLM preprocessing failed, using fallback: {e}")
-                processed_query = cls._preprocess_query(query)
-            
             # Get active documents with content
             active_docs = Document.objects.filter(
                 is_active=True,
@@ -114,20 +92,10 @@ class KnowledgeBase:
                 logger.info("No active documents with extracted text found")
                 return []
             
-            # Score documents by relevance using both original and processed query
+            # Simple relevance scoring - let LLM handle semantic understanding
             scored_docs = []
             for doc in active_docs:
-                # Try original query first
                 score = doc.get_relevance_score(query)
-                
-                # Always try processed query if it's different, not just for low scores
-                if processed_query != query.lower().strip():
-                    processed_score = doc.get_relevance_score(processed_query)
-                    # Use the higher score but mark it as fuzzy matched
-                    if processed_score > score:
-                        score = processed_score * 0.95  # Slight penalty for fuzzy match
-                        logger.info(f"Query '{query}' matched better as '{processed_query}' (score: {score:.2f})")
-                
                 if score >= min_score:
                     scored_docs.append((doc, score))
             
@@ -231,7 +199,7 @@ Corrected keywords:"""
         
         query_lower = query.lower().strip()
         
-        # Simple typo corrections as fallback
+        # Simple typo corrections and semantic expansions as fallback
         simple_corrections = {
             'cousultation': 'consultation',
             'startaps': 'startups',
@@ -241,6 +209,10 @@ Corrected keywords:"""
             'tecnology': 'technology',
             'suport': 'support',
             'pricng': 'pricing',
+            'price': 'pricing cost quote',
+            'cost': 'pricing cost quote',
+            'quote': 'pricing cost quote',
+            'models': 'pricing models packages services',
         }
         
         corrected_query = query_lower

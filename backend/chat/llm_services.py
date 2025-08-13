@@ -405,11 +405,17 @@ class LLMManager:
                     from asgiref.sync import sync_to_async
                     from documents.knowledge_base import KnowledgeBase
                     
-                    # Use async version of document search with LLM preprocessing
-                    relevant_docs = await KnowledgeBase.search_relevant_documents_async(user_message)
+                    # STAGE 1: Use LLM to understand user intent and generate search terms
+                    search_terms = await cls._analyze_user_intent(user_message, service)
+                    logger.info(f"LLM-generated search terms for '{user_message}': {search_terms}")
+                    
+                    # STAGE 2: Use enhanced search terms to find relevant documents
+                    relevant_docs = await KnowledgeBase.search_relevant_documents_async(
+                        search_terms, limit=3, min_score=0.05
+                    )
                     
                     if relevant_docs:
-                        # Generate context from documents
+                        # Generate context from ONLY relevant documents
                         context_parts = []
                         referenced_docs = []
                         current_length = 0
@@ -417,7 +423,9 @@ class LLMManager:
                         
                         for doc in relevant_docs:
                             # Get relevant excerpt from document
-                            excerpt = doc.get_excerpt(user_message, max_length=600)
+                            excerpt = doc.get_excerpt(search_terms, max_length=600)
+                            if not excerpt:
+                                excerpt = doc.get_excerpt(user_message, max_length=600)
                             if not excerpt:
                                 continue
                             
@@ -457,16 +465,18 @@ Content: {truncated_excerpt}
                     if knowledge_context:
                         system_prompt += f"""
 
-KNOWLEDGE BASE CONTEXT:
+RELEVANT KNOWLEDGE BASE CONTENT:
 {knowledge_context}
 
-CRITICAL INSTRUCTIONS FOR USING KNOWLEDGE BASE:
-1. ALWAYS prioritize information from the Knowledge Base above general knowledge
-2. If the user's question relates to content in the Knowledge Base, answer STRICTLY based on that information
-3. Use SEMANTIC UNDERSTANDING - match user intent even if exact words differ (e.g., "technologies you use" matches tech-related content)
-4. TOLERATE TYPOS - understand misspelled words like "businesse" (business), "startaps" (startups), "cousultation" (consultation)
-5. If no Knowledge Base content matches the query, clearly state this and provide general assistance
-6. When referencing Knowledge Base content, be specific and cite the relevant sections"""
+INSTRUCTIONS FOR USING KNOWLEDGE BASE:
+1. **PRIORITIZE KNOWLEDGE BASE**: The above content was specifically retrieved as relevant to the user's question
+2. **ANSWER FROM DOCUMENTS**: Base your response primarily on the provided document content
+3. **BE SPECIFIC**: Reference which document contains the information you're using
+4. **SYNTHESIZE**: If multiple documents are relevant, combine the information coherently
+5. **CITE SOURCES**: Mention document names when referencing specific information
+6. **FALLBACK**: Only use general knowledge if the provided content doesn't address the question
+
+The documents above were selected based on intelligent analysis of the user's intent."""
                         metadata_docs = [
                             {"name": doc.name, "category": doc.category, "uuid": str(doc.uuid)}
                             for doc in referenced_docs
@@ -543,6 +553,62 @@ CRITICAL INSTRUCTIONS FOR USING KNOWLEDGE BASE:
         except Exception as e:
             logger.error(f"Chat response generation failed: {e}")
             raise LLMError(f"Failed to generate response: {str(e)}")
+    
+    @classmethod
+    async def _analyze_user_intent(cls, user_message: str, service: BaseLLMService) -> str:
+        """
+        STAGE 1: Use LLM to analyze user intent and generate optimized search terms
+        This is the key to efficient RAG - understanding what the user really wants
+        """
+        try:
+            intent_analysis_prompt = f"""You are a query analysis specialist for a data analytics company's knowledge base.
+
+Your task: Analyze the user's question and generate optimal search terms to find relevant documentation.
+
+ANALYSIS PROCESS:
+1. Understand the user's real intent (what they actually want to know)
+2. Generate search terms that would match relevant document content
+3. Include synonyms and related terms
+4. Consider common business/technical terminology
+
+USER QUESTION: "{user_message}"
+
+EXAMPLES:
+- "price models" → "pricing cost packages fees quotes payment plans models services rates"
+- "technologies you use" → "technology tools platforms software stack systems frameworks programming languages databases"
+- "consultation info" → "consultation meeting free advice support services process"
+- "data analytics services" → "analytics services data analysis solutions predictive descriptive"
+- "how do you work" → "process methodology approach workflow timeline project phases"
+
+Generate optimized search terms (just the terms, no explanation):"""
+
+            # Make a lightweight LLM call for intent analysis
+            intent_response, _ = await service.generate_response(
+                messages=[{'role': 'user', 'content': intent_analysis_prompt}],
+                max_tokens=100,
+                temperature=0.1  # Low temperature for consistent analysis
+            )
+            
+            # Clean up the response
+            search_terms = intent_response.strip()
+            
+            # Remove common prefixes that LLMs might add
+            prefixes_to_remove = ['search terms:', 'terms:', 'keywords:', 'optimized terms:']
+            for prefix in prefixes_to_remove:
+                if search_terms.lower().startswith(prefix):
+                    search_terms = search_terms[len(prefix):].strip()
+            
+            # Fallback to original message if analysis fails
+            if not search_terms or len(search_terms) < 3:
+                search_terms = user_message
+            
+            logger.info(f"Intent analysis: '{user_message}' → '{search_terms}'")
+            return search_terms
+            
+        except Exception as e:
+            logger.warning(f"Intent analysis failed: {e}")
+            # Fallback to original message
+            return user_message
     
     @classmethod
     async def test_configuration(cls, provider: str) -> Dict[str, Any]:
