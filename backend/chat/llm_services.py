@@ -561,26 +561,19 @@ The documents above were selected based on intelligent analysis of the user's in
         This is the key to efficient RAG - understanding what the user really wants
         """
         try:
-            intent_analysis_prompt = f"""You are a query analysis specialist for a data analytics company's knowledge base.
+            intent_analysis_prompt = f"""Analyze this business inquiry and suggest search keywords for finding relevant company information.
 
-Your task: Analyze the user's question and generate optimal search terms to find relevant documentation.
+Query: "{user_message}"
 
-ANALYSIS PROCESS:
-1. Understand the user's real intent (what they actually want to know)
-2. Generate search terms that would match relevant document content
-3. Include synonyms and related terms
-4. Consider common business/technical terminology
+Task: Generate search keywords that would help find relevant business documentation.
 
-USER QUESTION: "{user_message}"
+Examples:
+Query: "price models" → Keywords: "pricing cost packages fees quotes payment plans models services rates"
+Query: "support for teams" → Keywords: "team support collaboration group projects enterprise business clients"  
+Query: "what technologies" → Keywords: "technology tools platforms software systems frameworks"
+Query: "consultation info" → Keywords: "consultation meeting advice support services process"
 
-EXAMPLES:
-- "price models" → "pricing cost packages fees quotes payment plans models services rates"
-- "technologies you use" → "technology tools platforms software stack systems frameworks programming languages databases"
-- "consultation info" → "consultation meeting free advice support services process"
-- "data analytics services" → "analytics services data analysis solutions predictive descriptive"
-- "how do you work" → "process methodology approach workflow timeline project phases"
-
-Generate optimized search terms (just the terms, no explanation):"""
+Keywords for the query:"""
 
             # Make a lightweight LLM call for intent analysis
             intent_response, _ = await service.generate_response(
@@ -607,8 +600,39 @@ Generate optimized search terms (just the terms, no explanation):"""
             
         except Exception as e:
             logger.warning(f"Intent analysis failed: {e}")
-            # Fallback to original message
-            return user_message
+            # Smart fallback - enhance the original query with common business terms
+            return cls._enhance_query_fallback(user_message)
+    
+    @classmethod
+    def _enhance_query_fallback(cls, query: str) -> str:
+        """
+        Fallback query enhancement when LLM intent analysis fails
+        """
+        query_lower = query.lower()
+        
+        # Common business term expansions
+        expansions = {
+            'support': 'support assistance help services customer service team collaboration',
+            'teams': 'teams groups organizations enterprises businesses collaboration',
+            'price': 'pricing cost packages fees quotes payment rates models',
+            'cost': 'pricing cost packages fees quotes payment rates models', 
+            'technology': 'technology tools platforms software systems frameworks stack',
+            'consultation': 'consultation meeting advice support services process discussion',
+            'services': 'services solutions offerings capabilities expertise analytics',
+            'analytics': 'analytics analysis data insights reports dashboards predictive',
+            'data': 'data information insights analytics reports analysis',
+            'project': 'project work engagement timeline process methodology phases',
+        }
+        
+        # Find relevant expansions
+        enhanced_terms = [query]
+        for keyword, expansion in expansions.items():
+            if keyword in query_lower:
+                enhanced_terms.append(expansion)
+        
+        result = ' '.join(enhanced_terms)
+        logger.info(f"Fallback query enhancement: '{query}' → '{result}'")
+        return result
     
     @classmethod
     async def test_configuration(cls, provider: str) -> Dict[str, Any]:

@@ -433,10 +433,10 @@ class Document(models.Model):
         # Enhanced excerpt generation with semantic matching
         text = self.extracted_text.lower()
         query_lower = query.lower()
+        query_words = query_lower.split()
         
         # First try exact phrase match
         query_pos = text.find(query_lower)
-        
         if query_pos != -1:
             # Found exact match, extract context around it
             start = max(0, query_pos - max_length // 2)
@@ -450,35 +450,66 @@ class Document(models.Model):
                 excerpt = excerpt + "..."
             return excerpt
         
-        # If exact phrase not found, try semantic word matching
-        query_words = query_lower.split()
-        best_match_pos = -1
-        best_match_score = 0
+        # Split into larger chunks (paragraphs and sections) for better semantic matching
+        # Look for question sections, paragraphs, or logical sections
+        sections = []
         
-        # Split text into sentences/sections for better context
-        sentences = self.extracted_text.split('.')
+        # Try splitting by questions (FAQ format)
+        if '**' in self.extracted_text:
+            sections = self.extracted_text.split('**')
+        elif '\n\n' in self.extracted_text:
+            sections = self.extracted_text.split('\n\n')
+        else:
+            # Fallback to sentences
+            sections = self.extracted_text.split('.')
         
-        for i, sentence in enumerate(sentences):
-            sentence_lower = sentence.lower()
-            word_matches = sum(1 for word in query_words if len(word) > 2 and word in sentence_lower)
+        best_section = None
+        best_score = 0
+        best_start_pos = 0
+        
+        current_pos = 0
+        for section in sections:
+            section_lower = section.lower()
             
-            if word_matches > best_match_score:
-                best_match_score = word_matches
-                best_match_pos = text.find(sentence_lower)
-        
-        # If we found semantic matches, return that section
-        if best_match_score > 0 and best_match_pos != -1:
-            # Find the best matching sentence and surrounding context
-            start = max(0, best_match_pos - max_length // 4)
-            end = min(len(self.extracted_text), best_match_pos + max_length)
-            excerpt = self.extracted_text[start:end]
+            # Calculate relevance score for this section
+            score = 0
+            for word in query_words:
+                if len(word) > 2:  # Skip short words
+                    # Count occurrences of each query word
+                    score += section_lower.count(word) * len(word)
             
-            # Add ellipsis if needed
-            if start > 0:
-                excerpt = "..." + excerpt
-            if end < len(self.extracted_text):
-                excerpt = excerpt + "..."
-            return excerpt
+            # Bonus for sections that contain multiple query words
+            words_found = sum(1 for word in query_words if len(word) > 2 and word in section_lower)
+            if words_found > 1:
+                score *= 1.5
+            
+            if score > best_score:
+                best_score = score
+                best_section = section
+                best_start_pos = current_pos
+            
+            current_pos += len(section)
+        
+        # If we found a relevant section, return it with context
+        if best_section and best_score > 0:
+            # Find position in original text
+            section_pos = self.extracted_text.lower().find(best_section.lower())
+            if section_pos != -1:
+                # Include some context before and after
+                context_before = max_length // 4
+                context_after = max_length - len(best_section) - context_before
+                
+                start = max(0, section_pos - context_before)
+                end = min(len(self.extracted_text), section_pos + len(best_section) + context_after)
+                
+                excerpt = self.extracted_text[start:end]
+                
+                # Add ellipsis if needed
+                if start > 0:
+                    excerpt = "..." + excerpt
+                if end < len(self.extracted_text):
+                    excerpt = excerpt + "..."
+                return excerpt
         
         # Fallback: If ai_summary contains query words, use it; otherwise use beginning
         if self.ai_summary:
