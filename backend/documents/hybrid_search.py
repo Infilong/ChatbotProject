@@ -90,70 +90,423 @@ class HybridSearchService:
             logger.error(f"Failed to load embedding model: {e}")
             raise
     
-    def chunk_text(self, text: str, chunk_size: int = 512, chunk_overlap: int = 50) -> List[str]:
+    def chunk_text(self, text: str, chunk_size: int = 512, chunk_overlap: int = 100) -> List[str]:
         """
-        Split text into overlapping chunks for better retrieval
+        Universal semantic chunking strategy for any document type
+        
+        Uses multiple strategies to create meaningful chunks:
+        1. Sentence-aware chunking with semantic boundaries
+        2. Paragraph preservation where possible  
+        3. Topic boundary detection
+        4. Overlapping windows for context preservation
         
         Args:
             text: Input text to chunk
-            chunk_size: Maximum tokens per chunk
-            chunk_overlap: Overlap between chunks
+            chunk_size: Target words per chunk (increased for better context)
+            chunk_overlap: Overlap between chunks for context continuity
             
         Returns:
-            List of text chunks
+            List of semantically meaningful text chunks
         """
         if not text or not text.strip():
             return []
         
         try:
-            # Tokenize text
-            tokens = word_tokenize(text.lower())
+            # Step 1: Try semantic chunking first
+            semantic_chunks = self._chunk_by_semantic_boundaries(text, chunk_size, chunk_overlap)
             
-            if len(tokens) <= chunk_size:
-                return [text]
+            if semantic_chunks:
+                logger.info(f"Semantic chunking created {len(semantic_chunks)} chunks")
+                return semantic_chunks
             
+            # Step 2: Fallback to sentence-aware chunking
+            sentence_chunks = self._chunk_by_sentences(text, chunk_size, chunk_overlap)
+            
+            if sentence_chunks:
+                logger.info(f"Sentence chunking created {len(sentence_chunks)} chunks")
+                return sentence_chunks
+                
+            # Step 3: Final fallback to word-based chunking
+            word_chunks = self._chunk_by_words(text, chunk_size, chunk_overlap)
+            logger.info(f"Word chunking created {len(word_chunks)} chunks")
+            return word_chunks
+            
+        except Exception as e:
+            logger.error(f"Error in universal chunking: {e}")
+            return self._fallback_chunk_text(text, chunk_size)
+    
+    def _chunk_faq_text(self, text: str, max_words: int = 300) -> List[str]:
+        """
+        Specialized chunking for FAQ-style documents with **Question** format
+        """
+        try:
+            # Split by questions marked with **
+            sections = text.split('**')
             chunks = []
-            start = 0
+            current_chunk = ""
             
-            while start < len(tokens):
-                end = min(start + chunk_size, len(tokens))
-                chunk_tokens = tokens[start:end]
+            for i, section in enumerate(sections):
+                if not section.strip():
+                    continue
                 
-                # Reconstruct text from tokens (approximate)
-                chunk_text = ' '.join(chunk_tokens)
-                
-                # Find actual sentence boundaries for cleaner chunks
-                sentences = text.split('.')
-                chunk_sentences = []
-                current_length = 0
-                
-                for sentence in sentences:
-                    sentence_tokens = len(word_tokenize(sentence.lower()))
-                    if current_length + sentence_tokens <= chunk_size:
-                        chunk_sentences.append(sentence.strip())
-                        current_length += sentence_tokens
+                # If this looks like a question (ends with ?)
+                if section.strip().endswith('?'):
+                    # Start a new chunk with this question
+                    # CRITICAL FIX: Always save previous chunk if it exists, regardless of size
+                    # This prevents losing Q&A pairs that are shorter than 50 words
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+                        current_chunk = ""
+                    current_chunk = f"**{section}**"
+                else:
+                    # This is likely an answer or content
+                    section_text = section.strip()
+                    if current_chunk:
+                        test_chunk = current_chunk + " " + section_text
+                        if len(test_chunk.split()) <= max_words:
+                            current_chunk = test_chunk
+                        else:
+                            # Current chunk is getting too big, save it
+                            if current_chunk:
+                                chunks.append(current_chunk.strip())
+                            current_chunk = section_text
                     else:
-                        break
+                        current_chunk = section_text
+            
+            # Don't forget the last chunk
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+            
+            # Filter out very short chunks
+            chunks = [chunk for chunk in chunks if len(chunk.split()) > 10]
+            
+            logger.info(f"FAQ chunking created {len(chunks)} chunks")
+            return chunks if chunks else self._fallback_chunk_text(text, max_words)
+            
+        except Exception as e:
+            logger.error(f"Error in FAQ chunking: {e}")
+            return self._fallback_chunk_text(text, max_words)
+    
+    def _chunk_by_semantic_boundaries(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+        """
+        Advanced semantic chunking using multiple boundary detection strategies
+        """
+        try:
+            chunks = []
+            
+            # Strategy 1: Split by strong semantic boundaries
+            strong_boundaries = [
+                '\n\n\n',  # Multiple line breaks
+                '\n\n',    # Double line breaks (paragraph boundaries)
+                '. \n',    # Sentence + line break
+                '?\n',     # Question + line break
+                '!\n',     # Exclamation + line break
+            ]
+            
+            sections = [text]
+            
+            # Apply each boundary type
+            for boundary in strong_boundaries:
+                new_sections = []
+                for section in sections:
+                    if boundary in section:
+                        parts = section.split(boundary)
+                        for i, part in enumerate(parts):
+                            if part.strip():
+                                if i < len(parts) - 1:  # Add boundary back except for last part
+                                    part = part + boundary.rstrip()
+                                new_sections.append(part.strip())
+                    else:
+                        new_sections.append(section)
+                sections = new_sections
+            
+            # Now combine sections into appropriately sized chunks
+            current_chunk = ""
+            current_words = 0
+            
+            for section in sections:
+                section_words = len(section.split())
                 
-                if chunk_sentences:
-                    chunk_text = '. '.join(chunk_sentences)
-                    if not chunk_text.endswith('.'):
-                        chunk_text += '.'
+                # If section alone is too big, split it further
+                if section_words > chunk_size:
+                    # Save current chunk if it exists
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+                        current_chunk = ""
+                        current_words = 0
+                    
+                    # Split large section by sentences
+                    section_chunks = self._split_large_section(section, chunk_size, chunk_overlap)
+                    chunks.extend(section_chunks)
+                    
+                # If adding this section would exceed chunk size
+                elif current_words + section_words > chunk_size:
+                    # Save current chunk
+                    if current_chunk.strip():
+                        chunks.append(current_chunk.strip())
+                    
+                    # Start new chunk with overlap
+                    if chunk_overlap > 0 and current_chunk:
+                        overlap_text = self._get_chunk_overlap(current_chunk, chunk_overlap)
+                        current_chunk = overlap_text + " " + section
+                        current_words = len(current_chunk.split())
+                    else:
+                        current_chunk = section
+                        current_words = section_words
+                        
+                else:
+                    # Add section to current chunk
+                    if current_chunk:
+                        current_chunk += " " + section
+                    else:
+                        current_chunk = section
+                    current_words += section_words
+            
+            # Don't forget the last chunk
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+            
+            # Filter out very small chunks
+            chunks = [chunk for chunk in chunks if len(chunk.split()) >= 20]
+            
+            return chunks if len(chunks) > 1 else []
+            
+        except Exception as e:
+            logger.error(f"Error in semantic chunking: {e}")
+            return []
+    
+    def _chunk_by_sentences(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+        """
+        Sentence-aware chunking that respects sentence boundaries
+        """
+        try:
+            # Split into sentences using multiple patterns
+            sentence_endings = ['. ', '! ', '? ', '.\n', '!\n', '?\n']
+            
+            sentences = [text]
+            for ending in sentence_endings:
+                new_sentences = []
+                for sent in sentences:
+                    if ending in sent:
+                        parts = sent.split(ending)
+                        for i, part in enumerate(parts):
+                            if part.strip():
+                                if i < len(parts) - 1:
+                                    part = part + ending.rstrip()
+                                new_sentences.append(part.strip())
+                    else:
+                        new_sentences.append(sent)
+                sentences = new_sentences
+            
+            # Combine sentences into chunks
+            chunks = []
+            current_chunk = ""
+            current_words = 0
+            
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if not sentence:
+                    continue
+                    
+                sentence_words = len(sentence.split())
                 
-                chunks.append(chunk_text)
-                start += chunk_size - chunk_overlap
+                # If adding this sentence exceeds chunk size
+                if current_words + sentence_words > chunk_size:
+                    if current_chunk:
+                        chunks.append(current_chunk.strip())
+                        
+                        # Add overlap from previous chunk
+                        if chunk_overlap > 0:
+                            overlap = self._get_chunk_overlap(current_chunk, chunk_overlap)
+                            current_chunk = overlap + " " + sentence if overlap else sentence
+                        else:
+                            current_chunk = sentence
+                        current_words = len(current_chunk.split())
+                    else:
+                        # Single sentence is too long, split it
+                        if sentence_words > chunk_size:
+                            sentence_chunks = self._split_large_section(sentence, chunk_size, chunk_overlap)
+                            chunks.extend(sentence_chunks)
+                            current_chunk = ""
+                            current_words = 0
+                        else:
+                            current_chunk = sentence
+                            current_words = sentence_words
+                else:
+                    # Add sentence to current chunk
+                    if current_chunk:
+                        current_chunk += " " + sentence
+                    else:
+                        current_chunk = sentence
+                    current_words += sentence_words
+            
+            # Add the last chunk
+            if current_chunk.strip():
+                chunks.append(current_chunk.strip())
+            
+            # Filter out very small chunks
+            chunks = [chunk for chunk in chunks if len(chunk.split()) >= 15]
             
             return chunks
             
         except Exception as e:
-            logger.error(f"Error chunking text: {e}")
-            # Fallback: split by character count
+            logger.error(f"Error in sentence chunking: {e}")
+            return []
+    
+    def _chunk_by_words(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+        """
+        Basic word-based chunking with overlap
+        """
+        try:
             words = text.split()
             chunks = []
-            for i in range(0, len(words), chunk_size):
-                chunk = ' '.join(words[i:i + chunk_size])
-                chunks.append(chunk)
+            
+            if len(words) <= chunk_size:
+                return [text]
+            
+            start = 0
+            while start < len(words):
+                end = min(start + chunk_size, len(words))
+                chunk_words = words[start:end]
+                chunk_text = ' '.join(chunk_words)
+                
+                chunks.append(chunk_text.strip())
+                
+                # Move start position with overlap
+                start = end - chunk_overlap if chunk_overlap > 0 else end
+                
+                # Prevent infinite loop
+                if start >= end:
+                    break
+            
             return chunks
+            
+        except Exception as e:
+            logger.error(f"Error in word chunking: {e}")
+            return [text]
+    
+    def _split_large_section(self, text: str, chunk_size: int, chunk_overlap: int) -> List[str]:
+        """
+        Split a large section that's bigger than chunk_size
+        """
+        # Try to split by sentences first
+        sentences = []
+        for ending in ['. ', '! ', '? ']:
+            if ending in text:
+                sentences = text.split(ending)
+                # Add ending back except for last sentence
+                sentences = [sent + ending.rstrip() for sent in sentences[:-1]] + [sentences[-1]]
+                break
+        
+        if not sentences or len(sentences) == 1:
+            # Fallback to word splitting
+            words = text.split()
+            chunks = []
+            start = 0
+            while start < len(words):
+                end = min(start + chunk_size, len(words))
+                chunk_words = words[start:end]
+                chunks.append(' '.join(chunk_words))
+                start = end - chunk_overlap if chunk_overlap > 0 else end
+                if start >= end:
+                    break
+            return chunks
+        
+        # Combine sentences into appropriate chunks
+        chunks = []
+        current_chunk = ""
+        current_words = 0
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+                
+            sentence_words = len(sentence.split())
+            
+            if current_words + sentence_words > chunk_size:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence
+                current_words = sentence_words
+            else:
+                if current_chunk:
+                    current_chunk += " " + sentence
+                else:
+                    current_chunk = sentence
+                current_words += sentence_words
+        
+        if current_chunk.strip():
+            chunks.append(current_chunk.strip())
+        
+        return chunks
+    
+    def _get_chunk_overlap(self, chunk: str, overlap_words: int) -> str:
+        """
+        Get the last N words from a chunk for overlap
+        """
+        words = chunk.split()
+        if len(words) <= overlap_words:
+            return chunk
+        return ' '.join(words[-overlap_words:])
+    
+    def _fallback_chunk_text(self, text: str, chunk_size: int) -> List[str]:
+        """Fallback chunking method using simple word splitting"""
+        words = text.split()
+        chunks = []
+        
+        for i in range(0, len(words), max(1, chunk_size - 50)):  # 50 word overlap
+            chunk_words = words[i:i + chunk_size]
+            chunk_text = ' '.join(chunk_words)
+            if chunk_text.strip():
+                chunks.append(chunk_text.strip())
+        
+        return chunks
+    
+    def _preprocess_search_query(self, query: str) -> str:
+        """
+        Preprocess search query to improve matching accuracy
+        """
+        if not query:
+            return query
+            
+        # Convert to lowercase for consistent matching
+        processed = query.lower().strip()
+        
+        # Expand common abbreviations and synonyms
+        expansions = {
+            'security': 'security privacy protection safe secure',
+            'data': 'data information database records',
+            'protect': 'protect secure safeguard encrypt',
+            'privacy': 'privacy confidential confidentiality GDPR CCPA',
+            'price': 'price cost pricing quote fee',
+            'cost': 'cost price pricing fee expense',
+            'pricing': 'pricing price cost quote',
+            'service': 'service services offering solution',
+            'analytics': 'analytics analysis insight report',
+            'consultation': 'consultation consult meeting discussion',
+            'support': 'support help assistance maintenance',
+        }
+        
+        # Add relevant terms based on query keywords
+        query_words = processed.split()
+        expanded_terms = []
+        
+        for word in query_words:
+            expanded_terms.append(word)
+            # Add expansions if keyword found
+            for key, expansion in expansions.items():
+                if key in word or word in key:
+                    expansion_words = expansion.split()
+                    for exp_word in expansion_words:
+                        if exp_word not in expanded_terms and exp_word != word:
+                            expanded_terms.append(exp_word)
+        
+        # Join expanded terms
+        processed = ' '.join(expanded_terms)
+        
+        logger.debug(f"Query preprocessing: '{query}' -> '{processed}'")
+        return processed
     
     def preprocess_text_for_bm25(self, text: str) -> List[str]:
         """
@@ -392,9 +745,9 @@ class HybridSearchService:
         self, 
         query: str, 
         top_k: int = 5,
-        bm25_weight: float = 0.3,
-        vector_weight: float = 0.7,
-        min_score: float = 0.1
+        bm25_weight: float = 0.4,
+        vector_weight: float = 0.6,
+        min_score: float = 0.05
     ) -> List[SearchResult]:
         """
         Perform hybrid search combining BM25 and vector similarity
@@ -417,9 +770,12 @@ class HybridSearchService:
                     logger.error("Failed to build indexes")
                     return []
             
-            # Search both indexes
-            bm25_results = self.search_bm25(query, top_k * 2)  # Get more results for fusion
-            vector_results = self.search_vector(query, top_k * 2)
+            # Preprocess query for better matching
+            processed_query = self._preprocess_search_query(query)
+            
+            # Search both indexes with processed query
+            bm25_results = self.search_bm25(processed_query, top_k * 3)  # Get more results for better fusion
+            vector_results = self.search_vector(query, top_k * 3)  # Use original query for semantic search
             
             # Normalize scores
             def normalize_scores(results):

@@ -465,18 +465,20 @@ Content: {truncated_excerpt}
                     if knowledge_context:
                         system_prompt += f"""
 
-RELEVANT KNOWLEDGE BASE CONTENT:
+IMPORTANT: You have access to relevant information from our company knowledge base. Use this information to answer the user's question naturally and professionally, as if you were a helpful human customer service representative.
+
+RELEVANT INFORMATION:
 {knowledge_context}
 
-INSTRUCTIONS FOR USING KNOWLEDGE BASE:
-1. **PRIORITIZE KNOWLEDGE BASE**: The above content was specifically retrieved as relevant to the user's question
-2. **ANSWER FROM DOCUMENTS**: Base your response primarily on the provided document content
-3. **BE SPECIFIC**: Reference which document contains the information you're using
-4. **SYNTHESIZE**: If multiple documents are relevant, combine the information coherently
-5. **CITE SOURCES**: Mention document names when referencing specific information
-6. **FALLBACK**: Only use general knowledge if the provided content doesn't address the question
+RESPONSE GUIDELINES:
+- Answer questions naturally like a helpful human customer service agent
+- Use the provided information to give accurate, helpful responses
+- Don't mention "knowledge base", "documents", or technical terms like "DATAPROFAQ"
+- If information isn't available, politely say so and suggest alternatives
+- Keep responses conversational and friendly
+- Example: Instead of "The provided knowledge base content does not contain...", say "I don't have that specific information, but you can..."
 
-The documents above were selected based on intelligent analysis of the user's intent."""
+Be natural, professional, and helpful - just like a real person would be."""
                         metadata_docs = [
                             {"name": doc.name, "category": doc.category, "uuid": str(doc.uuid)}
                             for doc in referenced_docs
