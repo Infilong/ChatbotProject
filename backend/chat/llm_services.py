@@ -398,14 +398,90 @@ class LLMManager:
             system_prompt = await service.aget_system_prompt('system', language)
             
             # Enhanced system prompt with knowledge base context
-            # TODO: Implement async knowledge base integration
+            knowledge_context = ""
             if use_knowledge_base:
-                # Temporarily disabled to avoid sync context issues
-                # Will implement proper async knowledge base integration
-                pass
+                try:
+                    # Import knowledge base (async-safe)
+                    from asgiref.sync import sync_to_async
+                    from documents.knowledge_base import KnowledgeBase
+                    
+                    # Use async version of document search with LLM preprocessing
+                    relevant_docs = await KnowledgeBase.search_relevant_documents_async(user_message)
+                    
+                    if relevant_docs:
+                        # Generate context from documents
+                        context_parts = []
+                        referenced_docs = []
+                        current_length = 0
+                        max_context_length = 2000
+                        
+                        for doc in relevant_docs:
+                            # Get relevant excerpt from document
+                            excerpt = doc.get_excerpt(user_message, max_length=600)
+                            if not excerpt:
+                                continue
+                            
+                            # Format document context
+                            doc_context = f"""
+[Document: {doc.name}]
+Category: {doc.category or 'General'}
+Content: {excerpt}
+---
+"""
+                            
+                            # Check if adding this document would exceed length limit
+                            if current_length + len(doc_context) > max_context_length:
+                                if not referenced_docs:  # Always include at least one document
+                                    # Truncate the excerpt to fit
+                                    available_length = max_context_length - current_length
+                                    truncated_excerpt = excerpt[:available_length - 100] + "..."
+                                    doc_context = f"""
+[Document: {doc.name}]
+Category: {doc.category or 'General'}
+Content: {truncated_excerpt}
+---
+"""
+                                    context_parts.append(doc_context)
+                                    referenced_docs.append(doc)
+                                break
+                            
+                            context_parts.append(doc_context)
+                            referenced_docs.append(doc)
+                            current_length += len(doc_context)
+                        
+                        knowledge_context = ''.join(context_parts)
+                    else:
+                        knowledge_context = ""
+                        referenced_docs = []
+                    
+                    if knowledge_context:
+                        system_prompt += f"""
+
+KNOWLEDGE BASE CONTEXT:
+{knowledge_context}
+
+CRITICAL INSTRUCTIONS FOR USING KNOWLEDGE BASE:
+1. ALWAYS prioritize information from the Knowledge Base above general knowledge
+2. If the user's question relates to content in the Knowledge Base, answer STRICTLY based on that information
+3. Use SEMANTIC UNDERSTANDING - match user intent even if exact words differ (e.g., "technologies you use" matches tech-related content)
+4. TOLERATE TYPOS - understand misspelled words like "businesse" (business), "startaps" (startups), "cousultation" (consultation)
+5. If no Knowledge Base content matches the query, clearly state this and provide general assistance
+6. When referencing Knowledge Base content, be specific and cite the relevant sections"""
+                        metadata_docs = [
+                            {"name": doc.name, "category": doc.category, "uuid": str(doc.uuid)}
+                            for doc in referenced_docs
+                        ]
+                        logger.info(f"Using {len(referenced_docs)} documents for context")
+                    
+                except Exception as e:
+                    logger.warning(f"Knowledge base integration failed: {e}")
+                    # Continue without knowledge base
             
-            referenced_docs = []
-            metadata_docs = []
+            # Initialize variables
+            if 'referenced_docs' not in locals():
+                referenced_docs = []
+            if 'metadata_docs' not in locals():
+                metadata_docs = []
             
             # Build message history
             messages = []
@@ -440,7 +516,27 @@ class LLMManager:
             
             # Record document usage (will be updated with feedback later)
             if referenced_docs:
-                KnowledgeBase.record_document_usage(referenced_docs, feedback_positive=True)
+                try:
+                    from asgiref.sync import sync_to_async
+                    from django.db import transaction
+                    from django.utils import timezone
+                    
+                    # Create async-safe document usage recording function
+                    @sync_to_async
+                    def record_usage_atomic():
+                        with transaction.atomic():
+                            for doc in referenced_docs:
+                                # Increment reference count atomically
+                                doc.reference_count += 1
+                                doc.last_referenced = timezone.now()
+                                # Update effectiveness score based on positive feedback
+                                doc.effectiveness_score = min(doc.effectiveness_score + 0.1, 10.0)
+                                doc.save(update_fields=['reference_count', 'last_referenced', 'effectiveness_score'])
+                                logger.info(f"Updated usage for document: {doc.name} (score: {doc.effectiveness_score:.2f})")
+                    
+                    await record_usage_atomic()
+                except Exception as e:
+                    logger.warning(f"Failed to record document usage: {e}")
             
             return response_text, metadata
             

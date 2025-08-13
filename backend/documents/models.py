@@ -267,10 +267,109 @@ class Document(models.Model):
         self.save(update_fields=['reference_count', 'last_referenced'])
     
     def get_relevance_score(self, query: str) -> float:
-        """Calculate relevance score for a query"""
+        """Calculate relevance score for a query with fuzzy matching for typo tolerance"""
         if not self.extracted_text and not self.ai_summary:
             return 0.0
         
+        query_lower = query.lower().strip()
+        score = 0.0
+        
+        # Import fuzzy matching library
+        try:
+            from rapidfuzz import fuzz, process
+        except ImportError:
+            # Fallback to original exact matching if rapidfuzz not available
+            return self._get_exact_relevance_score(query)
+        
+        # Check title relevance (higher weight)
+        if query_lower in self.name.lower():
+            score += 2.0
+        else:
+            # Fuzzy match with title
+            title_ratio = fuzz.partial_ratio(query_lower, self.name.lower())
+            if title_ratio > 80:  # High similarity threshold
+                score += 1.5 * (title_ratio / 100)
+        
+        # Check keywords relevance with fuzzy matching (high weight)
+        for keyword in self.ai_keywords:
+            if isinstance(keyword, str):
+                keyword_lower = keyword.lower()
+                if query_lower in keyword_lower:
+                    score += 1.5
+                else:
+                    # Fuzzy match with keywords
+                    keyword_ratio = fuzz.partial_ratio(query_lower, keyword_lower)
+                    if keyword_ratio > 75:  # Medium-high similarity threshold
+                        score += 1.2 * (keyword_ratio / 100)
+        
+        # Check category relevance
+        if self.category:
+            if query_lower in self.category.lower():
+                score += 1.0
+            else:
+                # Fuzzy match with category
+                category_ratio = fuzz.partial_ratio(query_lower, self.category.lower())
+                if category_ratio > 70:
+                    score += 0.8 * (category_ratio / 100)
+        
+        # Check tags relevance with fuzzy matching
+        for tag in self.get_tags_list():
+            tag_lower = tag.lower()
+            if query_lower in tag_lower:
+                score += 1.0
+            else:
+                # Fuzzy match with tags
+                tag_ratio = fuzz.partial_ratio(query_lower, tag_lower)
+                if tag_ratio > 70:
+                    score += 0.8 * (tag_ratio / 100)
+        
+        # Enhanced content relevance with fuzzy matching
+        if self.extracted_text:
+            content_lower = self.extracted_text.lower()
+            # Full query match (higher score)
+            if query_lower in content_lower:
+                score += 0.5
+            else:
+                # Enhanced individual word matches with fuzzy matching
+                query_words = query_lower.split()
+                for word in query_words:
+                    if len(word) > 2:  # Skip very short words
+                        if word in content_lower:
+                            score += 0.1
+                        else:
+                            # Fuzzy match individual words in content
+                            content_words = content_lower.split()
+                            best_match = process.extractOne(word, content_words, scorer=fuzz.ratio)
+                            if best_match and best_match[1] > 80:  # High similarity for content words
+                                score += 0.08 * (best_match[1] / 100)  # Slightly lower than exact match
+        
+        # Enhanced summary matching with fuzzy matching
+        if self.ai_summary:
+            summary_lower = self.ai_summary.lower()
+            if query_lower in summary_lower:
+                score += 0.8
+            else:
+                # Enhanced individual word matches in summary with fuzzy matching
+                query_words = query_lower.split()
+                for word in query_words:
+                    if len(word) > 2:
+                        if word in summary_lower:
+                            score += 0.15
+                        else:
+                            # Fuzzy match words in summary
+                            summary_words = summary_lower.split()
+                            best_match = process.extractOne(word, summary_words, scorer=fuzz.ratio)
+                            if best_match and best_match[1] > 80:  # High similarity for summary words
+                                score += 0.12 * (best_match[1] / 100)
+        
+        # Boost score based on effectiveness and usage
+        score *= (1 + self.effectiveness_score / 10)
+        score *= (1 + min(self.reference_count / 100, 0.5))
+        
+        return score
+    
+    def _get_exact_relevance_score(self, query: str) -> float:
+        """Fallback method for exact matching when fuzzy libraries unavailable"""
         query_lower = query.lower()
         score = 0.0
         
@@ -293,11 +392,28 @@ class Document(models.Model):
                 score += 1.0
         
         # Check content relevance (lower weight but important)
-        if self.extracted_text and query_lower in self.extracted_text.lower():
-            score += 0.5
+        if self.extracted_text:
+            content_lower = self.extracted_text.lower()
+            # Full query match (higher score)
+            if query_lower in content_lower:
+                score += 0.5
+            else:
+                # Individual word matches (partial score)
+                query_words = query_lower.split()
+                for word in query_words:
+                    if len(word) > 2 and word in content_lower:  # Skip very short words
+                        score += 0.1
         
-        if self.ai_summary and query_lower in self.ai_summary.lower():
-            score += 0.8
+        if self.ai_summary:
+            summary_lower = self.ai_summary.lower()
+            if query_lower in summary_lower:
+                score += 0.8
+            else:
+                # Individual word matches in summary
+                query_words = query_lower.split()
+                for word in query_words:
+                    if len(word) > 2 and word in summary_lower:
+                        score += 0.15
         
         # Boost score based on effectiveness and usage
         score *= (1 + self.effectiveness_score / 10)
@@ -306,7 +422,7 @@ class Document(models.Model):
         return score
     
     def get_excerpt(self, query: str = None, max_length: int = 300) -> str:
-        """Get relevant excerpt from document for context"""
+        """Get relevant excerpt from document for context with semantic matching"""
         if not self.extracted_text:
             return self.ai_summary[:max_length] if self.ai_summary else ""
         
@@ -314,26 +430,63 @@ class Document(models.Model):
             # Return beginning of text if no query
             return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
         
-        # Find relevant excerpt around query match
+        # Enhanced excerpt generation with semantic matching
         text = self.extracted_text.lower()
-        query_pos = text.find(query.lower())
+        query_lower = query.lower()
         
-        if query_pos == -1:
-            # Query not found, return summary or beginning
-            return self.ai_summary[:max_length] if self.ai_summary else self.extracted_text[:max_length]
+        # First try exact phrase match
+        query_pos = text.find(query_lower)
         
-        # Extract context around query
-        start = max(0, query_pos - max_length // 2)
-        end = min(len(self.extracted_text), start + max_length)
+        if query_pos != -1:
+            # Found exact match, extract context around it
+            start = max(0, query_pos - max_length // 2)
+            end = min(len(self.extracted_text), start + max_length)
+            excerpt = self.extracted_text[start:end]
+            
+            # Add ellipsis if needed
+            if start > 0:
+                excerpt = "..." + excerpt
+            if end < len(self.extracted_text):
+                excerpt = excerpt + "..."
+            return excerpt
         
-        excerpt = self.extracted_text[start:end]
+        # If exact phrase not found, try semantic word matching
+        query_words = query_lower.split()
+        best_match_pos = -1
+        best_match_score = 0
         
-        # Add ellipsis if needed
-        if start > 0:
-            excerpt = "..." + excerpt
-        if end < len(self.extracted_text):
-            excerpt = excerpt + "..."
+        # Split text into sentences/sections for better context
+        sentences = self.extracted_text.split('.')
         
-        return excerpt
+        for i, sentence in enumerate(sentences):
+            sentence_lower = sentence.lower()
+            word_matches = sum(1 for word in query_words if len(word) > 2 and word in sentence_lower)
+            
+            if word_matches > best_match_score:
+                best_match_score = word_matches
+                best_match_pos = text.find(sentence_lower)
+        
+        # If we found semantic matches, return that section
+        if best_match_score > 0 and best_match_pos != -1:
+            # Find the best matching sentence and surrounding context
+            start = max(0, best_match_pos - max_length // 4)
+            end = min(len(self.extracted_text), best_match_pos + max_length)
+            excerpt = self.extracted_text[start:end]
+            
+            # Add ellipsis if needed
+            if start > 0:
+                excerpt = "..." + excerpt
+            if end < len(self.extracted_text):
+                excerpt = excerpt + "..."
+            return excerpt
+        
+        # Fallback: If ai_summary contains query words, use it; otherwise use beginning
+        if self.ai_summary:
+            summary_words = sum(1 for word in query_words if len(word) > 2 and word in self.ai_summary.lower())
+            if summary_words > 0:
+                return self.ai_summary[:max_length]
+        
+        # Ultimate fallback: return beginning of document
+        return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
 
 
