@@ -18,6 +18,7 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
     Signal handler triggered when a message is saved
     Triggers message-level analysis for user messages immediately
     Also checks if the conversation should be analyzed automatically
+    Includes retry mechanism for failed analyses
     """
     if not created:
         # Only process new messages, not updates
@@ -120,6 +121,9 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
             import threading
             analysis_thread = threading.Thread(target=analyze_message_async, daemon=True)
             analysis_thread.start()
+            
+            # Start retry mechanism for this message
+            start_message_analysis_retry_monitor(instance)
         
         # 2. CONVERSATION-LEVEL ANALYSIS (enhanced)
         message_count = conversation.total_messages
@@ -276,3 +280,128 @@ def conversation_updated_check_analysis(sender, instance, created, **kwargs):
         
     except Exception as e:
         logger.warning(f"Error in conversation_updated_check_analysis signal: {e}")
+
+
+# Global dictionary to track retry timers
+_message_retry_timers = {}
+
+
+def start_message_analysis_retry_monitor(message_instance):
+    """
+    Start a retry monitor for message analysis that checks every 15 seconds
+    and attempts to analyze the message if it's still unanalyzed
+    """
+    message_uuid = str(message_instance.uuid)
+    
+    # Don't start multiple timers for the same message
+    if message_uuid in _message_retry_timers:
+        return
+    
+    import threading
+    import time
+    
+    def retry_analysis_monitor():
+        """Monitor function that runs every 15 seconds to check and retry analysis"""
+        max_retries = 20  # Maximum 20 retries (5 minutes total)
+        retry_count = 0
+        
+        logger.info(f"Starting analysis retry monitor for message {message_uuid}")
+        
+        while retry_count < max_retries:
+            try:
+                # Wait 15 seconds before checking
+                time.sleep(15)
+                retry_count += 1
+                
+                # Check if message still exists and needs analysis
+                try:
+                    from django.db import connections
+                    connections.close_all()  # Close stale connections
+                    
+                    message = Message.objects.get(uuid=message_uuid)
+                    
+                    # Check if message now has analysis
+                    if message.message_analysis and message.message_analysis != {}:
+                        logger.info(f"Message {message_uuid} analysis completed successfully (retry {retry_count})")
+                        break
+                    
+                    # Message still needs analysis - attempt retry
+                    logger.info(f"Message {message_uuid} still unanalyzed, attempting retry {retry_count}/{max_retries}")
+                    
+                    # Attempt analysis again
+                    import asyncio
+                    from core.services.hybrid_analysis_service import hybrid_analysis_service
+                    from django.db import transaction
+                    
+                    # Create new event loop for this retry
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    try:
+                        with transaction.atomic():
+                            # Re-fetch message with lock
+                            fresh_message = Message.objects.select_for_update().get(uuid=message_uuid)
+                            
+                            # Double-check it still needs analysis
+                            if not fresh_message.message_analysis or fresh_message.message_analysis == {}:
+                                # Analyze this specific message using hybrid approach
+                                analysis_result = loop.run_until_complete(
+                                    hybrid_analysis_service.analyze_message_hybrid(fresh_message)
+                                )
+                                
+                                if analysis_result and 'error' not in analysis_result:
+                                    # Add retry information to the analysis
+                                    analysis_result.update({
+                                        "retry_count": retry_count,
+                                        "retry_successful": True,
+                                        "retry_timestamp": timezone.now().isoformat()
+                                    })
+                                    
+                                    # Save analysis to message
+                                    fresh_message.message_analysis = analysis_result
+                                    fresh_message.save(update_fields=['message_analysis'])
+                                    
+                                    # Log success
+                                    analysis_source = analysis_result.get('analysis_source', 'Unknown')
+                                    logger.info(f"Message {message_uuid} retry analysis successful using {analysis_source} (attempt {retry_count})")
+                                    break
+                                else:
+                                    logger.warning(f"Message {message_uuid} retry analysis failed (attempt {retry_count}): {analysis_result.get('error', 'Unknown error')}")
+                            else:
+                                logger.info(f"Message {message_uuid} was analyzed by another process during retry {retry_count}")
+                                break
+                                
+                    finally:
+                        loop.close()
+                        
+                except Message.DoesNotExist:
+                    logger.info(f"Message {message_uuid} no longer exists, stopping retry monitor")
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Error in retry analysis monitor for {message_uuid} (attempt {retry_count}): {e}")
+                
+        # Clean up - remove from retry timers
+        if message_uuid in _message_retry_timers:
+            del _message_retry_timers[message_uuid]
+            
+        if retry_count >= max_retries:
+            logger.warning(f"Message {message_uuid} retry analysis gave up after {max_retries} attempts")
+        else:
+            logger.info(f"Message {message_uuid} retry monitor completed successfully")
+    
+    # Start the retry monitor in a background thread
+    retry_thread = threading.Thread(target=retry_analysis_monitor, daemon=True)
+    retry_thread.start()
+    
+    # Track this timer
+    _message_retry_timers[message_uuid] = retry_thread
+
+
+def stop_message_analysis_retry_monitor(message_uuid):
+    """
+    Stop the retry monitor for a specific message (if needed)
+    """
+    if message_uuid in _message_retry_timers:
+        logger.info(f"Stopping retry monitor for message {message_uuid}")
+        del _message_retry_timers[message_uuid]

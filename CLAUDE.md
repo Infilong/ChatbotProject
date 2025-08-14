@@ -318,6 +318,46 @@ def some_action.short_description = _("Analyze Data")
 - Keeps focus on functionality rather than decoration
 - Professional business software appearance
 
+## CRITICAL: Testing and Management Commands Unicode Standards
+
+**NO EMOJIS OR SPECIAL UNICODE CHARACTERS IN TESTS AND MANAGEMENT COMMANDS:**
+
+❌ **STRICTLY FORBIDDEN in tests, management commands, and debug output:**
+- Emojis in print statements, test output, or management command messages (🔍, ✅, ❌, 📊, etc.)
+- Special Unicode characters that cause encoding errors on Windows
+- Non-ASCII characters in console output or command-line tools
+- Decorative Unicode symbols in test descriptions or command help text
+
+✅ **ALWAYS Use Standard ASCII Text:**
+- Plain text for all console output and command messages
+- Standard ASCII characters for test assertions and descriptions
+- Professional text-only output for management commands
+- Clean, readable console messages without decorative characters
+
+**Examples:**
+```python
+# ❌ Wrong - Using emojis in management commands
+self.stdout.write(f"🔍 Searching for unanalyzed messages...")
+self.stdout.write(self.style.SUCCESS("✅ Analysis completed!"))
+
+# ✅ Correct - Plain text only
+self.stdout.write("Searching for unanalyzed messages...")
+self.stdout.write(self.style.SUCCESS("Analysis completed successfully!"))
+```
+
+**Testing Standards:**
+- All test output must use ASCII-only characters
+- Management command help text must be emoji-free
+- Console logging should avoid Unicode symbols
+- Error messages in tests should be plain text
+
+**Rationale:**
+- Prevents UnicodeEncodeError on Windows systems with 'gbk' codec
+- Ensures compatibility across different terminal environments
+- Maintains consistent behavior in CI/CD pipelines
+- Avoids console encoding issues in production deployments
+- Professional appearance in enterprise environments
+
 ## CRITICAL: Security Best Practices
 
 **ALWAYS IMPLEMENT SECURITY-FIRST DESIGN IN BACKEND SYSTEMS:**
