@@ -1,0 +1,5 @@
+[33mbc850b5[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m Implement universal RAG system with advanced semantic chunking
+[33mc9da554[m Implement complete hybrid search RAG system (BM25 + Vector Embeddings)
+[33m568e7ae[m Fix Gemini safety filter issues and improve semantic excerpt generation
+[33mffd2b0e[m Implement proper RAG architecture with two-stage LLM processing
+[33me829d45[m Implement LLM-powered query preprocessing for intelligent typo correction

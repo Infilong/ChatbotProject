@@ -66,6 +66,9 @@ class Message(models.Model):
     llm_model_used = models.CharField(max_length=50, null=True, blank=True, verbose_name=_('LLM Model Used'))
     tokens_used = models.IntegerField(null=True, blank=True, verbose_name=_('Tokens Used'))
     
+    # Message-level analysis (new field)
+    message_analysis = models.JSONField(default=dict, blank=True, verbose_name=_('Message Analysis'))
+    
     class Meta:
         ordering = ['timestamp']
         verbose_name = _('Message')
@@ -81,6 +84,8 @@ class Message(models.Model):
         if is_new:
             self.conversation.total_messages += 1
             self.conversation.save(update_fields=['total_messages', 'updated_at'])
+            
+            # Note: Automatic analysis is now handled by Django signals in chat/signals.py
 
 
 class UserSession(models.Model):

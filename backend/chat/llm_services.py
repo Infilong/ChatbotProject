@@ -214,8 +214,23 @@ class GeminiService(BaseLLMService):
         super().__init__(api_config)
         try:
             import google.generativeai as genai
+            from google.generativeai.types import HarmCategory, HarmBlockThreshold
+            
             genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
+            
+            # Configure safety settings to prevent blocking legitimate customer service content
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            }
+            
+            self.model = genai.GenerativeModel(
+                model_name=self.model_name,
+                safety_settings=safety_settings
+            )
+            logger.info(f"GeminiService initialized with safety settings disabled for model: {self.model_name}")
         except ImportError:
             raise LLMConfigurationError("google-generativeai package not installed. Run: pip install google-generativeai")
     

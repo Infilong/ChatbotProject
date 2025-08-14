@@ -14,6 +14,9 @@
       "Bash(find:*)",
       "WebFetch(domain:github.com)"
     ],
-    "deny": []
+    "deny": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\ytxqf\\Desktop\\Projects\\ChatbotProject"
+    ]
   }
 }

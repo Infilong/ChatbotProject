@@ -43,11 +43,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
   const { showError, showSuccess } = useToast();
   const { language, setLanguage } = useLanguage();
   const { 
-    saveConversation, 
-    updateCurrentConversation, 
     loadConversation, 
     startNewConversation,
-    state: historyState 
+    setCurrentConversation
   } = useConversationHistory();
 
   // Language translations
@@ -82,6 +80,9 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
 
   // Load saved messages on component mount
   useEffect(() => {
+    // Restore conversation ID from localStorage if available
+    chatService.restoreConversationFromStorage();
+    
     const savedMessages = storageUtils.getMessages();
     
     if (savedMessages.length > 0) {
@@ -182,28 +183,42 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     setMessages(prev => [...prev, serviceMessage]);
   }, [language]);
 
-  // Auto-save conversation whenever messages change (with meaningful content)
+  // Sync conversation ID with ConversationHistory context whenever messages change
   useEffect(() => {
     if (messages.length > 1) { // More than just welcome message
-      const autoSave = async () => {
+      const syncConversation = async () => {
         try {
-          await updateCurrentConversation(messages, username, language);
+          // Get the current conversation ID from chatService
+          const currentConversationId = chatService.getCurrentConversationId();
+          
+          if (currentConversationId) {
+            // If chatService has a conversation ID, sync it with the context
+            setCurrentConversation(currentConversationId);
+            console.log('Synced conversation ID with context:', currentConversationId);
+          } else {
+            console.log('No conversation ID from chatService yet');
+          }
         } catch (error) {
-          console.error('Error auto-saving conversation:', error);
+          console.error('Error syncing conversation:', error);
         }
       };
       
-      // Debounce auto-save to avoid too frequent saves
-      const timeoutId = setTimeout(autoSave, 2000); // Save 2 seconds after last message
+      // Debounce sync to avoid too frequent updates
+      const timeoutId = setTimeout(syncConversation, 1000); // Sync 1 second after last message
       return () => clearTimeout(timeoutId);
     }
-  }, [messages, username, language, updateCurrentConversation]);
+  }, [messages, setCurrentConversation]);
 
   const handleLoadConversation = useCallback(async (conversationId: string) => {
     try {
       const conversation = await loadConversation(conversationId);
       if (conversation) {
         setMessages(conversation.messages);
+        
+        // Sync the conversation ID with chatService
+        chatService.setCurrentConversationId(conversationId);
+        
+        console.log('Loaded conversation and synced with chatService:', conversationId);
         showSuccess(t.loadSuccess);
       }
     } catch (error) {
@@ -220,12 +235,19 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     setHistoryPanelOpen(false);
   }, []);
 
-  const handleNewConversation = useCallback(() => {
+  const handleNewConversation = useCallback(async () => {
     // Start new conversation (auto-save will handle saving current conversation)
     startNewConversation();
+    
+    // Clear the chat service conversation ID
+    await chatService.startNewConversation();
+    
+    // Ensure both systems are synchronized for new conversation
+    setCurrentConversation(null);
+    
     const welcomeMessage = messageUtils.createWelcomeMessage(username, language);
     setMessages([welcomeMessage]);
-  }, [startNewConversation, username, language]);
+  }, [startNewConversation, setCurrentConversation, username, language]);
 
   const handleLogout = useCallback(() => {
     // Auto-save will handle saving current conversation

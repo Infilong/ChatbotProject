@@ -486,10 +486,16 @@ class LLMChatAPIView(APIView):
                     )
                     print(f"Continuing existing conversation: {conversation.uuid}")
                 except Conversation.DoesNotExist:
-                    print(f"Conversation {conversation_id} not found, creating new one")
-                    # If provided UUID doesn't exist, create new conversation
-                    conversation = Conversation.objects.create(user=user)
-                    print(f"Created new conversation: {conversation.uuid}")
+                    print(f"Conversation {conversation_id} not found for user {user.username}")
+                    # Return error if provided UUID doesn't exist - don't create new one
+                    return Response(
+                        {
+                            'error': 'Conversation not found',
+                            'details': f'No conversation found with ID {conversation_id}',
+                            'conversation_id': conversation_id
+                        },
+                        status=status.HTTP_404_NOT_FOUND
+                    )
             else:
                 # Create new conversation only if no conversation_id provided
                 conversation = Conversation.objects.create(user=user)
@@ -653,3 +659,79 @@ def health_check(request):
         'user': request.user.username,
         'version': '1.0.0'
     })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])  # For demo purposes
+def automatic_analysis_status(request):
+    """
+    Get status of automatic analysis system
+    """
+    try:
+        from core.services.automatic_analysis_service import automatic_analysis_service
+        
+        # Get analysis statistics
+        total_conversations = Conversation.objects.count()
+        analyzed_conversations = Conversation.objects.filter(
+            langextract_analysis__isnull=False
+        ).count()
+        pending_conversations = total_conversations - analyzed_conversations
+        
+        # Get recent activity
+        recent_analyzed = Conversation.objects.filter(
+            langextract_analysis__isnull=False,
+            updated_at__gte=timezone.now() - timezone.timedelta(hours=24)
+        ).count()
+        
+        return Response({
+            'status': 'active',
+            'analysis_statistics': {
+                'total_conversations': total_conversations,
+                'analyzed_conversations': analyzed_conversations,
+                'pending_conversations': pending_conversations,
+                'analyzed_last_24h': recent_analyzed,
+                'analysis_percentage': round((analyzed_conversations / total_conversations * 100) if total_conversations > 0 else 0, 1)
+            },
+            'automatic_analysis_config': {
+                'min_messages_for_analysis': automatic_analysis_service.MIN_MESSAGES_FOR_ANALYSIS,
+                'analysis_delay_minutes': automatic_analysis_service.ANALYSIS_DELAY_MINUTES,
+                'max_analysis_delay_hours': automatic_analysis_service.MAX_ANALYSIS_DELAY_HOURS
+            },
+            'timestamp': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])  # For demo purposes
+def trigger_automatic_analysis(request):
+    """
+    Manually trigger automatic analysis for all pending conversations
+    """
+    try:
+        from core.services.automatic_analysis_service import automatic_analysis_service
+        import asyncio
+        
+        # Run the batch analysis
+        result = asyncio.run(automatic_analysis_service.analyze_pending_conversations())
+        
+        return Response({
+            'status': 'success',
+            'message': f"Analysis completed: {result['analyzed_count']} analyzed, {result['skipped_count']} skipped",
+            'details': result,
+            'timestamp': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
+        logger.error(f"Manual trigger of automatic analysis failed: {e}")
+        return Response({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
