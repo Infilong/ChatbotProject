@@ -46,7 +46,7 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ['uuid_short', 'user_link', 'title_display', 'total_messages', 'satisfaction_score', 'analysis_status', 'created_at_local', 'is_active']
+    list_display = ['uuid_short', 'user_link', 'title_display', 'total_messages', 'analysis_summary', 'analysis_source_display', 'quality_score', 'issues_detected', 'satisfaction_level', 'created_at_local', 'is_active']
     list_filter = ['is_active', 'created_at', 'updated_at', 'satisfaction_score']
     search_fields = ['user__username', 'user__email', 'title']
     readonly_fields = [
@@ -56,7 +56,7 @@ class ConversationAdmin(admin.ModelAdmin):
     list_per_page = 25
     date_hierarchy = 'created_at'
     ordering = ['-updated_at']
-    actions = ['add_sample_messages', 'analyze_with_langextract', 'bulk_analyze_langextract']
+    actions = ['add_sample_messages', 'analyze_with_langextract', 'bulk_analyze_langextract', 'auto_analyze_conversations']
     actions_selection_counter = True
     actions_on_top = True
     actions_on_bottom = False
@@ -130,6 +130,190 @@ class ConversationAdmin(admin.ModelAdmin):
                 logger.error(f"Database check failed: {db_error}")
             return format_html('<span style="color: gray;">Not analyzed</span>')
     analysis_status.short_description = _('Analysis Status')
+    
+    def analysis_summary(self, obj):
+        """Display comprehensive conversation analysis summary"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">Not analyzed</span>')
+        
+        analysis = obj.langextract_analysis
+        
+        # Get key metrics
+        message_counts = analysis.get('message_counts', {})
+        total_messages = message_counts.get('total_messages', 0)
+        user_messages = message_counts.get('user_messages', 0)
+        
+        issue_analysis = analysis.get('issue_analysis', {})
+        total_issues = issue_analysis.get('total_issues_detected', 0)
+        
+        satisfaction_analysis = analysis.get('satisfaction_analysis', {})
+        avg_satisfaction = satisfaction_analysis.get('average_satisfaction_score', 0)
+        
+        importance_analysis = analysis.get('importance_analysis', {})
+        urgent_count = importance_analysis.get('urgent_messages_count', 0)
+        
+        # Build summary with color coding
+        summary_parts = []
+        summary_parts.append(f'{total_messages} msgs')
+        
+        if total_issues > 0:
+            color = 'red' if total_issues > 2 else 'orange'
+            summary_parts.append(f'<span style="color: {color};">{total_issues} issues</span>')
+        
+        if avg_satisfaction > 0:
+            if avg_satisfaction >= 7:
+                color = 'green'
+                icon = '[+]'
+            elif avg_satisfaction >= 5:
+                color = 'orange' 
+                icon = '[~]'
+            else:
+                color = 'red'
+                icon = '[-]'
+            summary_parts.append(f'<span style="color: {color};">{icon} {avg_satisfaction:.1f}</span>')
+        
+        if urgent_count > 0:
+            summary_parts.append(f'<span style="color: red; font-weight: bold;">{urgent_count} urgent</span>')
+        
+        return format_html(' | '.join(summary_parts))
+    analysis_summary.short_description = _('Analysis Summary')
+    
+    def analysis_source_display(self, obj):
+        """Display the source of analysis (LLM model or Local)"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">Not analyzed</span>')
+        
+        analysis = obj.langextract_analysis
+        analysis_source = analysis.get('analysis_source', 'Missing Source')
+        analysis_method = analysis.get('analysis_method', 'unknown')
+        
+        # Color coding for different sources
+        if 'LLM' in analysis_source or 'gemini' in analysis_source.lower() or 'LangExtract' in analysis_source:
+            # LLM analysis - green
+            color = 'green'
+            icon = '🤖'
+        elif 'Local' in analysis_source:
+            # Local analysis - blue  
+            color = 'blue'
+            icon = '🔧'
+        elif 'Fallback' in analysis_source or 'Emergency' in analysis_source:
+            # Fallback analysis - orange
+            color = 'orange'
+            icon = '⚠️'
+        elif analysis_source == 'Missing Source':
+            # Missing source - red (shouldn't happen after fix)
+            color = 'red'
+            icon = '❌'
+            analysis_source = 'Missing Source'
+        else:
+            # Unknown/other - gray
+            color = 'gray'
+            icon = '❓'
+        
+        # Display with icon and color
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{} {}</span>',
+            color, icon, analysis_source
+        )
+    analysis_source_display.short_description = _('Analysis Source')
+    
+    def quality_score(self, obj):
+        """Display conversation quality metrics"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        analysis = obj.langextract_analysis
+        quality_metrics = analysis.get('quality_metrics', {})
+        
+        completeness = quality_metrics.get('conversation_completeness_score', 0)
+        engagement = quality_metrics.get('user_engagement_score', 0)
+        analysis_coverage = quality_metrics.get('message_analysis_coverage', 0)
+        
+        # Calculate overall quality score
+        overall_quality = (completeness + engagement + analysis_coverage) / 3
+        
+        if overall_quality >= 80:
+            color = 'green'
+            rating = 'Excellent'
+        elif overall_quality >= 60:
+            color = 'orange'
+            rating = 'Good'
+        elif overall_quality >= 40:
+            color = 'blue'
+            rating = 'Average'
+        else:
+            color = 'red'
+            rating = 'Poor'
+        
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{}%</small>',
+            color, rating, int(overall_quality)
+        )
+    quality_score.short_description = _('Quality')
+    
+    def issues_detected(self, obj):
+        """Display detected issues summary"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        analysis = obj.langextract_analysis
+        issue_analysis = analysis.get('issue_analysis', {})
+        total_issues = issue_analysis.get('total_issues_detected', 0)
+        top_issues = issue_analysis.get('top_issues', [])
+        
+        if total_issues == 0:
+            return format_html('<span style="color: green;">No issues</span>')
+        
+        # Show top 2 issues
+        issue_display = []
+        for i, (issue_type, data) in enumerate(top_issues[:2]):
+            count = data['count']
+            confidence = data.get('average_confidence', 0)
+            color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
+            issue_display.append(f'<span style="color: {color};">{issue_type} ({count})</span>')
+        
+        result = '<br>'.join(issue_display)
+        if len(top_issues) > 2:
+            remaining = sum(data['count'] for _, data in top_issues[2:])
+            result += f'<br><small style="color: #666;">+{remaining} more</small>'
+        
+        return format_html(result)
+    issues_detected.short_description = _('Issues Detected')
+    
+    def satisfaction_level(self, obj):
+        """Display conversation satisfaction analysis"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        analysis = obj.langextract_analysis
+        satisfaction_analysis = analysis.get('satisfaction_analysis', {})
+        
+        avg_score = satisfaction_analysis.get('average_satisfaction_score', 0)
+        distribution = satisfaction_analysis.get('satisfaction_distribution', {})
+        percentages = satisfaction_analysis.get('satisfaction_percentage', {})
+        
+        satisfied_pct = percentages.get('satisfied', 0)
+        dissatisfied_pct = percentages.get('dissatisfied', 0)
+        
+        # Determine overall satisfaction level
+        if satisfied_pct > 50:
+            level = 'Satisfied'
+            color = 'green'
+        elif dissatisfied_pct > 30:
+            level = 'Dissatisfied'  
+            color = 'red'
+        elif satisfied_pct > 20:
+            level = 'Mixed'
+            color = 'orange'
+        else:
+            level = 'Neutral'
+            color = 'blue'
+        
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>Score: {} | {}% satisfied</small>',
+            color, level, f'{avg_score:.1f}', int(satisfied_pct)
+        )
+    satisfaction_level.short_description = _('Satisfaction')
     
     def created_at_local(self, obj):
         """Display created_at converted from UTC to user's local timezone"""
@@ -573,17 +757,246 @@ class ConversationAdmin(admin.ModelAdmin):
                 level='ERROR'
             )
     bulk_analyze_langextract.short_description = _('Bulk Analyze Unanalyzed Conversations')
+    
+    def auto_analyze_conversations(self, request, queryset):
+        """Admin action to automatically analyze conversations using the new automatic analysis service"""
+        from django.contrib import messages
+        import asyncio
+        import threading
+        
+        try:
+            from core.services.automatic_analysis_service import automatic_analysis_service
+            
+            conversation_count = queryset.count()
+            
+            if conversation_count == 0:
+                messages.error(request, "No conversations selected for automatic analysis.")
+                return
+            
+            # Show immediate success message
+            messages.success(
+                request,
+                f"Automatic analysis started for {conversation_count} conversation(s)! "
+                f"The system will analyze conversations that meet the criteria (3+ messages, inactive for 5+ minutes). "
+                f"Results will be saved to the database automatically."
+            )
+            
+            def background_auto_analysis():
+                """Run automatic analysis in background thread"""
+                try:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Starting automatic analysis for {conversation_count} conversations")
+                    
+                    success_count = 0
+                    skipped_count = 0
+                    error_count = 0
+                    
+                    # Create new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    try:
+                        for conversation in queryset:
+                            try:
+                                # Trigger analysis if needed
+                                result = loop.run_until_complete(
+                                    automatic_analysis_service.trigger_analysis_if_needed(conversation)
+                                )
+                                
+                                if result:
+                                    success_count += 1
+                                    logger.info(f"Analyzed conversation {conversation.uuid}")
+                                else:
+                                    skipped_count += 1
+                                    logger.debug(f"Skipped conversation {conversation.uuid}")
+                                    
+                            except Exception as e:
+                                error_count += 1
+                                logger.error(f"Error analyzing conversation {conversation.uuid}: {e}")
+                        
+                        logger.info(f"Automatic analysis completed: {success_count} analyzed, {skipped_count} skipped, {error_count} errors")
+                        
+                    finally:
+                        loop.close()
+                        
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Background automatic analysis failed: {e}")
+            
+            # Start background thread
+            thread = threading.Thread(target=background_auto_analysis)
+            thread.daemon = True
+            thread.start()
+            
+        except ImportError as e:
+            messages.error(
+                request,
+                f"Automatic analysis service not available: {e}"
+            )
+        except Exception as e:
+            messages.error(
+                request,
+                f"Error starting automatic analysis: {e}"
+            )
+    
+    auto_analyze_conversations.short_description = _('Auto-Analyze with Smart Criteria')
+
+
+# Custom filters for message analysis
+class IssueTypeFilter(admin.SimpleListFilter):
+    title = _('Filter by Issue Type')
+    parameter_name = 'issue_type'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('login_problems', _('Issue Type: Login Problems')),
+            ('billing_issues', _('Issue Type: Billing Issues')),
+            ('technical_problems', _('Issue Type: Technical Problems')),
+            ('feature_requests', _('Issue Type: Feature Requests')),
+            ('integration_issues', _('Issue Type: Integration Issues')),
+            ('performance_issues', _('Issue Type: Performance Issues')),
+            ('data_issues', _('Issue Type: Data Issues')),
+            ('ui_ux_feedback', _('Issue Type: UI/UX Feedback')),
+            ('documentation_gaps', _('Issue Type: Documentation Gaps')),
+            ('security_concerns', _('Issue Type: Security Concerns')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            issue_type_map = {
+                'login_problems': 'Login Problems',
+                'billing_issues': 'Billing Issues',
+                'technical_problems': 'Technical Problems',
+                'feature_requests': 'Feature Requests',
+                'integration_issues': 'Integration Issues',
+                'performance_issues': 'Performance Issues',
+                'data_issues': 'Data Issues',
+                'ui_ux_feedback': 'UI/UX Feedback',
+                'documentation_gaps': 'Documentation Gaps',
+                'security_concerns': 'Security Concerns',
+            }
+            issue_name = issue_type_map.get(self.value())
+            if issue_name:
+                return queryset.filter(message_analysis__issues_raised__contains=[{'issue_type': issue_name}])
+        return queryset
+
+
+class SatisfactionLevelFilter(admin.SimpleListFilter):
+    title = _('Filter by Satisfaction')
+    parameter_name = 'satisfaction_level'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('satisfied', _('Satisfaction: Satisfied')),
+            ('dissatisfied', _('Satisfaction: Dissatisfied')),
+            ('neutral', _('Satisfaction: Neutral')),
+            ('unknown', _('Satisfaction: Unknown')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(message_analysis__satisfaction_level__level=self.value())
+        return queryset
+
+
+class ImportanceLevelFilter(admin.SimpleListFilter):
+    title = _('Filter by Importance')
+    parameter_name = 'importance_level'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('high', _('Importance: High')),
+            ('medium', _('Importance: Medium')),
+            ('low', _('Importance: Low')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(message_analysis__importance_level__level=self.value())
+        return queryset
+
+
+class DocumentationPotentialFilter(admin.SimpleListFilter):
+    title = _('Filter by Doc Potential')
+    parameter_name = 'doc_potential'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('high', _('Doc Potential: High')),
+            ('medium', _('Doc Potential: Medium')),
+            ('low', _('Doc Potential: Low')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(message_analysis__doc_improvement_potential__potential_level=self.value())
+        return queryset
+
+
+class FAQPotentialFilter(admin.SimpleListFilter):
+    title = _('Filter by FAQ Potential')
+    parameter_name = 'faq_potential'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('high', _('FAQ Potential: High')),
+            ('medium', _('FAQ Potential: Medium')),
+            ('low', _('FAQ Potential: Low')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(message_analysis__faq_potential__faq_potential=self.value())
+        return queryset
+
+
+class AnalysisStatusFilter(admin.SimpleListFilter):
+    title = _('Filter by Analysis Status')
+    parameter_name = 'analysis_status'
+
+    def lookups(self, request, model_admin):
+        return (
+            ('analyzed', _('Analysis: Completed')),
+            ('not_analyzed', _('Analysis: Not Done')),
+            ('user_only', _('Type: User Messages Only')),
+        )
+
+    def queryset(self, request, queryset):
+        if self.value() == 'analyzed':
+            return queryset.exclude(message_analysis__exact={})
+        elif self.value() == 'not_analyzed':
+            return queryset.filter(message_analysis__exact={})
+        elif self.value() == 'user_only':
+            return queryset.filter(sender_type='user')
+        return queryset
 
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
-    list_display = ['uuid_short', 'conversation_link', 'sender_type', 'content_preview', 'feedback_display', 'timestamp']
-    list_filter = ['sender_type', 'feedback', 'timestamp', 'llm_model_used']
-    search_fields = ['content', 'conversation__user__username']
-    readonly_fields = ['timestamp', 'response_time']
+    list_display = [
+        'uuid_short', 'conversation_link', 'sender_type', 'content_preview', 
+        'feedback_display', 'analysis_source_message', 'issues_summary', 'satisfaction_display', 
+        'importance_display', 'doc_potential_display', 'faq_potential_display', 'timestamp'
+    ]
+    list_filter = [
+        'sender_type', 'feedback', AnalysisStatusFilter, IssueTypeFilter, 
+        SatisfactionLevelFilter, ImportanceLevelFilter, DocumentationPotentialFilter, 
+        FAQPotentialFilter, 'timestamp', 'llm_model_used'
+    ]
+    search_fields = [
+        'content', 'conversation__user__username', 'conversation__title',
+        'conversation__user__email', 'llm_model_used'
+    ]
+    readonly_fields = ['timestamp', 'response_time', 'message_analysis']
     list_per_page = 50
     date_hierarchy = 'timestamp'
     ordering = ['-timestamp']
+    
+    def get_queryset(self, request):
+        """Optimize queryset for admin performance"""
+        return super().get_queryset(request).select_related('conversation__user')
     
     def uuid_short(self, obj):
         """Display first 4 characters of UUID followed by ..."""
@@ -593,12 +1006,13 @@ class MessageAdmin(admin.ModelAdmin):
     
     def conversation_link(self, obj):
         url = reverse('admin:chat_conversation_change', args=[obj.conversation.id])
-        return format_html('<a href="{}">Conv #{}</a>', url, obj.conversation.id)
+        title = obj.conversation.title[:30] + "..." if len(obj.conversation.title) > 30 else obj.conversation.title
+        return format_html('<a href="{}" title="{}">{}</a>', url, obj.conversation.title, title)
     conversation_link.short_description = _('Conversation')
-    conversation_link.admin_order_field = 'conversation__id'
+    conversation_link.admin_order_field = 'conversation__title'
     
     def content_preview(self, obj):
-        return obj.content[:80] + "..." if len(obj.content) > 80 else obj.content
+        return obj.content[:60] + "..." if len(obj.content) > 60 else obj.content
     content_preview.short_description = _('Content')
     
     def feedback_display(self, obj):
@@ -608,6 +1022,151 @@ class MessageAdmin(admin.ModelAdmin):
             return format_html('<span style="color: red; font-weight: bold;">- Negative</span>')
         return _('-')
     feedback_display.short_description = _('Feedback')
+    
+    def analysis_source_message(self, obj):
+        """Display analysis source for messages"""
+        if not obj.message_analysis:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        analysis_source = obj.message_analysis.get('analysis_source', 'Missing')
+        
+        # Simplified display for message list
+        if 'LLM' in analysis_source or 'gemini' in analysis_source.lower():
+            return format_html('<span style="color: green; font-size: 11px;">🤖 LLM</span>')
+        elif 'Local' in analysis_source:
+            if 'Legacy' in analysis_source:
+                return format_html('<span style="color: #4169E1; font-size: 11px;">🔧 Local (Legacy)</span>')
+            else:
+                return format_html('<span style="color: blue; font-size: 11px;">🔧 Local</span>')
+        elif 'Fallback' in analysis_source:
+            return format_html('<span style="color: orange; font-size: 11px;">⚠️ Fallback</span>')
+        elif analysis_source == 'Missing':
+            return format_html('<span style="color: red; font-size: 11px;">❌ Missing</span>')
+        else:
+            return format_html('<span style="color: gray; font-size: 11px;">❓ {}</span>', analysis_source[:10])
+    analysis_source_message.short_description = _('Source')
+    
+    def issues_summary(self, obj):
+        """Display summary of detected issues"""
+        if not obj.message_analysis or not obj.message_analysis.get('issues_raised'):
+            return format_html('<span style="color: #999;">No issues</span>')
+        
+        issues = obj.message_analysis.get('issues_raised', [])
+        if not issues:
+            return format_html('<span style="color: #999;">No issues</span>')
+        
+        # Show top 2 issues with confidence
+        issue_summaries = []
+        for issue in issues[:2]:
+            issue_type = issue.get('issue_type', 'Unknown')
+            confidence = issue.get('confidence', 0)
+            color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
+            issue_summaries.append(f'<span style="color: {color};">{issue_type} ({confidence:.0f}%)</span>')
+        
+        result = '<br>'.join(issue_summaries)
+        if len(issues) > 2:
+            result += f'<br><small style="color: #666;">+{len(issues)-2} more</small>'
+        
+        return format_html(result)
+    issues_summary.short_description = _('Issues Detected')
+    
+    def satisfaction_display(self, obj):
+        """Display satisfaction level with visual indicators"""
+        if not obj.message_analysis:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        satisfaction_data = obj.message_analysis.get('satisfaction_level', {})
+        level = satisfaction_data.get('level', 'unknown')
+        score = satisfaction_data.get('score', 0)
+        confidence = satisfaction_data.get('confidence', 0)
+        
+        color_map = {
+            'satisfied': 'green',
+            'dissatisfied': 'red',
+            'neutral': 'orange',
+            'unknown': 'gray'
+        }
+        
+        color = color_map.get(level, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>Score: {} ({}%)</small>',
+            color, level.title(), f'{score:.1f}', int(confidence)
+        )
+    satisfaction_display.short_description = _('Satisfaction')
+    
+    def importance_display(self, obj):
+        """Display importance/urgency level"""
+        if not obj.message_analysis:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        importance_data = obj.message_analysis.get('importance_level', {})
+        level = importance_data.get('level', 'low')
+        priority = importance_data.get('priority', 'low')
+        urgency_score = importance_data.get('urgency_score', 0)
+        
+        color_map = {
+            'high': 'red',
+            'medium': 'orange',
+            'low': 'green'
+        }
+        
+        color = color_map.get(level, 'gray')
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{} priority ({})</small>',
+            color, level.title(), priority.title(), urgency_score
+        )
+    importance_display.short_description = _('Importance')
+    
+    def doc_potential_display(self, obj):
+        """Display documentation improvement potential"""
+        if not obj.message_analysis:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        doc_data = obj.message_analysis.get('doc_improvement_potential', {})
+        potential_level = doc_data.get('potential_level', 'low')
+        score = doc_data.get('score', 0)
+        improvement_areas = doc_data.get('improvement_areas', [])
+        
+        color_map = {
+            'high': 'red',
+            'medium': 'orange',
+            'low': 'green'
+        }
+        
+        color = color_map.get(potential_level, 'gray')
+        areas_text = ', '.join(improvement_areas[:2]) if improvement_areas else 'None'
+        
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{}% - {}</small>',
+            color, potential_level.title(), score, areas_text[:30] + '...' if len(areas_text) > 30 else areas_text
+        )
+    doc_potential_display.short_description = _('Doc Potential')
+    
+    def faq_potential_display(self, obj):
+        """Display FAQ potential"""
+        if not obj.message_analysis:
+            return format_html('<span style="color: #999;">-</span>')
+        
+        faq_data = obj.message_analysis.get('faq_potential', {})
+        potential_level = faq_data.get('faq_potential', 'low')
+        score = faq_data.get('score', 0)
+        question_type = faq_data.get('question_type', 'other')
+        should_add = faq_data.get('should_add_to_faq', False)
+        
+        color_map = {
+            'high': 'red',
+            'medium': 'orange',
+            'low': 'green'
+        }
+        
+        color = color_map.get(potential_level, 'gray')
+        add_indicator = ' [ADD]' if should_add else ''
+        
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}{}</span><br><small>{}% - {}</small>',
+            color, potential_level.title(), add_indicator, score, question_type.replace('_', ' ').title()
+        )
+    faq_potential_display.short_description = _('FAQ Potential')
 
 
 @admin.register(UserSession)
