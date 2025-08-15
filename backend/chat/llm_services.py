@@ -444,9 +444,9 @@ class LLMManager:
                             if not excerpt:
                                 continue
                             
-                            # Format document context
+                            # Format document context (hide document name for user privacy)
                             doc_context = f"""
-[Document: {doc.name}]
+[Company Information]
 Category: {doc.category or 'General'}
 Content: {excerpt}
 ---
@@ -459,7 +459,7 @@ Content: {excerpt}
                                     available_length = max_context_length - current_length
                                     truncated_excerpt = excerpt[:available_length - 100] + "..."
                                     doc_context = f"""
-[Document: {doc.name}]
+[Company Information]
 Category: {doc.category or 'General'}
 Content: {truncated_excerpt}
 ---

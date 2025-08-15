@@ -62,7 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    # Custom timezone middleware - must be after AuthenticationMiddleware
+    # Custom timezone middleware - re-enabled (popup and auto-refresh removed from template)
     'chatbot_backend.middleware.TimezoneDetectionMiddleware',
     'chatbot_backend.middleware.UserTimezoneMiddleware',
 ]
@@ -287,6 +287,7 @@ JAZZMIN_SETTINGS = {
         "documents.DocumentCategory": "fas fa-tags",
         "documents.CompanyDocument": "fas fa-file-alt",
         "documents.Document": "fas fa-file-alt",
+        "documents.DocumentationImprovement": "fas fa-tools",
     },
     "theme": "flatly",
     "custom_css": "admin/css/sidebar-responsive.css",

@@ -9,9 +9,18 @@ from django.db.models import Q
 from django.utils import timezone
 
 from .models import Document
-from .hybrid_search import hybrid_search_service, SearchResult
 
 logger = logging.getLogger(__name__)
+
+# Try to import hybrid search, fallback gracefully if dependencies missing
+try:
+    from .hybrid_search import hybrid_search_service, SearchResult
+    HYBRID_SEARCH_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Hybrid search not available: {e}. Falling back to basic search.")
+    HYBRID_SEARCH_AVAILABLE = False
+    hybrid_search_service = None
+    SearchResult = None
 
 
 class KnowledgeBase:
@@ -25,10 +34,16 @@ class KnowledgeBase:
         min_score: float = 0.1
     ) -> List[Document]:
         """
-        Async version with modern hybrid search (BM25 + Vector Embeddings)
+        Async version with modern hybrid search (BM25 + Vector Embeddings) if available,
+        otherwise falls back to basic search
         """
         if not query.strip():
             return []
+        
+        # Check if hybrid search is available
+        if not HYBRID_SEARCH_AVAILABLE or hybrid_search_service is None:
+            logger.info("Hybrid search not available, using fallback search")
+            return await cls._fallback_search_async(query, limit, min_score)
         
         try:
             # Use hybrid search service
@@ -254,14 +269,19 @@ Corrected keywords:"""
             Tuple of (formatted_context, list_of_referenced_documents)
         """
         try:
-            # Use hybrid search for better relevance
-            search_results = hybrid_search_service.hybrid_search(
-                query, top_k=max_documents, min_score=0.1
-            )
-            
-            if not search_results:
-                logger.info(f"No hybrid search results for query: {query}")
-                return "", []
+            # Use hybrid search for better relevance if available
+            if HYBRID_SEARCH_AVAILABLE and hybrid_search_service is not None:
+                search_results = hybrid_search_service.hybrid_search(
+                    query, top_k=max_documents, min_score=0.1
+                )
+                
+                if not search_results:
+                    logger.info(f"No hybrid search results for query: {query}")
+                    return "", []
+            else:
+                # Fall back to traditional search
+                logger.info("Hybrid search not available, using fallback method")
+                return cls._get_knowledge_context_fallback(query, max_documents, max_context_length)
             
             context_parts = []
             referenced_docs = []

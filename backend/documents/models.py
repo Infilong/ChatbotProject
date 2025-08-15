@@ -568,3 +568,152 @@ class Document(models.Model):
         return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
 
 
+class DocumentationImprovement(models.Model):
+    """Model for tracking conversation analysis and documentation improvement needs"""
+    
+    PRIORITY_CHOICES = [
+        ('low', _('Low')),
+        ('medium', _('Medium')),
+        ('high', _('High')),
+        ('urgent', _('Urgent')),
+    ]
+    
+    SATISFACTION_CHOICES = [
+        (1, _('Very Dissatisfied')),
+        (2, _('Dissatisfied')),
+        (3, _('Neutral')),
+        (4, _('Satisfied')),
+        (5, _('Very Satisfied')),
+    ]
+    
+    # Unique identifier for secure URLs
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        verbose_name=_('UUID')
+    )
+    
+    # Link to conversation
+    conversation = models.ForeignKey(
+        'chat.Conversation',
+        on_delete=models.CASCADE,
+        related_name='documentation_improvements',
+        verbose_name=_('Conversation')
+    )
+    
+    # Analysis fields
+    conversation_title = models.CharField(
+        max_length=255,
+        blank=True,
+        verbose_name=_('Conversation Title'),
+        help_text=_('Display title for the conversation')
+    )
+    
+    issues_detected = models.TextField(
+        blank=True,
+        verbose_name=_('Issues Detected'),
+        help_text=_('Specific issues like account, password, pricing concerns')
+    )
+    
+    priority = models.CharField(
+        max_length=10,
+        choices=PRIORITY_CHOICES,
+        default='medium',
+        verbose_name=_('Priority')
+    )
+    
+    langextract_analysis_summary = models.TextField(
+        blank=True,
+        verbose_name=_('LangExtract Analysis Summary'),
+        help_text=_('User-friendly summary of conversation analysis')
+    )
+    
+    langextract_full_analysis = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('Full LangExtract Analysis'),
+        help_text=_('Complete analysis data from LangExtract')
+    )
+    
+    category = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_('Category'),
+        help_text=_('Category based on LangExtract analysis')
+    )
+    
+    satisfaction_level = models.IntegerField(
+        choices=SATISFACTION_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name=_('Satisfaction Level'),
+        help_text=_('Customer satisfaction rating from 1-5')
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Created At'))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_('Updated At'))
+    
+    # Analysis status
+    analysis_completed = models.BooleanField(
+        default=False,
+        verbose_name=_('Analysis Completed'),
+        help_text=_('Whether LangExtract analysis has been completed')
+    )
+    
+    analysis_error = models.TextField(
+        blank=True,
+        verbose_name=_('Analysis Error'),
+        help_text=_('Error message if analysis failed')
+    )
+    
+    class Meta:
+        verbose_name = _('Doc Improvement')
+        verbose_name_plural = _('Doc Improvements') 
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"Improvement for: {self.conversation_title or f'Conversation {self.conversation.id}'}"
+    
+    def get_conversation_url(self):
+        """Get URL to view the conversation (placeholder for frontend routing)"""
+        return f"/chat/conversation/{self.conversation.uuid}/"
+    
+    def get_priority_display_color(self):
+        """Return CSS color class for priority display"""
+        color_map = {
+            'low': 'text-success',
+            'medium': 'text-warning', 
+            'high': 'text-danger',
+            'urgent': 'text-danger fw-bold'
+        }
+        return color_map.get(self.priority, 'text-secondary')
+    
+    def get_satisfaction_display_color(self):
+        """Return CSS color class for satisfaction display"""
+        if not self.satisfaction_level:
+            return 'text-muted'
+        if self.satisfaction_level <= 2:
+            return 'text-danger'
+        elif self.satisfaction_level == 3:
+            return 'text-warning'
+        else:
+            return 'text-success'
+    
+    def get_analysis_summary_preview(self, max_length=150):
+        """Get truncated analysis summary for list view"""
+        if not self.langextract_analysis_summary:
+            return _('No analysis summary available')
+        if len(self.langextract_analysis_summary) <= max_length:
+            return self.langextract_analysis_summary
+        return self.langextract_analysis_summary[:max_length] + "..."
+    
+    def save(self, *args, **kwargs):
+        # Auto-populate conversation title if not set
+        if not self.conversation_title and self.conversation:
+            self.conversation_title = self.conversation.get_title()
+        
+        super().save(*args, **kwargs)
+
+
