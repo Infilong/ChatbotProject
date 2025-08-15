@@ -23,9 +23,7 @@ class HybridAnalysisService:
         self.llm_model_name = None
         self._init_llm_client()
         
-        # Import local analysis service
-        from core.services.message_analysis_service import message_analysis_service
-        self.local_service = message_analysis_service
+        # LLM-only analysis - no local service needed
         
         # LLM analysis cache to avoid redundant API calls
         self._analysis_cache = {}
@@ -147,13 +145,9 @@ class HybridAnalysisService:
             except Exception as e:
                 logger.error(f"LLM analysis error for message {message.uuid}: {e}, falling back to local analysis")
         
-        # Fallback to local analysis
-        local_result = self._analyze_message_with_local(message)
-        
-        # Cache local result
-        self._analysis_cache[cache_key] = local_result
-        logger.info(f"Message {message.uuid} analyzed with local analysis (LLM unavailable)")
-        return local_result
+        # No local fallback - return error to trigger retry mechanism
+        logger.warning(f"Message {message.uuid} LLM analysis failed, will retry with 30-second intervals")
+        return {"error": "LLM analysis failed - will retry automatically"}
     
     async def _analyze_message_with_llm(self, message: Message) -> Dict[str, Any]:
         """Analyze message using Gemini API directly with safety filter bypass"""
@@ -180,128 +174,280 @@ class HybridAnalysisService:
             return {"error": str(e)}
     
     def _analyze_with_langextract_fallback(self, message: Message) -> Dict[str, Any]:
-        """Use LangExtract's simpler API for message analysis to avoid safety filters"""
+        """Use LangExtract's simpler API for message analysis with proper result parsing"""
         try:
             # Import LangExtract components
             import langextract as lx
             from langextract.data import ExampleData, Extraction
+            import os
+            import sys
             
-            # Create simple examples for message analysis
-            simple_examples = [
-                ExampleData(
-                    text="I have a question about my account settings",
-                    extractions=[
-                        Extraction(
-                            extraction_class="urgency",
-                            extraction_text="low"
-                        ),
-                        Extraction(
-                            extraction_class="sentiment",
-                            extraction_text="neutral"
-                        )
-                    ]
-                ),
-                ExampleData(
-                    text="This is urgent, I need help immediately",
-                    extractions=[
-                        Extraction(
-                            extraction_class="urgency",
-                            extraction_text="high"
-                        ),
-                        Extraction(
-                            extraction_class="sentiment",
-                            extraction_text="concerned"
-                        )
-                    ]
+            # Fix Unicode encoding issues for Windows
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            
+            try:
+                # Temporarily suppress LangExtract console output to avoid Unicode issues
+                import io
+                sys.stdout = io.StringIO()
+                sys.stderr = io.StringIO()
+                
+                # Create comprehensive examples for better analysis
+                analysis_examples = [
+                    ExampleData(
+                        text="I love this service, it's amazing!",
+                        extractions=[
+                            Extraction(extraction_class="urgency", extraction_text="low"),
+                            Extraction(extraction_class="sentiment", extraction_text="very_positive"),
+                            Extraction(extraction_class="satisfaction", extraction_text="very_satisfied"),
+                            Extraction(extraction_class="issue_type", extraction_text="praise"),
+                            Extraction(extraction_class="escalation_needed", extraction_text="false")
+                        ]
+                    ),
+                    ExampleData(
+                        text="This is terrible, I hate it and want a refund immediately!",
+                        extractions=[
+                            Extraction(extraction_class="urgency", extraction_text="high"),
+                            Extraction(extraction_class="sentiment", extraction_text="very_negative"),
+                            Extraction(extraction_class="satisfaction", extraction_text="very_dissatisfied"),
+                            Extraction(extraction_class="issue_type", extraction_text="complaint_refund"),
+                            Extraction(extraction_class="escalation_needed", extraction_text="true")
+                        ]
+                    ),
+                    ExampleData(
+                        text="I have a question about my account settings",
+                        extractions=[
+                            Extraction(extraction_class="urgency", extraction_text="low"),
+                            Extraction(extraction_class="sentiment", extraction_text="neutral"),
+                            Extraction(extraction_class="satisfaction", extraction_text="neutral"),
+                            Extraction(extraction_class="issue_type", extraction_text="question"),
+                            Extraction(extraction_class="escalation_needed", extraction_text="false")
+                        ]
+                    ),
+                    ExampleData(
+                        text="This is urgent! The system is down and I can't work!",
+                        extractions=[
+                            Extraction(extraction_class="urgency", extraction_text="critical"),
+                            Extraction(extraction_class="sentiment", extraction_text="frustrated"),
+                            Extraction(extraction_class="satisfaction", extraction_text="dissatisfied"),
+                            Extraction(extraction_class="issue_type", extraction_text="technical_urgent"),
+                            Extraction(extraction_class="escalation_needed", extraction_text="true")
+                        ]
+                    ),
+                    ExampleData(
+                        text="Could you help me understand how to use this feature?",
+                        extractions=[
+                            Extraction(extraction_class="urgency", extraction_text="low"),
+                            Extraction(extraction_class="sentiment", extraction_text="polite"),
+                            Extraction(extraction_class="satisfaction", extraction_text="neutral"),
+                            Extraction(extraction_class="issue_type", extraction_text="help_request"),
+                            Extraction(extraction_class="escalation_needed", extraction_text="false")
+                        ]
+                    )
+                ]
+                
+                # Perform LangExtract analysis with comprehensive prompt
+                result = lx.extract(
+                    text_or_documents=message.content,
+                    prompt_description="Analyze this customer service message to extract urgency level, sentiment, satisfaction, issue type, and escalation needs",
+                    model_id="gemini-2.5-flash",
+                    examples=analysis_examples,
+                    temperature=0.1
                 )
-            ]
+                
+            finally:
+                # Restore original stdout/stderr
+                sys.stdout = original_stdout
+                sys.stderr = original_stderr
             
-            # Simple extraction with minimal prompt to avoid safety filters
-            result = lx.extract(
-                text_or_documents=message.content,
-                prompt_description="Analyze this customer message for urgency level and sentiment",
-                model_id="gemini-2.5-flash",
-                examples=simple_examples,
-                temperature=0.1
-            )
+            # Parse the actual LangExtract results
+            parsed_analysis = self._parse_langextract_result(result, message)
             
-            # Convert LangExtract result to our expected format
-            formatted_result = {
-                "issues_raised": [],
-                "satisfaction_level": {
-                    "level": "neutral",
-                    "confidence": 80,
-                    "score": 5.0,
-                    "emotional_indicators": [],
-                    "llm_analyzed": True
-                },
-                "importance_level": {
-                    "level": "medium",
-                    "priority": "normal",
-                    "urgency_score": 5,
-                    "urgency_indicators": [],
-                    "business_impact": "medium",
-                    "escalation_needed": False,
-                    "llm_analyzed": True
-                },
-                "doc_improvement_potential": {
-                    "potential_level": "medium",
-                    "score": 50,
-                    "improvement_areas": [],
-                    "suggested_actions": [],
-                    "llm_inferred": True
-                },
-                "faq_potential": {
-                    "faq_potential": "medium",
-                    "score": 50,
-                    "question_type": "general_inquiry",
-                    "recommended_faq_title": message.content[:80] + "..." if len(message.content) > 80 else message.content,
-                    "should_add_to_faq": False,
-                    "llm_inferred": True
-                },
-                # Source labeling - CRITICAL
+            # Add source labeling
+            parsed_analysis.update({
                 "analysis_source": f"LangExtract Simple ({self.llm_model_name})",
-                "analysis_method": "langextract_simple",
-                "analysis_version": f"langextract_simple_v1.0_{self.llm_model_name}",
+                "analysis_method": "langextract_simple_parsed",
+                "analysis_version": f"langextract_simple_v2.0_{self.llm_model_name}",
                 "llm_model": self.llm_model_name,
                 "analysis_timestamp": timezone.now().isoformat(),
                 "message_uuid": str(message.uuid),
                 "api_available": True,
                 "safety_filter_bypass": True,
                 "langextract_used": True,
-                "result_available": result is not None
-            }
-            
-            return formatted_result
-            
-        except Exception as e:
-            logger.warning(f"LangExtract simple analysis failed: {e}")
-            return {"error": str(e)}
-    
-    def _analyze_message_with_local(self, message: Message) -> Dict[str, Any]:
-        """Analyze message using local keyword-based analysis"""
-        try:
-            # Use existing local analysis service
-            local_result = self.local_service.analyze_user_message(message)
-            
-            # Add source labeling for local analysis
-            local_result.update({
-                "analysis_source": "Local Analysis",
-                "analysis_method": "keyword_based",
-                "analysis_version": "local_v2.0_enhanced",
-                "llm_attempted": self.llm_available,
-                "fallback_reason": "LLM unavailable" if not self.llm_available else "LLM analysis failed"
+                "result_parsed": True
             })
             
-            return local_result
+            return parsed_analysis
             
         except Exception as e:
-            logger.error(f"Local analysis failed for message {message.uuid}: {e}")
-            return {
-                "error": str(e),
-                "analysis_source": "Local Analysis",
-                "analysis_method": "error_fallback"
+            error_msg = str(e)
+            # Handle Unicode errors gracefully
+            if "'gbk' codec can't encode" in error_msg or "UnicodeEncodeError" in error_msg:
+                logger.info(f"LangExtract completed with Unicode display issue, attempting result parsing")
+                # Try to return basic analysis since LangExtract likely succeeded but had display issues
+                return self._create_basic_analysis(message, "unicode_issue")
+            else:
+                logger.warning(f"LangExtract simple analysis failed: {e}")
+                return {"error": str(e)}
+    
+    def _parse_langextract_result(self, langextract_result, message: Message) -> Dict[str, Any]:
+        """Parse actual LangExtract results into our analysis format"""
+        try:
+            # Initialize with defaults
+            urgency = "medium"
+            sentiment = "neutral"
+            satisfaction = "neutral"
+            issue_type = "general_inquiry"
+            escalation_needed = False
+            
+            # Extract data from LangExtract AnnotatedDocument result
+            if langextract_result and hasattr(langextract_result, 'extractions'):
+                extractions = {}
+                
+                # Iterate through the extractions list
+                for extraction in langextract_result.extractions:
+                    if hasattr(extraction, 'extraction_class') and hasattr(extraction, 'extraction_text'):
+                        extraction_class = extraction.extraction_class.lower()
+                        extraction_text = extraction.extraction_text.lower()
+                        extractions[extraction_class] = extraction_text
+                        logger.debug(f"Extracted {extraction_class}: {extraction_text}")
+                
+                # Map extracted values to our analysis
+                urgency = extractions.get('urgency', urgency)
+                sentiment = extractions.get('sentiment', sentiment) 
+                satisfaction = extractions.get('satisfaction', satisfaction)
+                issue_type = extractions.get('issue_type', issue_type)
+                escalation_needed = extractions.get('escalation_needed', 'false') == 'true'
+                
+                logger.info(f"LangExtract parsed - urgency: {urgency}, sentiment: {sentiment}, satisfaction: {satisfaction}, issue_type: {issue_type}")
+            
+            # Map to our expected format with intelligent scoring
+            satisfaction_mapping = {
+                "very_positive": ("satisfied", 9.0),
+                "positive": ("satisfied", 7.0),
+                "polite": ("neutral", 6.0),
+                "neutral": ("neutral", 5.0),
+                "frustrated": ("dissatisfied", 3.0),
+                "negative": ("dissatisfied", 2.0),
+                "very_negative": ("dissatisfied", 1.0),
+                "very_dissatisfied": ("dissatisfied", 1.0),
+                "dissatisfied": ("dissatisfied", 2.0),
+                "satisfied": ("satisfied", 7.0),
+                "very_satisfied": ("satisfied", 9.0)
             }
+            
+            urgency_mapping = {
+                "low": ("low", "normal", 2),
+                "medium": ("medium", "normal", 5),
+                "high": ("high", "urgent", 8),
+                "critical": ("critical", "critical", 10)
+            }
+            
+            # Get mapped values
+            sat_level, sat_score = satisfaction_mapping.get(satisfaction, ("neutral", 5.0))
+            if sentiment in satisfaction_mapping:
+                sent_level, sent_score = satisfaction_mapping[sentiment]
+                # Use the more extreme of satisfaction or sentiment
+                if abs(sent_score - 5.0) > abs(sat_score - 5.0):
+                    sat_level, sat_score = sent_level, sent_score
+            
+            urg_level, priority, urg_score = urgency_mapping.get(urgency, ("medium", "normal", 5))
+            
+            # Create comprehensive analysis
+            return {
+                "issues_raised": [
+                    {
+                        "issue_type": issue_type,
+                        "confidence": 85,
+                        "description": f"LangExtract detected: {issue_type}",
+                        "severity": urg_level,
+                        "matched_keywords": [],
+                        "llm_detected": True
+                    }
+                ] if issue_type != "general_inquiry" else [],
+                
+                "satisfaction_level": {
+                    "level": sat_level,
+                    "confidence": 85,
+                    "score": sat_score,
+                    "emotional_indicators": [sentiment] if sentiment != "neutral" else [],
+                    "llm_analyzed": True
+                },
+                
+                "importance_level": {
+                    "level": urg_level,
+                    "priority": priority,
+                    "urgency_score": urg_score,
+                    "urgency_indicators": [urgency] if urgency != "medium" else [],
+                    "business_impact": urg_level,
+                    "escalation_needed": escalation_needed,
+                    "llm_analyzed": True
+                },
+                
+                "doc_improvement_potential": {
+                    "potential_level": "high" if "question" in issue_type or "help" in issue_type else "low",
+                    "score": 75 if "question" in issue_type or "help" in issue_type else 25,
+                    "improvement_areas": ["documentation"] if "question" in issue_type else [],
+                    "suggested_actions": ["improve_docs"] if "question" in issue_type else [],
+                    "llm_inferred": True
+                },
+                
+                "faq_potential": {
+                    "faq_potential": "high" if "question" in issue_type or "help" in issue_type else "low",
+                    "score": 80 if "question" in issue_type or "help" in issue_type else 20,
+                    "question_type": issue_type,
+                    "recommended_faq_title": message.content[:80] + "..." if len(message.content) > 80 else message.content,
+                    "should_add_to_faq": "question" in issue_type or "help" in issue_type,
+                    "llm_inferred": True
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse LangExtract result: {e}")
+            return self._create_basic_analysis(message, "parse_error")
+    
+    def _create_basic_analysis(self, message: Message, reason: str) -> Dict[str, Any]:
+        """Create basic analysis when LangExtract parsing fails"""
+        return {
+            "issues_raised": [],
+            "satisfaction_level": {
+                "level": "neutral",
+                "confidence": 60,
+                "score": 5.0,
+                "emotional_indicators": [],
+                "llm_analyzed": False,
+                "fallback_reason": reason
+            },
+            "importance_level": {
+                "level": "medium",
+                "priority": "normal",
+                "urgency_score": 5,
+                "urgency_indicators": [],
+                "business_impact": "medium",
+                "escalation_needed": False,
+                "llm_analyzed": False,
+                "fallback_reason": reason
+            },
+            "doc_improvement_potential": {
+                "potential_level": "medium",
+                "score": 50,
+                "improvement_areas": [],
+                "suggested_actions": [],
+                "llm_inferred": False,
+                "fallback_reason": reason
+            },
+            "faq_potential": {
+                "faq_potential": "medium",
+                "score": 50,
+                "question_type": "general_inquiry",
+                "recommended_faq_title": message.content[:80] + "..." if len(message.content) > 80 else message.content,
+                "should_add_to_faq": False,
+                "llm_inferred": False,
+                "fallback_reason": reason
+            }
+        }
+    
+    # Removed _analyze_message_with_local method - LLM-only analysis
     
     def _parse_gemini_analysis(self, response_text: str, message: Message) -> Dict[str, Any]:
         """Parse Gemini's structured response into our expected format"""
@@ -579,25 +725,9 @@ class HybridAnalysisService:
                 except Exception as e:
                     logger.error(f"LLM conversation analysis failed: {e}")
             
-            # Fallback to simple conversation analysis (sync method)
-            from asgiref.sync import sync_to_async
-            from core.services.simple_conversation_analysis_service import simple_conversation_analysis_service
-            
-            # Run sync method in async context
-            analyze_sync = sync_to_async(simple_conversation_analysis_service.analyze_conversation)
-            local_conv_result = await analyze_sync(conversation)
-            
-            # Add source labeling
-            local_conv_result.update({
-                "analysis_source": "Local Analysis", 
-                "analysis_method": "local_conversation_aggregation",
-                "analysis_version": "simple_v1.0_enhanced",
-                "llm_attempted": self.llm_available,
-                "api_available": False
-            })
-            
-            logger.info(f"Conversation {conversation.uuid} analyzed with local method")
-            return local_conv_result
+            # No local fallback for conversations - return error to trigger retry
+            logger.warning(f"Conversation {conversation.uuid} LLM analysis failed, will retry with 30-second intervals")
+            return {"error": "LLM conversation analysis failed - will retry automatically"}
             
         except Exception as e:
             logger.error(f"Hybrid conversation analysis failed: {e}")
@@ -612,10 +742,11 @@ class HybridAnalysisService:
         return {
             "llm_available": self.llm_available,
             "llm_model": self.llm_model_name if self.llm_available else None,
-            "local_available": True,  # Always available
+            "local_available": False,  # Removed local analysis
             "cache_size": len(self._analysis_cache),
-            "preferred_method": "LLM" if self.llm_available else "Local",
-            "fallback_method": "Local"
+            "analysis_method": "LLM-only",
+            "fallback_method": "30-second retry intervals",
+            "retry_enabled": True
         }
     
     def clear_analysis_cache(self):

@@ -132,25 +132,51 @@ class ConversationAdmin(admin.ModelAdmin):
     analysis_status.short_description = _('Analysis Status')
     
     def analysis_summary(self, obj):
-        """Display comprehensive conversation analysis summary"""
+        """Display comprehensive conversation analysis summary from new structure"""
         if not obj.langextract_analysis or obj.langextract_analysis == {}:
             return format_html('<span style="color: #999;">Not analyzed</span>')
         
         analysis = obj.langextract_analysis
         
-        # Get key metrics
-        message_counts = analysis.get('message_counts', {})
-        total_messages = message_counts.get('total_messages', 0)
-        user_messages = message_counts.get('user_messages', 0)
+        # Try new structure first
+        customer_insights = analysis.get('customer_insights', {})
+        conversation_patterns = analysis.get('conversation_patterns', {})
         
-        issue_analysis = analysis.get('issue_analysis', {})
-        total_issues = issue_analysis.get('total_issues_detected', 0)
-        
-        satisfaction_analysis = analysis.get('satisfaction_analysis', {})
-        avg_satisfaction = satisfaction_analysis.get('average_satisfaction_score', 0)
-        
-        importance_analysis = analysis.get('importance_analysis', {})
-        urgent_count = importance_analysis.get('urgent_messages_count', 0)
+        if (customer_insights and not customer_insights.get('fallback_used')) or (conversation_patterns and not conversation_patterns.get('fallback_used')):
+            # New structure - extract from customer_insights and conversation_patterns
+            total_messages = obj.total_messages  # Get from model method
+            user_messages = obj.messages.filter(sender_type='user').count()
+            
+            # Get issues from customer_insights
+            if customer_insights and not customer_insights.get('fallback_used'):
+                issue_extraction = customer_insights.get('issue_extraction', {})
+                primary_issues = issue_extraction.get('primary_issues', [])
+                total_issues = len(primary_issues)
+                
+                sentiment_analysis = customer_insights.get('sentiment_analysis', {})
+                avg_satisfaction = sentiment_analysis.get('satisfaction_score', 0)
+                
+                urgency_assessment = customer_insights.get('urgency_assessment', {})
+                urgency_level = urgency_assessment.get('urgency_level', 'medium')
+                urgent_count = 1 if urgency_level in ['high', 'critical'] else 0
+            else:
+                total_issues = 0
+                avg_satisfaction = 0
+                urgent_count = 0
+        else:
+            # Fallback to old structure
+            message_counts = analysis.get('message_counts', {})
+            total_messages = message_counts.get('total_messages', 0)
+            user_messages = message_counts.get('user_messages', 0)
+            
+            issue_analysis = analysis.get('issue_analysis', {})
+            total_issues = issue_analysis.get('total_issues_detected', 0)
+            
+            satisfaction_analysis = analysis.get('satisfaction_analysis', {})
+            avg_satisfaction = satisfaction_analysis.get('average_satisfaction_score', 0)
+            
+            importance_analysis = analysis.get('importance_analysis', {})
+            urgent_count = importance_analysis.get('urgent_messages_count', 0)
         
         # Build summary with color coding
         summary_parts = []
@@ -218,19 +244,29 @@ class ConversationAdmin(admin.ModelAdmin):
     analysis_source_display.short_description = _('Analysis Source')
     
     def quality_score(self, obj):
-        """Display conversation quality metrics"""
+        """Display conversation quality metrics from new analysis structure"""
         if not obj.langextract_analysis or obj.langextract_analysis == {}:
             return format_html('<span style="color: #999;">-</span>')
         
         analysis = obj.langextract_analysis
-        quality_metrics = analysis.get('quality_metrics', {})
         
-        completeness = quality_metrics.get('conversation_completeness_score', 0)
-        engagement = quality_metrics.get('user_engagement_score', 0)
-        analysis_coverage = quality_metrics.get('message_analysis_coverage', 0)
-        
-        # Calculate overall quality score
-        overall_quality = (completeness + engagement + analysis_coverage) / 3
+        # Try new structure first (conversation_patterns)
+        conversation_patterns = analysis.get('conversation_patterns', {})
+        if conversation_patterns and not conversation_patterns.get('fallback_used'):
+            conversation_flow = conversation_patterns.get('conversation_flow', {})
+            overall_quality = conversation_flow.get('conversation_quality', 0)
+            
+            # Convert 1-10 scale to percentage
+            overall_quality = (overall_quality * 10) if overall_quality <= 10 else overall_quality
+        else:
+            # Fallback to old structure if available
+            quality_metrics = analysis.get('quality_metrics', {})
+            completeness = quality_metrics.get('conversation_completeness_score', 0)
+            engagement = quality_metrics.get('user_engagement_score', 0)
+            analysis_coverage = quality_metrics.get('message_analysis_coverage', 0)
+            
+            # Calculate overall quality score
+            overall_quality = (completeness + engagement + analysis_coverage) / 3 if any([completeness, engagement, analysis_coverage]) else 0
         
         if overall_quality >= 80:
             color = 'green'
@@ -281,19 +317,36 @@ class ConversationAdmin(admin.ModelAdmin):
     issues_detected.short_description = _('Issues Detected')
     
     def satisfaction_level(self, obj):
-        """Display conversation satisfaction analysis"""
+        """Display conversation satisfaction analysis from new structure"""
         if not obj.langextract_analysis or obj.langextract_analysis == {}:
             return format_html('<span style="color: #999;">-</span>')
         
         analysis = obj.langextract_analysis
-        satisfaction_analysis = analysis.get('satisfaction_analysis', {})
         
-        avg_score = satisfaction_analysis.get('average_satisfaction_score', 0)
-        distribution = satisfaction_analysis.get('satisfaction_distribution', {})
-        percentages = satisfaction_analysis.get('satisfaction_percentage', {})
-        
-        satisfied_pct = percentages.get('satisfied', 0)
-        dissatisfied_pct = percentages.get('dissatisfied', 0)
+        # Try new structure first (customer_insights)
+        customer_insights = analysis.get('customer_insights', {})
+        if customer_insights and not customer_insights.get('fallback_used'):
+            sentiment_analysis = customer_insights.get('sentiment_analysis', {})
+            avg_score = sentiment_analysis.get('satisfaction_score', 0)
+            overall_sentiment = sentiment_analysis.get('overall_sentiment', 'neutral')
+            
+            # Map sentiment to satisfaction percentages
+            if overall_sentiment in ['very_positive', 'positive']:
+                satisfied_pct = 80 if overall_sentiment == 'very_positive' else 65
+                dissatisfied_pct = 5
+            elif overall_sentiment in ['very_negative', 'negative']:
+                satisfied_pct = 5
+                dissatisfied_pct = 80 if overall_sentiment == 'very_negative' else 65
+            else:  # neutral
+                satisfied_pct = 50
+                dissatisfied_pct = 20
+        else:
+            # Fallback to old structure if available
+            satisfaction_analysis = analysis.get('satisfaction_analysis', {})
+            avg_score = satisfaction_analysis.get('average_satisfaction_score', 0)
+            percentages = satisfaction_analysis.get('satisfaction_percentage', {})
+            satisfied_pct = percentages.get('satisfied', 0)
+            dissatisfied_pct = percentages.get('dissatisfied', 0)
         
         # Determine overall satisfaction level
         if satisfied_pct > 50:

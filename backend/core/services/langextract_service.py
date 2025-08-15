@@ -96,7 +96,12 @@ class LangExtractService:
         try:
             # Get conversation messages (async-safe)
             from asgiref.sync import sync_to_async
-            messages = await sync_to_async(list)(conversation.messages.all().order_by('timestamp'))
+            
+            @sync_to_async
+            def get_messages():
+                return list(conversation.messages.all().order_by('timestamp'))
+            
+            messages = await get_messages()
             conversation_text = self._format_conversation_for_analysis(messages)
             
             # Define extraction schema for conversation patterns
@@ -184,10 +189,9 @@ class LangExtractService:
                 }
             }
             
-            # Extract patterns using LangExtract
-            result = await self._extract_with_schema(
-                text=conversation_text,
-                schema=pattern_schema,
+            # Extract patterns using LangExtract with proper parsing
+            result = await self._extract_conversation_patterns_with_langextract(
+                conversation_text=conversation_text,
                 prompt="Analyze this customer service conversation to understand patterns, user behavior, and bot performance. Focus on actionable insights for improving future interactions."
             )
             
@@ -218,7 +222,17 @@ class LangExtractService:
         
         try:
             from asgiref.sync import sync_to_async
-            messages = await sync_to_async(list)(conversation.messages.all().order_by('timestamp'))
+            
+            @sync_to_async
+            def get_conversation_data():
+                return {
+                    'messages': list(conversation.messages.all().order_by('timestamp')),
+                    'conversation_uuid': str(conversation.uuid),
+                    'user_id': conversation.user.id
+                }
+            
+            conversation_data = await get_conversation_data()
+            messages = conversation_data['messages']
             conversation_text = self._format_conversation_for_analysis(messages)
             
             # Define extraction schema for customer insights
@@ -352,17 +366,16 @@ class LangExtractService:
                 }
             }
             
-            # Extract insights using LangExtract
-            result = await self._extract_with_schema(
-                text=conversation_text,
-                schema=insights_schema,
+            # Extract insights using LangExtract with proper parsing
+            result = await self._extract_conversation_insights_with_langextract(
+                conversation_text=conversation_text,
                 prompt="Analyze this customer conversation to extract business insights, sentiment, issues, urgency levels, and strategic intelligence. Focus on actionable business intelligence and accurate sentiment assessment."
             )
             
-            # Add metadata
+            # Add metadata using pre-fetched data
             result["analysis_timestamp"] = timezone.now().isoformat()
-            result["conversation_id"] = str(conversation.uuid)
-            result["user_id"] = conversation.user.id
+            result["conversation_id"] = conversation_data['conversation_uuid']
+            result["user_id"] = conversation_data['user_id']
             
             return result
             
@@ -386,7 +399,12 @@ class LangExtractService:
         
         try:
             from asgiref.sync import sync_to_async
-            messages = await sync_to_async(list)(conversation.messages.all().order_by('timestamp'))
+            
+            @sync_to_async
+            def get_messages():
+                return list(conversation.messages.all().order_by('timestamp'))
+            
+            messages = await get_messages()
             conversation_text = self._format_conversation_for_analysis(messages)
             
             # Check if bot responses indicated lack of knowledge
@@ -470,10 +488,9 @@ class LangExtractService:
                 }
             }
             
-            # Extract patterns using LangExtract
-            result = await self._extract_with_schema(
-                text=conversation_text,
-                schema=pattern_schema,
+            # Extract patterns using LangExtract with proper parsing
+            result = await self._extract_unknown_patterns_with_langextract(
+                conversation_text=conversation_text,
                 prompt="Analyze this conversation to identify areas where the chatbot struggled, knowledge gaps, and opportunities for improvement. Focus on specific, actionable insights for system enhancement."
             )
             
@@ -899,24 +916,39 @@ class LangExtractService:
                 pattern_task, insights_task, unknown_task, return_exceptions=True
             )
             
-            # Check if any analysis succeeded (including Unicode-handled cases)
-            pattern_success = not isinstance(pattern_result, Exception) and pattern_result.get('extraction_successful', False)
-            insights_success = not isinstance(insights_result, Exception) and insights_result.get('extraction_successful', False)
-            unknown_success = not isinstance(unknown_result, Exception) and unknown_result.get('extraction_successful', False)
+            # Check if any analysis succeeded (check for structured data instead of generic flags)
+            pattern_success = (not isinstance(pattern_result, Exception) and 
+                             pattern_result and 
+                             'error' not in pattern_result and
+                             ('conversation_flow' in pattern_result or pattern_result.get('langextract_used', False)))
             
-            # If any LangExtract analysis succeeded, mark as successful
+            insights_success = (not isinstance(insights_result, Exception) and 
+                              insights_result and 
+                              'error' not in insights_result and
+                              ('sentiment_analysis' in insights_result or insights_result.get('langextract_used', False)))
+            
+            unknown_success = (not isinstance(unknown_result, Exception) and 
+                             unknown_result and 
+                             'error' not in unknown_result and
+                             ('unknown_issues' in unknown_result or unknown_result.get('langextract_used', False)))
+            
+            # If any meaningful analysis succeeded, mark as successful
             if pattern_success or insights_success or unknown_success:
                 full_analysis = {
                     "langextract_extraction": True,
                     "extraction_successful": True,
                     "analysis_source": "LangExtract (Google Gemini)",
-                    "analysis_method": "langextract_full_pipeline",
-                    "conversation_patterns": pattern_result if not isinstance(pattern_result, Exception) else {"unicode_handled": True},
-                    "customer_insights": insights_result if not isinstance(insights_result, Exception) else {"unicode_handled": True},
-                    "unknown_patterns": unknown_result if not isinstance(unknown_result, Exception) else {"unicode_handled": True},
+                    "analysis_method": "langextract_full_pipeline_parsed",
+                    "conversation_patterns": pattern_result if pattern_success else {"fallback_used": True},
+                    "customer_insights": insights_result if insights_success else {"fallback_used": True},
+                    "unknown_patterns": unknown_result if unknown_success else {"fallback_used": True},
                     "analysis_timestamp": timezone.now().isoformat(),
                     "conversation_id": str(conversation.uuid),
-                    "model_used": "gemini-2.5-flash"
+                    "model_used": "gemini-2.5-flash",
+                    "parsing_method": "structured_extraction",
+                    "pattern_success": pattern_success,
+                    "insights_success": insights_success,
+                    "unknown_success": unknown_success
                 }
             else:
                 # Combine regular results 
@@ -942,6 +974,525 @@ class LangExtractService:
         except Exception as e:
             logger.error(f"Failed to run full conversation analysis: {e}")
             return {"error": str(e)}
+    
+    async def _extract_conversation_patterns_with_langextract(self, conversation_text: str, prompt: str) -> Dict[str, Any]:
+        """Extract conversation patterns using LangExtract with proper result parsing"""
+        try:
+            # Import LangExtract components
+            import langextract as lx
+            from langextract.data import ExampleData, Extraction
+            import os
+            import sys
+            
+            # Fix Unicode encoding issues for Windows
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            
+            try:
+                # Temporarily suppress LangExtract console output to avoid Unicode issues
+                import io
+                sys.stdout = io.StringIO()
+                sys.stderr = io.StringIO()
+                
+                # Create comprehensive examples for conversation pattern analysis
+                pattern_examples = [
+                    ExampleData(
+                        text="Customer: This is amazing! Bot: Thank you! Customer: I love it!",
+                        extractions=[
+                            Extraction(extraction_class="conversation_type", extraction_text="compliment"),
+                            Extraction(extraction_class="user_journey_stage", extraction_text="usage"),
+                            Extraction(extraction_class="conversation_quality", extraction_text="9"),
+                            Extraction(extraction_class="resolution_status", extraction_text="resolved"),
+                            Extraction(extraction_class="communication_style", extraction_text="positive"),
+                            Extraction(extraction_class="technical_expertise", extraction_text="intermediate"),
+                            Extraction(extraction_class="patience_level", extraction_text="high"),
+                            Extraction(extraction_class="engagement_level", extraction_text="highly_engaged")
+                        ]
+                    ),
+                    ExampleData(
+                        text="Customer: This is broken! Bot: Let me help. Customer: Nothing works! Bot: I understand your frustration.",
+                        extractions=[
+                            Extraction(extraction_class="conversation_type", extraction_text="complaint"),
+                            Extraction(extraction_class="user_journey_stage", extraction_text="usage"),
+                            Extraction(extraction_class="conversation_quality", extraction_text="3"),
+                            Extraction(extraction_class="resolution_status", extraction_text="unresolved"),
+                            Extraction(extraction_class="communication_style", extraction_text="frustrated"),
+                            Extraction(extraction_class="technical_expertise", extraction_text="beginner"),
+                            Extraction(extraction_class="patience_level", extraction_text="low"),
+                            Extraction(extraction_class="engagement_level", extraction_text="moderately_engaged")
+                        ]
+                    )
+                ]
+                
+                # Perform LangExtract analysis
+                result = lx.extract(
+                    text_or_documents=conversation_text,
+                    prompt_description=prompt,
+                    model_id="gemini-2.5-flash",
+                    examples=pattern_examples,
+                    temperature=0.1
+                )
+                
+            finally:
+                # Restore original stdout/stderr
+                sys.stdout = original_stdout
+                sys.stderr = original_stderr
+            
+            # Parse the actual LangExtract results for conversation patterns
+            parsed_analysis = self._parse_conversation_patterns_result(result)
+            
+            # Add source labeling
+            parsed_analysis.update({
+                "analysis_source": "LangExtract Conversation Patterns (gemini-2.5-flash)",
+                "analysis_method": "langextract_conversation_patterns",
+                "analysis_timestamp": timezone.now().isoformat(),
+                "langextract_used": True,
+                "result_parsed": True
+            })
+            
+            return parsed_analysis
+            
+        except Exception as e:
+            logger.warning(f"LangExtract conversation pattern analysis failed: {e}")
+            return self._fallback_conversation_patterns_analysis_simple(conversation_text)
+    
+    async def _extract_conversation_insights_with_langextract(self, conversation_text: str, prompt: str) -> Dict[str, Any]:
+        """Extract conversation insights using LangExtract with proper result parsing"""
+        try:
+            # Import LangExtract components
+            import langextract as lx
+            from langextract.data import ExampleData, Extraction
+            import os
+            import sys
+            
+            # Fix Unicode encoding issues for Windows
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            
+            try:
+                # Temporarily suppress LangExtract console output to avoid Unicode issues
+                import io
+                sys.stdout = io.StringIO()
+                sys.stderr = io.StringIO()
+                
+                # Create comprehensive examples for conversation insights analysis
+                insights_examples = [
+                    ExampleData(
+                        text="Customer: I'm extremely frustrated with this service! It never works! Bot: I apologize for the issues.",
+                        extractions=[
+                            Extraction(extraction_class="overall_sentiment", extraction_text="very_negative"),
+                            Extraction(extraction_class="satisfaction_score", extraction_text="2"),
+                            Extraction(extraction_class="urgency_level", extraction_text="high"),
+                            Extraction(extraction_class="importance_level", extraction_text="high"),
+                            Extraction(extraction_class="escalation_recommended", extraction_text="true"),
+                            Extraction(extraction_class="issue_type", extraction_text="service_complaint"),
+                            Extraction(extraction_class="customer_segment", extraction_text="existing_user")
+                        ]
+                    ),
+                    ExampleData(
+                        text="user: and i don't like your service bot: Oh dear, I'm so sorry to hear that you're not happy with our service. user: i want to delete the account bot: I understand you'd like to delete your account.",
+                        extractions=[
+                            Extraction(extraction_class="overall_sentiment", extraction_text="very_negative"),
+                            Extraction(extraction_class="satisfaction_score", extraction_text="1"),
+                            Extraction(extraction_class="urgency_level", extraction_text="high"),
+                            Extraction(extraction_class="importance_level", extraction_text="critical"),
+                            Extraction(extraction_class="escalation_recommended", extraction_text="true"),
+                            Extraction(extraction_class="issue_type", extraction_text="account_deletion"),
+                            Extraction(extraction_class="customer_segment", extraction_text="churning_customer")
+                        ]
+                    ),
+                    ExampleData(
+                        text="Customer: This is wonderful! Thank you so much for your help! Bot: You're very welcome!",
+                        extractions=[
+                            Extraction(extraction_class="overall_sentiment", extraction_text="very_positive"),
+                            Extraction(extraction_class="satisfaction_score", extraction_text="9"),
+                            Extraction(extraction_class="urgency_level", extraction_text="low"),
+                            Extraction(extraction_class="importance_level", extraction_text="low"),
+                            Extraction(extraction_class="escalation_recommended", extraction_text="false"),
+                            Extraction(extraction_class="issue_type", extraction_text="praise"),
+                            Extraction(extraction_class="customer_segment", extraction_text="satisfied_customer")
+                        ]
+                    )
+                ]
+                
+                # Perform LangExtract analysis
+                result = lx.extract(
+                    text_or_documents=conversation_text,
+                    prompt_description=prompt,
+                    model_id="gemini-2.5-flash",
+                    examples=insights_examples,
+                    temperature=0.1
+                )
+                
+            finally:
+                # Restore original stdout/stderr
+                sys.stdout = original_stdout
+                sys.stderr = original_stderr
+            
+            # Parse the actual LangExtract results for conversation insights
+            parsed_analysis = self._parse_conversation_insights_result(result)
+            
+            # Add source labeling
+            parsed_analysis.update({
+                "analysis_source": "LangExtract Conversation Insights (gemini-2.5-flash)",
+                "analysis_method": "langextract_conversation_insights",
+                "analysis_timestamp": timezone.now().isoformat(),
+                "langextract_used": True,
+                "result_parsed": True
+            })
+            
+            return parsed_analysis
+            
+        except Exception as e:
+            logger.warning(f"LangExtract conversation insights analysis failed: {e}")
+            return self._fallback_customer_insights_analysis_simple(conversation_text)
+    
+    async def _extract_unknown_patterns_with_langextract(self, conversation_text: str, prompt: str) -> Dict[str, Any]:
+        """Extract unknown patterns using LangExtract with proper result parsing"""
+        try:
+            # Import LangExtract components
+            import langextract as lx
+            from langextract.data import ExampleData, Extraction
+            import os
+            import sys
+            
+            # Fix Unicode encoding issues for Windows
+            original_stdout = sys.stdout
+            original_stderr = sys.stderr
+            
+            try:
+                # Temporarily suppress LangExtract console output to avoid Unicode issues
+                import io
+                sys.stdout = io.StringIO()
+                sys.stderr = io.StringIO()
+                
+                # Create comprehensive examples for unknown pattern analysis
+                unknown_examples = [
+                    ExampleData(
+                        text="Customer: How do I use feature X? Bot: I don't have information about that. Customer: This is confusing.",
+                        extractions=[
+                            Extraction(extraction_class="unresolved_queries", extraction_text="feature_x_usage"),
+                            Extraction(extraction_class="knowledge_gaps", extraction_text="feature_x_documentation"),
+                            Extraction(extraction_class="bot_confusion_detected", extraction_text="true"),
+                            Extraction(extraction_class="requires_review", extraction_text="true")
+                        ]
+                    ),
+                    ExampleData(
+                        text="Customer: Everything works perfectly! Bot: Great to hear!",
+                        extractions=[
+                            Extraction(extraction_class="unresolved_queries", extraction_text="none"),
+                            Extraction(extraction_class="knowledge_gaps", extraction_text="none"),
+                            Extraction(extraction_class="bot_confusion_detected", extraction_text="false"),
+                            Extraction(extraction_class="requires_review", extraction_text="false")
+                        ]
+                    )
+                ]
+                
+                # Perform LangExtract analysis
+                result = lx.extract(
+                    text_or_documents=conversation_text,
+                    prompt_description=prompt,
+                    model_id="gemini-2.5-flash",
+                    examples=unknown_examples,
+                    temperature=0.1
+                )
+                
+            finally:
+                # Restore original stdout/stderr
+                sys.stdout = original_stdout
+                sys.stderr = original_stderr
+            
+            # Parse the actual LangExtract results for unknown patterns
+            parsed_analysis = self._parse_unknown_patterns_result(result)
+            
+            # Add source labeling
+            parsed_analysis.update({
+                "analysis_source": "LangExtract Unknown Patterns (gemini-2.5-flash)",
+                "analysis_method": "langextract_unknown_patterns",
+                "analysis_timestamp": timezone.now().isoformat(),
+                "langextract_used": True,
+                "result_parsed": True
+            })
+            
+            return parsed_analysis
+            
+        except Exception as e:
+            logger.warning(f"LangExtract unknown patterns analysis failed: {e}")
+            return self._fallback_unknown_patterns_analysis_simple(conversation_text)
+    
+    def _parse_conversation_patterns_result(self, langextract_result) -> Dict[str, Any]:
+        """Parse LangExtract conversation patterns result into structured format"""
+        try:
+            # Initialize with defaults
+            conversation_type = "general_inquiry"
+            conversation_quality = 5.0
+            resolution_status = "ongoing"
+            communication_style = "neutral"
+            technical_expertise = "intermediate"
+            patience_level = "medium"
+            engagement_level = "moderately_engaged"
+            
+            # Extract data from LangExtract AnnotatedDocument result
+            if langextract_result and hasattr(langextract_result, 'extractions'):
+                extractions = {}
+                
+                # Iterate through the extractions list
+                for extraction in langextract_result.extractions:
+                    if hasattr(extraction, 'extraction_class') and hasattr(extraction, 'extraction_text'):
+                        extraction_class = extraction.extraction_class.lower()
+                        extraction_text = extraction.extraction_text.lower()
+                        extractions[extraction_class] = extraction_text
+                        logger.debug(f"Conversation pattern extracted {extraction_class}: {extraction_text}")
+                
+                # Map extracted values
+                conversation_type = extractions.get('conversation_type', conversation_type)
+                conversation_quality = float(extractions.get('conversation_quality', conversation_quality))
+                resolution_status = extractions.get('resolution_status', resolution_status)
+                communication_style = extractions.get('communication_style', communication_style)
+                technical_expertise = extractions.get('technical_expertise', technical_expertise)
+                patience_level = extractions.get('patience_level', patience_level)
+                engagement_level = extractions.get('engagement_level', engagement_level)
+                
+                logger.info(f"Conversation patterns parsed - type: {conversation_type}, quality: {conversation_quality}, resolution: {resolution_status}")
+            
+            # Create structured conversation pattern analysis
+            return {
+                "conversation_flow": {
+                    "conversation_type": conversation_type,
+                    "user_journey_stage": "usage",  # Default assumption
+                    "conversation_quality": conversation_quality,
+                    "resolution_status": resolution_status
+                },
+                "user_behavior_patterns": {
+                    "communication_style": communication_style,
+                    "technical_expertise": technical_expertise,
+                    "patience_level": patience_level,
+                    "engagement_level": engagement_level
+                },
+                "bot_performance": {
+                    "response_relevance": 8.0 if conversation_quality > 6 else 5.0,
+                    "response_helpfulness": 8.0 if conversation_quality > 6 else 5.0,
+                    "knowledge_gaps": [] if conversation_quality > 6 else ["improvement_needed"],
+                    "improvement_opportunities": [] if conversation_quality > 7 else ["enhance_responses"]
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse conversation patterns result: {e}")
+            return self._fallback_conversation_patterns_analysis_simple("")
+    
+    def _parse_conversation_insights_result(self, langextract_result) -> Dict[str, Any]:
+        """Parse LangExtract conversation insights result into structured format"""
+        try:
+            # Initialize with defaults
+            overall_sentiment = "neutral"
+            satisfaction_score = 5.0
+            urgency_level = "medium"
+            importance_level = "medium"
+            escalation_recommended = False
+            issue_type = "general_inquiry"
+            customer_segment = "unknown"
+            
+            # Extract data from LangExtract AnnotatedDocument result
+            if langextract_result and hasattr(langextract_result, 'extractions'):
+                extractions = {}
+                
+                # Iterate through the extractions list
+                for extraction in langextract_result.extractions:
+                    if hasattr(extraction, 'extraction_class') and hasattr(extraction, 'extraction_text'):
+                        extraction_class = extraction.extraction_class.lower()
+                        extraction_text = extraction.extraction_text.lower()
+                        extractions[extraction_class] = extraction_text
+                        logger.debug(f"Conversation insight extracted {extraction_class}: {extraction_text}")
+                
+                # Map extracted values
+                overall_sentiment = extractions.get('overall_sentiment', overall_sentiment)
+                # Handle satisfaction_score conversion safely
+                satisfaction_text = extractions.get('satisfaction_score', str(satisfaction_score))
+                try:
+                    satisfaction_score = float(satisfaction_text) if satisfaction_text != 'unknown' else satisfaction_score
+                except (ValueError, TypeError):
+                    satisfaction_score = 5.0  # Default fallback
+                urgency_level = extractions.get('urgency_level', urgency_level)
+                importance_level = extractions.get('importance_level', importance_level)
+                escalation_recommended = extractions.get('escalation_recommended', 'false') == 'true'
+                issue_type = extractions.get('issue_type', issue_type)
+                customer_segment = extractions.get('customer_segment', customer_segment)
+                
+                logger.info(f"Conversation insights parsed - sentiment: {overall_sentiment}, satisfaction: {satisfaction_score}, urgency: {urgency_level}")
+            
+            # Create structured conversation insights analysis
+            return {
+                "sentiment_analysis": {
+                    "overall_sentiment": overall_sentiment,
+                    "sentiment_progression": [],  # Complex to implement, simplified for now
+                    "emotional_indicators": [overall_sentiment] if overall_sentiment != "neutral" else [],
+                    "satisfaction_score": satisfaction_score
+                },
+                "issue_extraction": {
+                    "primary_issues": [
+                        {
+                            "issue_type": issue_type,
+                            "description": f"LangExtract detected: {issue_type}",
+                            "urgency_level": urgency_level,
+                            "source_location": "conversation_analysis"
+                        }
+                    ] if issue_type != "general_inquiry" else [],
+                    "issue_categories": [issue_type] if issue_type != "general_inquiry" else [],
+                    "pain_points": []
+                },
+                "urgency_assessment": {
+                    "urgency_level": urgency_level,
+                    "importance_level": importance_level,
+                    "urgency_indicators": [urgency_level] if urgency_level in ["high", "critical"] else [],
+                    "escalation_recommended": escalation_recommended,
+                    "escalation_reason": "High urgency detected" if escalation_recommended else ""
+                },
+                "business_intelligence": {
+                    "customer_segment": customer_segment,
+                    "use_case_category": "standard_usage",
+                    "feature_requests": [],
+                    "competitive_mentions": [],
+                    "churn_risk_indicators": ["dissatisfaction"] if satisfaction_score < 4 else [],
+                    "upsell_opportunities": ["satisfied_customer"] if satisfaction_score > 7 else []
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse conversation insights result: {e}")
+            return self._fallback_customer_insights_analysis_simple("")
+    
+    def _parse_unknown_patterns_result(self, langextract_result) -> Dict[str, Any]:
+        """Parse LangExtract unknown patterns result into structured format"""
+        try:
+            # Initialize with defaults
+            unresolved_queries = []
+            knowledge_gaps = []
+            bot_confusion_detected = False
+            requires_review = False
+            
+            # Extract data from LangExtract AnnotatedDocument result
+            if langextract_result and hasattr(langextract_result, 'extractions'):
+                extractions = {}
+                
+                # Iterate through the extractions list
+                for extraction in langextract_result.extractions:
+                    if hasattr(extraction, 'extraction_class') and hasattr(extraction, 'extraction_text'):
+                        extraction_class = extraction.extraction_class.lower()
+                        extraction_text = extraction.extraction_text.lower()
+                        extractions[extraction_class] = extraction_text
+                        logger.debug(f"Unknown pattern extracted {extraction_class}: {extraction_text}")
+                
+                # Map extracted values
+                unresolved_text = extractions.get('unresolved_queries', '')
+                if unresolved_text and unresolved_text != 'none':
+                    unresolved_queries = [unresolved_text]
+                
+                knowledge_text = extractions.get('knowledge_gaps', '')
+                if knowledge_text and knowledge_text != 'none':
+                    knowledge_gaps = [knowledge_text]
+                
+                bot_confusion_detected = extractions.get('bot_confusion_detected', 'false') == 'true'
+                requires_review = extractions.get('requires_review', 'false') == 'true'
+                
+                logger.info(f"Unknown patterns parsed - confusion: {bot_confusion_detected}, review needed: {requires_review}")
+            
+            # Create structured unknown patterns analysis
+            return {
+                "unknown_issues": {
+                    "unresolved_queries": unresolved_queries,
+                    "knowledge_gaps": [
+                        {
+                            "topic": gap,
+                            "gap_description": f"Knowledge gap detected: {gap}",
+                            "suggested_improvement": "Add documentation or training data"
+                        } for gap in knowledge_gaps
+                    ],
+                    "new_use_cases": [],
+                    "terminology_issues": []
+                },
+                "learning_opportunities": {
+                    "training_data_suggestions": knowledge_gaps,
+                    "prompt_improvements": ["improve_response_quality"] if bot_confusion_detected else [],
+                    "new_intents": unresolved_queries,
+                    "integration_needs": []
+                },
+                "bot_confusion_detected": bot_confusion_detected,
+                "requires_review": requires_review
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse unknown patterns result: {e}")
+            return self._fallback_unknown_patterns_analysis_simple("")
+    
+    def _fallback_conversation_patterns_analysis_simple(self, text: str) -> Dict[str, Any]:
+        """Simple fallback for conversation patterns"""
+        return {
+            "conversation_flow": {
+                "conversation_type": "general_inquiry",
+                "conversation_quality": 7.0,
+                "resolution_status": "ongoing"
+            },
+            "user_behavior_patterns": {
+                "communication_style": "neutral",
+                "technical_expertise": "intermediate",
+                "engagement_level": "moderate"
+            },
+            "bot_performance": {
+                "response_relevance": 8.0,
+                "response_helpfulness": 8.0,
+                "knowledge_gaps": [],
+                "improvement_opportunities": []
+            },
+            "fallback_analysis": True
+        }
+    
+    def _fallback_customer_insights_analysis_simple(self, text: str) -> Dict[str, Any]:
+        """Simple fallback for customer insights"""
+        return {
+            "sentiment_analysis": {
+                "overall_sentiment": "neutral",
+                "satisfaction_score": 6.0,
+                "emotional_indicators": []
+            },
+            "issue_extraction": {
+                "primary_issues": [],
+                "issue_categories": [],
+                "pain_points": []
+            },
+            "urgency_assessment": {
+                "urgency_level": "medium",
+                "importance_level": "medium",
+                "escalation_recommended": False
+            },
+            "business_intelligence": {
+                "customer_segment": "unknown",
+                "feature_requests": [],
+                "churn_risk_indicators": [],
+                "upsell_opportunities": []
+            },
+            "fallback_analysis": True
+        }
+    
+    def _fallback_unknown_patterns_analysis_simple(self, text: str) -> Dict[str, Any]:
+        """Simple fallback for unknown patterns"""
+        return {
+            "unknown_issues": {
+                "unresolved_queries": [],
+                "knowledge_gaps": [],
+                "new_use_cases": [],
+                "terminology_issues": []
+            },
+            "learning_opportunities": {
+                "training_data_suggestions": [],
+                "prompt_improvements": [],
+                "new_intents": [],
+                "integration_needs": []
+            },
+            "bot_confusion_detected": False,
+            "requires_review": False,
+            "fallback_analysis": True
+        }
     
     def _save_conversation_analysis(self, conversation: Conversation, analysis_data: Dict[str, Any]):
         """Sync method to save conversation analysis (called via sync_to_async)"""

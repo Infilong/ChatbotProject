@@ -95,27 +95,8 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
                     import traceback
                     logger.error(f"Full traceback: {traceback.format_exc()}")
                     
-                    # Fallback: Try local analysis directly if hybrid fails
-                    try:
-                        logger.info(f"Attempting fallback local analysis for {instance.uuid}")
-                        from core.services.message_analysis_service import message_analysis_service
-                        from django.db import transaction
-                        with transaction.atomic():
-                            msg = Message.objects.get(uuid=instance.uuid)
-                            if not msg.message_analysis or msg.message_analysis == {}:
-                                result = message_analysis_service.analyze_user_message(msg)
-                                if result and 'error' not in result:
-                                    # Add fallback source labeling
-                                    result.update({
-                                        "analysis_source": "Local Analysis (Fallback)",
-                                        "analysis_method": "emergency_fallback",
-                                        "hybrid_failed": True
-                                    })
-                                    msg.message_analysis = result
-                                    msg.save(update_fields=['message_analysis'])
-                                    logger.info(f"Emergency fallback analysis successful for {instance.uuid}")
-                    except Exception as fallback_error:
-                        logger.error(f"Emergency fallback analysis also failed for {instance.uuid}: {fallback_error}")
+                    # No local fallback - LLM-only analysis with retry mechanism
+                    logger.info(f"Hybrid analysis failed for {instance.uuid}, will rely on retry mechanism")
             
             # Start message analysis in background thread
             import threading
@@ -197,32 +178,16 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
                     import traceback
                     logger.error(f"Full traceback: {traceback.format_exc()}")
                     
-                    # Emergency fallback to simple analysis
-                    try:
-                        logger.info(f"Attempting emergency fallback conversation analysis for {conversation.uuid}")
-                        from core.services.simple_conversation_analysis_service import simple_conversation_analysis_service
-                        from django.db import transaction
-                        with transaction.atomic():
-                            conv = Conversation.objects.get(uuid=conversation.uuid)
-                            if not conv.langextract_analysis or conv.langextract_analysis == {}:
-                                result = simple_conversation_analysis_service.analyze_conversation(conv)
-                                if result and 'error' not in result:
-                                    # Add emergency fallback labeling
-                                    result.update({
-                                        "analysis_source": "Local Analysis (Emergency Fallback)",
-                                        "analysis_method": "emergency_conversation_fallback",
-                                        "hybrid_failed": True
-                                    })
-                                    conv.langextract_analysis = result
-                                    conv.save(update_fields=['langextract_analysis'])
-                                    logger.info(f"Emergency conversation fallback successful for {conversation.uuid}")
-                    except Exception as emergency_error:
-                        logger.error(f"Emergency conversation fallback failed for {conversation.uuid}: {emergency_error}")
+                    # No local fallback for conversations - LLM-only analysis with retry mechanism
+                    logger.info(f"Hybrid conversation analysis failed for {conversation.uuid}, will rely on retry mechanism")
             
             # Start conversation analysis in background thread
             import threading
             conv_analysis_thread = threading.Thread(target=analyze_conversation_async, daemon=True)
             conv_analysis_thread.start()
+            
+            # Start retry mechanism for this conversation
+            start_conversation_analysis_retry_monitor(conversation)
         
     except Exception as e:
         logger.warning(f"Error in message_saved_trigger_analysis signal: {e}")
@@ -282,14 +247,15 @@ def conversation_updated_check_analysis(sender, instance, created, **kwargs):
         logger.warning(f"Error in conversation_updated_check_analysis signal: {e}")
 
 
-# Global dictionary to track retry timers
+# Global dictionaries to track retry timers
 _message_retry_timers = {}
+_conversation_retry_timers = {}
 
 
 def start_message_analysis_retry_monitor(message_instance):
     """
-    Start a retry monitor for message analysis that checks every 15 seconds
-    and attempts to analyze the message if it's still unanalyzed
+    Start a retry monitor for message analysis that checks every 30 seconds
+    and attempts to analyze the message if it's still unanalyzed (LLM-only)
     """
     message_uuid = str(message_instance.uuid)
     
@@ -301,16 +267,16 @@ def start_message_analysis_retry_monitor(message_instance):
     import time
     
     def retry_analysis_monitor():
-        """Monitor function that runs every 15 seconds to check and retry analysis"""
-        max_retries = 20  # Maximum 20 retries (5 minutes total)
+        """Monitor function that runs every 30 seconds to check and retry LLM analysis"""
+        max_retries = 40  # Maximum 40 retries (20 minutes total)
         retry_count = 0
         
-        logger.info(f"Starting analysis retry monitor for message {message_uuid}")
+        logger.info(f"Starting LLM-only analysis retry monitor for message {message_uuid}")
         
         while retry_count < max_retries:
             try:
-                # Wait 15 seconds before checking
-                time.sleep(15)
+                # Wait 30 seconds before checking
+                time.sleep(30)
                 retry_count += 1
                 
                 # Check if message still exists and needs analysis
@@ -405,3 +371,124 @@ def stop_message_analysis_retry_monitor(message_uuid):
     if message_uuid in _message_retry_timers:
         logger.info(f"Stopping retry monitor for message {message_uuid}")
         del _message_retry_timers[message_uuid]
+
+
+def start_conversation_analysis_retry_monitor(conversation_instance):
+    """
+    Start a retry monitor for conversation analysis that checks every 30 seconds
+    and attempts to analyze the conversation if it's still unanalyzed (LLM-only)
+    """
+    conversation_uuid = str(conversation_instance.uuid)
+    
+    # Don't start multiple timers for the same conversation
+    if conversation_uuid in _conversation_retry_timers:
+        return
+    
+    import threading
+    import time
+    
+    def retry_conversation_analysis_monitor():
+        """Monitor function that runs every 30 seconds to check and retry LLM conversation analysis"""
+        max_retries = 40  # Maximum 40 retries (20 minutes total)
+        retry_count = 0
+        
+        logger.info(f"Starting LLM-only conversation analysis retry monitor for conversation {conversation_uuid}")
+        
+        while retry_count < max_retries:
+            try:
+                # Wait 30 seconds before checking
+                time.sleep(30)
+                retry_count += 1
+                
+                # Check if conversation still exists and needs analysis
+                try:
+                    from django.db import connections
+                    connections.close_all()  # Close stale connections
+                    
+                    conversation = Conversation.objects.get(uuid=conversation_uuid)
+                    
+                    # Check if conversation now has analysis
+                    if conversation.langextract_analysis and conversation.langextract_analysis != {}:
+                        logger.info(f"Conversation {conversation_uuid} analysis completed successfully (retry {retry_count})")
+                        break
+                    
+                    # Conversation still needs analysis - attempt retry
+                    logger.info(f"Conversation {conversation_uuid} still unanalyzed, attempting retry {retry_count}/{max_retries}")
+                    
+                    # Attempt conversation analysis again
+                    import asyncio
+                    from core.services.hybrid_analysis_service import hybrid_analysis_service
+                    from django.db import transaction
+                    
+                    # Create new event loop for this retry
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    try:
+                        with transaction.atomic():
+                            # Re-fetch conversation with lock
+                            fresh_conversation = Conversation.objects.select_for_update().get(uuid=conversation_uuid)
+                            
+                            # Double-check it still needs analysis
+                            if not fresh_conversation.langextract_analysis or fresh_conversation.langextract_analysis == {}:
+                                # Analyze this conversation using hybrid approach
+                                analysis_result = loop.run_until_complete(
+                                    hybrid_analysis_service.analyze_conversation_hybrid(fresh_conversation)
+                                )
+                                
+                                if analysis_result and 'error' not in analysis_result:
+                                    # Add retry information to the analysis
+                                    analysis_result.update({
+                                        "retry_count": retry_count,
+                                        "retry_successful": True,
+                                        "retry_timestamp": timezone.now().isoformat()
+                                    })
+                                    
+                                    # Save analysis to conversation
+                                    fresh_conversation.langextract_analysis = analysis_result
+                                    fresh_conversation.save(update_fields=['langextract_analysis'])
+                                    
+                                    # Log success
+                                    analysis_source = analysis_result.get('analysis_source', 'Unknown')
+                                    logger.info(f"Conversation {conversation_uuid} retry analysis successful using {analysis_source} (attempt {retry_count})")
+                                    break
+                                else:
+                                    logger.warning(f"Conversation {conversation_uuid} retry analysis failed (attempt {retry_count}): {analysis_result.get('error', 'Unknown error')}")
+                            else:
+                                logger.info(f"Conversation {conversation_uuid} was analyzed by another process during retry {retry_count}")
+                                break
+                                
+                    finally:
+                        loop.close()
+                        
+                except Conversation.DoesNotExist:
+                    logger.info(f"Conversation {conversation_uuid} no longer exists, stopping retry monitor")
+                    break
+                    
+            except Exception as e:
+                logger.error(f"Error in conversation retry analysis monitor for {conversation_uuid} (attempt {retry_count}): {e}")
+                
+        # Clean up - remove from retry timers
+        if conversation_uuid in _conversation_retry_timers:
+            del _conversation_retry_timers[conversation_uuid]
+            
+        if retry_count >= max_retries:
+            logger.warning(f"Conversation {conversation_uuid} retry analysis gave up after {max_retries} attempts")
+        else:
+            logger.info(f"Conversation {conversation_uuid} retry monitor completed successfully")
+    
+    # Start the retry monitor in a background thread
+    retry_thread = threading.Thread(target=retry_conversation_analysis_monitor, daemon=True)
+    retry_thread.start()
+    
+    # Track this timer
+    _conversation_retry_timers[conversation_uuid] = retry_thread
+
+
+def stop_conversation_analysis_retry_monitor(conversation_uuid):
+    """
+    Stop the retry monitor for a specific conversation (if needed)
+    """
+    if conversation_uuid in _conversation_retry_timers:
+        logger.info(f"Stopping retry monitor for conversation {conversation_uuid}")
+        del _conversation_retry_timers[conversation_uuid]
