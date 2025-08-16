@@ -5,6 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from django import forms
 from django.utils import timezone
 from django.conf import settings
+import uuid
 from .models import Conversation, Message, UserSession, APIConfiguration, AdminPrompt
 
 
@@ -62,6 +63,57 @@ class ConversationAdmin(admin.ModelAdmin):
     actions_on_bottom = False
     inlines = [MessageInline]  # Add inline message editing
     
+    def get_object(self, request, object_id, from_field=None):
+        """Override get_object to handle UUID lookup for security"""
+        try:
+            # Try to parse as UUID first
+            uuid_obj = uuid.UUID(str(object_id))
+            return self.get_queryset(request).get(uuid=uuid_obj)
+        except (ValueError, TypeError):
+            # Fallback to PK for backward compatibility
+            try:
+                return self.get_queryset(request).get(pk=object_id)
+            except (ValueError, Conversation.DoesNotExist):
+                return None
+        except Conversation.DoesNotExist:
+            return None
+    
+    def get_urls(self):
+        """Override admin URLs with UUID-based ones for security"""
+        from django.urls import path
+        urls = super().get_urls()
+        
+        # Create wrapper views that convert UUID to string for admin compatibility
+        def uuid_change_view(request, object_id):
+            return self.change_view(request, str(object_id))
+        
+        def uuid_delete_view(request, object_id):
+            return self.delete_view(request, str(object_id))
+            
+        def uuid_history_view(request, object_id):
+            return self.history_view(request, str(object_id))
+        
+        # Override default admin URLs with UUID-based ones
+        custom_urls = [
+            path('<uuid:object_id>/change/', self.admin_site.admin_view(uuid_change_view), 
+                 name='chat_conversation_change'),
+            path('<uuid:object_id>/delete/', self.admin_site.admin_view(uuid_delete_view), 
+                 name='chat_conversation_delete'),
+            path('<uuid:object_id>/history/', self.admin_site.admin_view(uuid_history_view), 
+                 name='chat_conversation_history'),
+        ]
+        return custom_urls + urls
+    
+    def response_change(self, request, obj):
+        """Redirect to UUID-based URLs after form submission"""
+        import re
+        response = super().response_change(request, obj)
+        if hasattr(response, 'url') and response.url:
+            pattern = r'/admin/chat/conversation/\d+/'
+            replacement = f'/admin/chat/conversation/{obj.uuid}/'
+            response.url = re.sub(pattern, replacement, response.url)
+        return response
+    
     fieldsets = (
         (_('Conversation Details'), {
             'fields': ('user', 'title', 'is_active')
@@ -85,8 +137,10 @@ class ConversationAdmin(admin.ModelAdmin):
     )
     
     def uuid_short(self, obj):
-        """Display first 4 characters of UUID followed by ..."""
-        return f"{str(obj.uuid)[:4]}..."
+        """Display first 4 characters of UUID followed by ... as a clickable link"""
+        url = reverse('admin:chat_conversation_change', args=[obj.uuid])
+        uuid_display = f"{str(obj.uuid)[:4]}..."
+        return format_html('<a href="{}">{}</a>', url, uuid_display)
     uuid_short.short_description = _('ID')
     uuid_short.admin_order_field = 'uuid'
     
@@ -1058,9 +1112,10 @@ class MessageAdmin(admin.ModelAdmin):
     uuid_short.admin_order_field = 'uuid'
     
     def conversation_link(self, obj):
-        url = reverse('admin:chat_conversation_change', args=[obj.conversation.id])
-        title = obj.conversation.title[:30] + "..." if len(obj.conversation.title) > 30 else obj.conversation.title
-        return format_html('<a href="{}" title="{}">{}</a>', url, obj.conversation.title, title)
+        url = reverse('admin:chat_conversation_change', args=[obj.conversation.uuid])
+        title = obj.conversation.get_title()
+        title_display = title[:30] + "..." if len(title) > 30 else title
+        return format_html('<a href="{}" title="{}">{}</a>', url, title, title_display)
     conversation_link.short_description = _('Conversation')
     conversation_link.admin_order_field = 'conversation__title'
     
