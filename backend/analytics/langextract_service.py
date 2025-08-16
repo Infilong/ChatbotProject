@@ -31,29 +31,57 @@ class LangExtractService:
         self.default_model = "gemini-2.5-flash"  # Updated to latest recommended model
     
     def _get_api_key(self) -> Optional[str]:
-        """Get API key from APIConfiguration model or environment"""
+        """Get API key from APIConfiguration model or environment - ASYNC SAFE"""
         try:
-            from chat.models import APIConfiguration
+            # Check if we're in an async context by looking at the current thread
+            import asyncio
+            try:
+                # If this doesn't raise an exception, we're in an async context
+                loop = asyncio.get_running_loop()
+                in_async_context = True
+            except RuntimeError:
+                in_async_context = False
             
-            # Try to get API key from admin-configured sources
-            # Priority: Gemini (recommended for LangExtract) -> OpenAI -> Claude
-            for provider in ['gemini', 'openai', 'claude']:
-                try:
-                    config = APIConfiguration.objects.get(provider=provider, is_active=True)
-                    if config.api_key:
-                        logger.info(f"Using {provider} API key from admin configuration for LangExtract")
-                        return config.api_key
-                except APIConfiguration.DoesNotExist:
-                    continue
-            
-            # Fallback to environment variables
-            env_key = os.getenv('LANGEXTRACT_API_KEY') or getattr(settings, 'LANGEXTRACT_API_KEY', None)
-            if env_key:
-                logger.info("Using API key from environment for LangExtract")
-                return env_key
+            if in_async_context:
+                # We're in async context - can't use Django ORM directly
+                # Use environment variables only
+                env_key = os.getenv('LANGEXTRACT_API_KEY') or getattr(settings, 'LANGEXTRACT_API_KEY', None)
+                if env_key:
+                    logger.info("Using API key from environment for LangExtract (async context)")
+                    return env_key
                 
-            logger.warning("No API key found for LangExtract. Configure in Django admin or set LANGEXTRACT_API_KEY")
-            return None
+                # Try to get API key from pre-cached value if available
+                if hasattr(self, '_cached_api_key'):
+                    logger.info("Using cached API key for LangExtract (async context)")
+                    return self._cached_api_key
+                
+                logger.warning("No API key found for LangExtract in async context. Set LANGEXTRACT_API_KEY environment variable.")
+                return None
+            else:
+                # We're in sync context - safe to use Django ORM
+                from chat.models import APIConfiguration
+                
+                # Try to get API key from admin-configured sources
+                # Priority: Gemini (recommended for LangExtract) -> OpenAI -> Claude
+                for provider in ['gemini', 'openai', 'claude']:
+                    try:
+                        config = APIConfiguration.objects.get(provider=provider, is_active=True)
+                        if config.api_key:
+                            logger.info(f"Using {provider} API key from admin configuration for LangExtract")
+                            # Cache the key for async contexts
+                            self._cached_api_key = config.api_key
+                            return config.api_key
+                    except APIConfiguration.DoesNotExist:
+                        continue
+                
+                # Fallback to environment variables
+                env_key = os.getenv('LANGEXTRACT_API_KEY') or getattr(settings, 'LANGEXTRACT_API_KEY', None)
+                if env_key:
+                    logger.info("Using API key from environment for LangExtract")
+                    return env_key
+                    
+                logger.warning("No API key found for LangExtract. Configure in Django admin or set LANGEXTRACT_API_KEY")
+                return None
             
         except Exception as e:
             logger.error(f"Error getting API key for LangExtract: {e}")
@@ -351,17 +379,34 @@ class LangExtractService:
             return self._simulate_langextract_analysis(messages)
     
     def _get_provider_from_key(self) -> str:
-        """Determine which provider is being used based on the API key source"""
+        """Determine which provider is being used based on the API key source - ASYNC SAFE"""
         try:
-            from chat.models import APIConfiguration
-            for provider in ['gemini', 'openai', 'claude']:
-                try:
-                    config = APIConfiguration.objects.get(provider=provider, is_active=True)
-                    if config.api_key == self.api_key:
-                        return provider
-                except APIConfiguration.DoesNotExist:
-                    continue
-            return 'gemini'  # Default assumption
+            # Check if we're in an async context
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                in_async_context = True
+            except RuntimeError:
+                in_async_context = False
+            
+            if in_async_context:
+                # In async context - can't use Django ORM, return cached value or default
+                if hasattr(self, '_cached_provider'):
+                    return self._cached_provider
+                return 'gemini'  # Default assumption for async context
+            else:
+                # Safe to use Django ORM in sync context
+                from chat.models import APIConfiguration
+                for provider in ['gemini', 'openai', 'claude']:
+                    try:
+                        config = APIConfiguration.objects.get(provider=provider, is_active=True)
+                        if config.api_key == self.api_key:
+                            # Cache the provider for async contexts
+                            self._cached_provider = provider
+                            return provider
+                    except APIConfiguration.DoesNotExist:
+                        continue
+                return 'gemini'  # Default assumption
         except:
             return 'gemini'
     

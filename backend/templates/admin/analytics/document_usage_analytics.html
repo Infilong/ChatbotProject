@@ -1,0 +1,381 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+{% load l10n %}
+
+{% block title %}{% trans 'User Message Analytics' %} | {{ site_title|default:_('Django Administration') }}{% endblock %}
+
+{% block extrahead %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+.analytics-dashboard {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+.analytics-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.analytics-header h1 {
+    color: #2c3e50;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.stats-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.stat-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 2.2em;
+    font-weight: bold;
+}
+
+.stat-card p {
+    margin: 0;
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+.charts-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.chart-container {
+    background: white;
+    padding: 25px;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e1e5e9;
+}
+
+.chart-container h2 {
+    color: #2c3e50;
+    margin-bottom: 20px;
+    font-size: 1.3em;
+    text-align: center;
+}
+
+.data-tables {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 30px;
+}
+
+.table-container {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border: 1px solid #e1e5e9;
+    overflow: hidden;
+}
+
+.table-container h2 {
+    background: #f8f9fa;
+    color: #2c3e50;
+    padding: 20px;
+    margin: 0;
+    font-size: 1.3em;
+    border-bottom: 1px solid #e1e5e9;
+}
+
+.analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.analytics-table th {
+    background: #34495e;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.analytics-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.analytics-table tr:hover {
+    background: #f8f9fa;
+}
+
+.relevance-high { color: #27ae60; font-weight: bold; }
+.relevance-medium { color: #f39c12; font-weight: bold; }
+.relevance-low { color: #e74c3c; font-weight: bold; }
+
+.keywords-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.keyword-tag {
+    background: #3498db;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.9em;
+    font-weight: 500;
+}
+
+.keyword-count {
+    background: #2c3e50;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    margin-left: 5px;
+}
+
+@media (max-width: 768px) {
+    .charts-section {
+        grid-template-columns: 1fr;
+    }
+    
+    .data-tables {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-cards {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='analytics' %}">{% trans 'Analytics' %}</a>
+    &rsaquo; {% trans 'Document Usage Analytics' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-dashboard">
+    <div class="analytics-header">
+        <h1>{% trans 'User Message & Document Usage Analytics' %}</h1>
+        <p>{% blocktrans with start=start_date|date:"M d, Y" end=end_date|date:"M d, Y" %}User questions that triggered document usage: {{ start }} - {{ end }}{% endblocktrans %}</p>
+    </div>
+
+    <!-- Key Statistics Cards -->
+    <div class="stats-cards">
+        <div class="stat-card">
+            <h3>{{ total_usages|floatformat:0 }}</h3>
+            <p>{% trans 'User Messages Answered' %}</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ unique_documents|floatformat:0 }}</h3>
+            <p>{% trans 'Documents Utilized' %}</p>
+        </div>
+        <div class="stat-card">
+            <h3>{{ avg_relevance|floatformat:2 }}</h3>
+            <p>{% trans 'Average Relevance Score' %}</p>
+        </div>
+        <div class="stat-card">
+            <h3>{% if total_usages > 0 %}{{ unique_documents|div:total_usages|mul:100|floatformat:1 }}%{% else %}0%{% endif %}</h3>
+            <p>{% trans 'Document Coverage Rate' %}</p>
+        </div>
+    </div>
+
+    <!-- Charts Section -->
+    <div class="charts-section">
+        <div class="chart-container">
+            <h2>{% trans 'Most Referenced Documents' %}</h2>
+            <canvas id="documentsChart"></canvas>
+        </div>
+        
+        <div class="chart-container">
+            <h2>{% trans 'Question Categories Distribution' %}</h2>
+            <canvas id="intentChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Data Tables -->
+    <div class="data-tables">
+        <div class="table-container">
+            <h2>{% trans 'Top Performing Documents' %}</h2>
+            <table class="analytics-table">
+                <thead>
+                    <tr>
+                        <th>{% trans 'Document Name' %}</th>
+                        <th>{% trans 'Usage Count' %}</th>
+                        <th>{% trans 'Avg Relevance' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for doc in top_documents %}
+                    <tr>
+                        <td>{{ doc.document__name|truncatechars:50 }}</td>
+                        <td>{{ doc.usage_count }}</td>
+                        <td>
+                            {% if doc.avg_relevance >= 0.8 %}
+                                <span class="relevance-high">{{ doc.avg_relevance|floatformat:2 }}</span>
+                            {% elif doc.avg_relevance >= 0.5 %}
+                                <span class="relevance-medium">{{ doc.avg_relevance|floatformat:2 }}</span>
+                            {% else %}
+                                <span class="relevance-low">{{ doc.avg_relevance|floatformat:2 }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3">{% trans 'No document usage data available.' %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="table-container">
+            <h2>{% trans 'User Intent Analysis' %}</h2>
+            <table class="analytics-table">
+                <thead>
+                    <tr>
+                        <th>{% trans 'Intent' %}</th>
+                        <th>{% trans 'Count' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for intent in intent_stats %}
+                    <tr>
+                        <td>{{ intent.user_intent|capfirst|default:"Unknown" }}</td>
+                        <td>{{ intent.count }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="2">{% trans 'No intent data available.' %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Popular Keywords -->
+    {% if keyword_counts %}
+    <div class="table-container">
+        <h2>{% trans 'Most Matched Keywords' %}</h2>
+        <div class="keywords-list">
+            {% for keyword, count in keyword_counts %}
+                <span class="keyword-tag">
+                    {{ keyword }}
+                    <span class="keyword-count">{{ count }}</span>
+                </span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// Documents Usage Chart
+const documentsCtx = document.getElementById('documentsChart').getContext('2d');
+const documentsChart = new Chart(documentsCtx, {
+    type: 'bar',
+    data: {
+        labels: [
+            {% for doc in top_documents %}
+                '{{ doc.document__name|truncatechars:20|escapejs }}'{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ],
+        datasets: [{
+            label: '{% trans "Usage Count" %}',
+            data: [
+                {% for doc in top_documents %}
+                    {{ doc.usage_count }}{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            backgroundColor: [
+                '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6',
+                '#1abc9c', '#34495e', '#f1c40f', '#e67e22', '#95a5a6'
+            ],
+            borderColor: [
+                '#2980b9', '#27ae60', '#e67e22', '#c0392b', '#8e44ad',
+                '#16a085', '#2c3e50', '#f39c12', '#d35400', '#7f8c8d'
+            ],
+            borderWidth: 1
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        },
+        plugins: {
+            legend: {
+                display: false
+            }
+        }
+    }
+});
+
+// User Intent Distribution Chart
+const intentCtx = document.getElementById('intentChart').getContext('2d');
+const intentChart = new Chart(intentCtx, {
+    type: 'doughnut',
+    data: {
+        labels: [
+            {% for intent in intent_stats %}
+                '{{ intent.user_intent|capfirst|default:"Unknown"|escapejs }}'{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        ],
+        datasets: [{
+            data: [
+                {% for intent in intent_stats %}
+                    {{ intent.count }}{% if not forloop.last %},{% endif %}
+                {% endfor %}
+            ],
+            backgroundColor: [
+                '#3498db', '#2ecc71', '#f39c12', '#e74c3c', '#9b59b6',
+                '#1abc9c', '#34495e', '#f1c40f'
+            ],
+            borderColor: '#fff',
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Resize charts on window resize
+window.addEventListener('resize', function() {
+    documentsChart.resize();
+    intentChart.resize();
+});
+</script>
+{% endblock %}

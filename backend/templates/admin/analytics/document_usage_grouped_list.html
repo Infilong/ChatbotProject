@@ -1,0 +1,285 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+.grouped-usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    background: white;
+}
+
+.grouped-usage-table th {
+    background: #417690;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid #2d5a6b;
+}
+
+.grouped-usage-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.grouped-usage-table tr:hover {
+    background: #f8f9fa;
+}
+
+.user-message-cell {
+    max-width: 300px;
+    word-wrap: break-word;
+}
+
+.user-message-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.user-message-link:hover {
+    text-decoration: underline;
+}
+
+.category-badge {
+    background: #1976D2;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.category-badge.technical { background: #1976D2; }
+.category-badge.support { background: #388E3C; }
+.category-badge.compliance { background: #F57C00; }
+.category-badge.services { background: #7B1FA2; }
+.category-badge.general { background: #616161; }
+
+.document-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.document-link:hover {
+    text-decoration: underline;
+}
+
+.usage-count {
+    font-weight: bold;
+    font-size: 16px;
+    color: #1976d2;
+    text-align: center;
+}
+
+.keyword-badge {
+    background: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-right: 3px;
+    margin-bottom: 2px;
+    display: inline-block;
+}
+
+.excerpt-container {
+    max-width: 400px;
+    word-wrap: break-word;
+}
+
+.show-full-btn {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-top: 3px;
+    cursor: pointer;
+}
+
+.show-full-btn:hover {
+    background: #005a85;
+}
+
+.timestamp-cell {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.analytics-header {
+    background: #f8f9fa;
+    padding: 15px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+.analytics-header h2 {
+    margin: 0 0 5px 0;
+    color: #2c3e50;
+}
+
+.analytics-header p {
+    margin: 0;
+    color: #6c757d;
+}
+</style>
+
+<script>
+function toggleExcerpt(id) {
+    var preview = document.getElementById('preview_' + id);
+    var full = document.getElementById('full_' + id);
+    var btn = event.target;
+    
+    if (preview.style.display === 'none') {
+        preview.style.display = 'inline';
+        full.style.display = 'none';
+        btn.textContent = 'Show Full Text';
+    } else {
+        preview.style.display = 'none';
+        full.style.display = 'inline';
+        btn.textContent = 'Show Less';
+    }
+}
+
+function showMessageDetails(searchQuery, documentId) {
+    // Navigate to detailed view of all instances
+    var url = '{% url "admin:analytics_documentusage_message_details" %}?search_query=' + encodeURIComponent(searchQuery) + '&document=' + documentId;
+    window.location.href = url;
+}
+</script>
+{% endblock %}
+
+{% block content_title %}
+<div class="analytics-header">
+    <h2>{% trans 'Document Usage Analytics - Grouped by User Messages' %}</h2>
+    <p>{% trans 'Shows unique user messages that triggered document usage, grouped and aggregated for analysis' %}</p>
+</div>
+{% endblock %}
+
+{% block result_list %}
+{% if grouped_usages %}
+<div class="results">
+    <table class="grouped-usage-table">
+        <thead>
+            <tr>
+                <th>{% trans 'User Message (Latest)' %}</th>
+                <th>{% trans 'Question Category' %}</th>
+                <th>{% trans 'Document' %}</th>
+                <th>{% trans 'Usage Count' %}</th>
+                <th>{% trans 'Excerpt Used' %}</th>
+                <th>{% trans 'Keywords' %}</th>
+                <th>{% trans 'Last Used' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in grouped_usages %}
+            <tr>
+                <!-- User Message (Clickable) -->
+                <td class="user-message-cell">
+                    <a href="javascript:void(0)" 
+                       onclick="showMessageDetails('{{ group.search_query|escapejs }}', {{ group.document.id }})"
+                       class="user-message-link"
+                       title="Click to see all {{ group.usage_count }} instance(s) of this message">
+                        {{ group.search_query }}
+                    </a>
+                </td>
+                
+                <!-- Question Category -->
+                <td>
+                    {% with category=group.latest_usage.user_intent|default:group.latest_usage.context_category|default:"general" %}
+                    <span class="category-badge category-{{ category|lower }}">
+                        {{ category|capfirst|default:"General" }}
+                    </span>
+                    {% endwith %}
+                </td>
+                
+                <!-- Document Name -->
+                <td>
+                    <a href="{% url 'admin:documents_document_change' group.document.uuid %}" 
+                       class="document-link"
+                       title="{{ group.document.name }}">
+                        {{ group.document.name }}
+                    </a>
+                </td>
+                
+                <!-- Usage Count -->
+                <td class="usage-count">
+                    {{ group.usage_count }}
+                </td>
+                
+                <!-- Combined Excerpts -->
+                <td class="excerpt-container">
+                    {% if group.combined_excerpts %}
+                        {% for excerpt in group.combined_excerpts|slice:":2" %}
+                            {% if forloop.counter0 > 0 %}<hr style="margin: 5px 0;">{% endif %}
+                            {% if excerpt|length <= 150 %}
+                                <span>{{ excerpt }}</span>
+                            {% else %}
+                                <div>
+                                    <span id="preview_{{ group.latest_usage.id }}_{{ forloop.counter0 }}">{{ excerpt|slice:":150" }}...</span>
+                                    <span id="full_{{ group.latest_usage.id }}_{{ forloop.counter0 }}" style="display:none;">{{ excerpt }}</span><br>
+                                    <button type="button" 
+                                            onclick="toggleExcerpt('{{ group.latest_usage.id }}_{{ forloop.counter0 }}')"
+                                            class="show-full-btn">
+                                        Show Full Text
+                                    </button>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if group.combined_excerpts|length > 2 %}
+                            <div style="color: #666; font-size: 11px; margin-top: 5px;">
+                                ... and {{ group.combined_excerpts|length|add:"-2" }} more excerpt(s)
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">No excerpts</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Combined Keywords -->
+                <td>
+                    {% if group.combined_keywords %}
+                        {% for keyword in group.combined_keywords|slice:":8" %}
+                            <span class="keyword-badge">{{ keyword }}</span>
+                        {% endfor %}
+                        {% if group.combined_keywords|length > 8 %}
+                            <span style="color: gray; font-size: 11px;">+{{ group.combined_keywords|length|add:"-8" }} more</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">None</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Last Used Timestamp -->
+                <td class="timestamp-cell">
+                    {{ group.latest_usage.referenced_at|date:"Y-m-d H:i" }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 4px;">
+        <p><strong>{% trans 'Summary:' %}</strong></p>
+        <ul>
+            <li>{% trans 'Total unique message patterns:' %} {{ grouped_usages|length }}</li>
+            <li>{% trans 'Click on any user message to see all instances' %}</li>
+            <li>{% trans 'Usage count shows how many times each message pattern triggered document usage' %}</li>
+            <li>{% trans 'Excerpts are combined from all instances of the same message pattern' %}</li>
+        </ul>
+    </div>
+</div>
+{% else %}
+<div class="results">
+    <p>{% trans 'No document usage data available.' %}</p>
+</div>
+{% endif %}
+{% endblock %}

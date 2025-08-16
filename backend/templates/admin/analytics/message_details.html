@@ -1,0 +1,289 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static admin_list %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django Administration') }}{% endblock %}
+
+{% block extrahead %}
+<style>
+.message-details-container {
+    padding: 20px;
+    max-width: 1200px;
+}
+
+.details-header {
+    background: #f8f9fa;
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.details-header h1 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    font-size: 1.5em;
+}
+
+.details-header p {
+    margin: 0;
+    color: #6c757d;
+}
+
+.instances-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.instances-table th {
+    background: #417690;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.instances-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.instances-table tr:hover {
+    background: #f8f9fa;
+}
+
+.excerpt-cell {
+    max-width: 400px;
+    word-wrap: break-word;
+}
+
+.user-info {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.user-info:hover {
+    text-decoration: underline;
+}
+
+.timestamp-cell {
+    white-space: nowrap;
+    font-size: 12px;
+    color: #666;
+}
+
+.document-cell {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.document-cell:hover {
+    text-decoration: underline;
+}
+
+.keyword-tag {
+    background: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-right: 3px;
+    display: inline-block;
+}
+
+.show-full-btn {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-top: 3px;
+    cursor: pointer;
+}
+
+.show-full-btn:hover {
+    background: #005a85;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.summary-stats {
+    background: #e8f4fd;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.summary-stats ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.summary-stats li {
+    margin-bottom: 5px;
+}
+</style>
+
+<script>
+function toggleExcerpt(id) {
+    var preview = document.getElementById('preview_' + id);
+    var full = document.getElementById('full_' + id);
+    var btn = event.target;
+    
+    if (preview.style.display === 'none') {
+        preview.style.display = 'inline';
+        full.style.display = 'none';
+        btn.textContent = 'Show Full Text';
+    } else {
+        preview.style.display = 'none';
+        full.style.display = 'inline';
+        btn.textContent = 'Show Less';
+    }
+}
+</script>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='analytics' %}">{% trans 'Analytics' %}</a>
+    &rsaquo; <a href="{% url 'admin:analytics_documentusage_changelist' %}">{% trans 'Document Usage' %}</a>
+    &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="message-details-container">
+    <a href="{% url 'admin:analytics_documentusage_changelist' %}" class="back-link">
+        ← {% trans 'Back to Document Usage List' %}
+    </a>
+    
+    <div class="details-header">
+        <h1>{{ title }}</h1>
+        <p>{% blocktrans with count=total_count %}Showing all {{ count }} instance(s) of this user message{% endblocktrans %}</p>
+    </div>
+    
+    {% if usage_instances %}
+    <div class="summary-stats">
+        <strong>{% trans 'Quick Summary:' %}</strong>
+        <ul>
+            <li>{% trans 'Total occurrences:' %} {{ total_count }}</li>
+            <li>{% trans 'Documents referenced:' %} {% regroup usage_instances by document as doc_groups %}{{ doc_groups|length }}</li>
+            <li>{% trans 'Users who asked this:' %} {% regroup usage_instances by conversation.user as user_groups %}{{ user_groups|length }}</li>
+            <li>{% trans 'Date range:' %} {{ usage_instances.last.referenced_at|date:"M d, Y" }} - {{ usage_instances.first.referenced_at|date:"M d, Y" }}</li>
+        </ul>
+    </div>
+    
+    <table class="instances-table">
+        <thead>
+            <tr>
+                <th>{% trans 'Date & Time' %}</th>
+                <th>{% trans 'User' %}</th>
+                <th>{% trans 'Conversation' %}</th>
+                <th>{% trans 'Document Used' %}</th>
+                <th>{% trans 'Excerpt' %}</th>
+                <th>{% trans 'Keywords' %}</th>
+                <th>{% trans 'Relevance' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for usage in usage_instances %}
+            <tr>
+                <!-- Timestamp -->
+                <td class="timestamp-cell">
+                    {{ usage.referenced_at|date:"Y-m-d H:i:s" }}
+                </td>
+                
+                <!-- User -->
+                <td>
+                    <a href="{% url 'admin:auth_user_change' usage.conversation.user.id %}" class="user-info">
+                        {{ usage.conversation.user.username }}
+                    </a>
+                </td>
+                
+                <!-- Conversation -->
+                <td>
+                    <a href="{% url 'admin:chat_conversation_change' usage.conversation.id %}" class="user-info">
+                        Conv #{{ usage.conversation.id }}
+                    </a>
+                </td>
+                
+                <!-- Document -->
+                <td>
+                    <a href="{% url 'admin:documents_document_change' usage.document.uuid %}" class="document-cell">
+                        {{ usage.document.name }}
+                    </a>
+                </td>
+                
+                <!-- Excerpt -->
+                <td class="excerpt-cell">
+                    {% if usage.excerpt_used %}
+                        {% if usage.excerpt_used|length <= 150 %}
+                            {{ usage.excerpt_used }}
+                        {% else %}
+                            <div>
+                                <span id="preview_{{ usage.id }}">{{ usage.excerpt_used|slice:":150" }}...</span>
+                                <span id="full_{{ usage.id }}" style="display:none;">{{ usage.excerpt_used }}</span><br>
+                                <button type="button" 
+                                        onclick="toggleExcerpt('{{ usage.id }}')"
+                                        class="show-full-btn">
+                                    Show Full Text
+                                </button>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">No excerpt</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Keywords -->
+                <td>
+                    {% if usage.keywords_matched %}
+                        {% for keyword in usage.keywords_matched|slice:":5" %}
+                            <span class="keyword-tag">{{ keyword }}</span>
+                        {% endfor %}
+                        {% if usage.keywords_matched|length > 5 %}
+                            <span style="color: gray; font-size: 11px;">+{{ usage.keywords_matched|length|add:"-5" }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">None</span>
+                    {% endif %}
+                </td>
+                
+                <!-- Relevance Score -->
+                <td>
+                    {% if usage.relevance_score %}
+                        {% if usage.relevance_score >= 0.8 %}
+                            <span style="color: green; font-weight: bold;">{{ usage.relevance_score|floatformat:2 }}</span>
+                        {% elif usage.relevance_score >= 0.5 %}
+                            <span style="color: orange; font-weight: bold;">{{ usage.relevance_score|floatformat:2 }}</span>
+                        {% else %}
+                            <span style="color: red; font-weight: bold;">{{ usage.relevance_score|floatformat:2 }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: #666;">
+        <p>{% trans 'No instances found for this message.' %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

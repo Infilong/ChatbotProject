@@ -1,0 +1,286 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block title %}{{ title }} | {{ site_title|default:_('Django Administration') }}{% endblock %}
+
+{% block extrahead %}
+<style>
+.grouped-usage-container {
+    padding: 20px;
+    max-width: 1400px;
+}
+
+.grouped-usage-header {
+    background: #f8f9fa;
+    padding: 20px;
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.grouped-usage-header h1 {
+    margin: 0 0 10px 0;
+    color: #2c3e50;
+    font-size: 1.5em;
+}
+
+.grouped-usage-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.grouped-usage-table th {
+    background: #417690;
+    color: white;
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+}
+
+.grouped-usage-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.grouped-usage-table tr:hover {
+    background: #f8f9fa;
+}
+
+.user-message-link {
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.user-message-link:hover {
+    text-decoration: underline;
+}
+
+.category-badge {
+    background: #1976D2;
+    color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.category-badge.technical { background: #1976D2; }
+.category-badge.support { background: #388E3C; }
+.category-badge.compliance { background: #F57C00; }
+.category-badge.services { background: #7B1FA2; }
+.category-badge.general { background: #616161; }
+
+.document-link {
+    color: #2563eb;
+    text-decoration: none;
+}
+
+.document-link:hover {
+    text-decoration: underline;
+}
+
+.usage-count {
+    font-weight: bold;
+    font-size: 16px;
+    color: #1976d2;
+    text-align: center;
+}
+
+.keyword-badge {
+    background: #e3f2fd;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    margin-right: 3px;
+    margin-bottom: 2px;
+    display: inline-block;
+}
+
+.show-full-btn {
+    background: #007cba;
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    margin-top: 3px;
+    cursor: pointer;
+}
+
+.show-full-btn:hover {
+    background: #005a85;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.summary-info {
+    background: #e8f4fd;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+</style>
+
+<script>
+function toggleExcerpt(id) {
+    var preview = document.getElementById('preview_' + id);
+    var full = document.getElementById('full_' + id);
+    var btn = event.target;
+    
+    if (preview.style.display === 'none') {
+        preview.style.display = 'inline';
+        full.style.display = 'none';
+        btn.textContent = 'Show Full Text';
+    } else {
+        preview.style.display = 'none';
+        full.style.display = 'inline';
+        btn.textContent = 'Show Less';
+    }
+}
+
+function showMessageDetails(searchQuery, documentId) {
+    var url = '{% url "admin:analytics_documentusage_message_details" %}?search_query=' + encodeURIComponent(searchQuery) + '&document=' + documentId;
+    window.location.href = url;
+}
+</script>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='analytics' %}">{% trans 'Analytics' %}</a>
+    &rsaquo; <a href="{% url 'admin:analytics_documentusage_changelist' %}">{% trans 'Document Usage' %}</a>
+    &rsaquo; {% trans 'Grouped View' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="grouped-usage-container">
+    <a href="{% url 'admin:analytics_documentusage_changelist' %}" class="back-link">
+        ← {% trans 'Back to Individual Records' %}
+    </a>
+    
+    <div class="grouped-usage-header">
+        <h1>{{ title }}</h1>
+        <p>{% trans 'Shows unique user messages that triggered document usage, grouped and aggregated for analysis' %}</p>
+    </div>
+    
+    {% if grouped_usages %}
+    <div class="summary-info">
+        <strong>{% trans 'Summary:' %}</strong>
+        {% blocktrans with count=grouped_usages|length %}Showing {{ count }} unique message patterns{% endblocktrans %} |
+        <a href="{% url 'admin:analytics_documentusage_analytics' %}">{% trans 'View Analytics Dashboard' %}</a>
+    </div>
+    
+    <table class="grouped-usage-table">
+        <thead>
+            <tr>
+                <th>{% trans 'User Message (Latest)' %}</th>
+                <th>{% trans 'Question Category' %}</th>
+                <th>{% trans 'Document' %}</th>
+                <th>{% trans 'Usage Count' %}</th>
+                <th>{% trans 'Excerpt Used' %}</th>
+                <th>{% trans 'Keywords' %}</th>
+                <th>{% trans 'Last Used' %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for group in grouped_usages %}
+            <tr>
+                <td style="max-width: 300px; word-wrap: break-word;">
+                    <a href="javascript:void(0)" 
+                       onclick="showMessageDetails('{{ group.search_query|escapejs }}', {{ group.document.id }})"
+                       class="user-message-link"
+                       title="Click to see all {{ group.usage_count }} instance(s)">
+                        {{ group.search_query }}
+                    </a>
+                </td>
+                
+                <td>
+                    {% with category=group.latest_usage.user_intent|default:group.latest_usage.context_category|default:"general" %}
+                    <span class="category-badge category-{{ category|lower }}">
+                        {{ category|capfirst|default:"General" }}
+                    </span>
+                    {% endwith %}
+                </td>
+                
+                <td>
+                    <a href="{% url 'admin:documents_document_change' group.document.uuid %}" 
+                       class="document-link">
+                        {{ group.document.name }}
+                    </a>
+                </td>
+                
+                <td class="usage-count">
+                    {{ group.usage_count }}
+                </td>
+                
+                <td style="max-width: 400px; word-wrap: break-word;">
+                    {% if group.combined_excerpts %}
+                        {% for excerpt in group.combined_excerpts|slice:":2" %}
+                            {% if forloop.counter0 > 0 %}<hr style="margin: 5px 0;">{% endif %}
+                            {% if excerpt|length <= 150 %}
+                                {{ excerpt }}
+                            {% else %}
+                                <div>
+                                    <span id="preview_{{ group.latest_usage.id }}_{{ forloop.counter0 }}">{{ excerpt|slice:":150" }}...</span>
+                                    <span id="full_{{ group.latest_usage.id }}_{{ forloop.counter0 }}" style="display:none;">{{ excerpt }}</span><br>
+                                    <button type="button" 
+                                            onclick="toggleExcerpt('{{ group.latest_usage.id }}_{{ forloop.counter0 }}')"
+                                            class="show-full-btn">
+                                        Show Full Text
+                                    </button>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if group.combined_excerpts|length > 2 %}
+                            <div style="color: #666; font-size: 11px; margin-top: 5px;">
+                                +{{ group.combined_excerpts|length|add:"-2" }} more excerpt(s)
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">No excerpts</span>
+                    {% endif %}
+                </td>
+                
+                <td>
+                    {% if group.combined_keywords %}
+                        {% for keyword in group.combined_keywords|slice:":6" %}
+                            <span class="keyword-badge">{{ keyword }}</span>
+                        {% endfor %}
+                        {% if group.combined_keywords|length > 6 %}
+                            <span style="color: gray; font-size: 11px;">+{{ group.combined_keywords|length|add:"-6" }}</span>
+                        {% endif %}
+                    {% else %}
+                        <span style="color: gray;">None</span>
+                    {% endif %}
+                </td>
+                
+                <td style="white-space: nowrap; font-size: 12px; color: #666;">
+                    {{ group.latest_usage.referenced_at|date:"Y-m-d H:i" }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding: 40px; text-align: center; color: #666;">
+        <p>{% trans 'No document usage data available.' %}</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -314,104 +314,177 @@ class Document(models.Model):
         self.save(update_fields=['reference_count', 'last_referenced'])
     
     def get_relevance_score(self, query: str) -> float:
-        """Calculate relevance score for a query with fuzzy matching for typo tolerance"""
+        """Calculate hybrid relevance score combining multiple strategies"""
         if not self.extracted_text and not self.ai_summary:
             return 0.0
         
         query_lower = query.lower().strip()
-        score = 0.0
+        total_score = 0.0
         
-        # Import fuzzy matching library
+        # HYBRID SCORING: Combine multiple search strategies
+        
+        # 1. Traditional fuzzy matching score (base score)
+        base_score = self._get_fuzzy_relevance_score(query)
+        total_score += base_score * 0.4  # 40% weight
+        
+        # 2. Semantic concept matching score
+        semantic_score = self._get_semantic_relevance_score(query)
+        total_score += semantic_score * 0.3  # 30% weight
+        
+        # 3. Keyword density score
+        keyword_score = self._get_keyword_density_score(query)
+        total_score += keyword_score * 0.2  # 20% weight
+        
+        # 4. Q&A pattern matching score
+        qa_score = self._get_qa_pattern_score(query)
+        total_score += qa_score * 0.1  # 10% weight
+        
+        # Apply document effectiveness multipliers
+        total_score *= (1 + self.effectiveness_score / 10)
+        total_score *= (1 + min(self.reference_count / 100, 0.5))
+        
+        return total_score
+    
+    def _get_fuzzy_relevance_score(self, query: str) -> float:
+        """Traditional fuzzy matching score (fallback method)"""
         try:
             from rapidfuzz import fuzz, process
         except ImportError:
-            # Fallback to original exact matching if rapidfuzz not available
             return self._get_exact_relevance_score(query)
         
-        # Check title relevance (higher weight)
+        query_lower = query.lower().strip()
+        score = 0.0
+        
+        # Check title relevance
         if query_lower in self.name.lower():
             score += 2.0
         else:
-            # Fuzzy match with title
             title_ratio = fuzz.partial_ratio(query_lower, self.name.lower())
-            if title_ratio > 80:  # High similarity threshold
+            if title_ratio > 80:
                 score += 1.5 * (title_ratio / 100)
         
-        # Check keywords relevance with fuzzy matching (high weight)
+        # Check keywords relevance
         for keyword in self.ai_keywords:
             if isinstance(keyword, str):
                 keyword_lower = keyword.lower()
                 if query_lower in keyword_lower:
                     score += 1.5
                 else:
-                    # Fuzzy match with keywords
                     keyword_ratio = fuzz.partial_ratio(query_lower, keyword_lower)
-                    if keyword_ratio > 75:  # Medium-high similarity threshold
+                    if keyword_ratio > 75:
                         score += 1.2 * (keyword_ratio / 100)
         
-        # Check category relevance
-        if self.category:
-            if query_lower in self.category.lower():
-                score += 1.0
-            else:
-                # Fuzzy match with category
-                category_ratio = fuzz.partial_ratio(query_lower, self.category.lower())
-                if category_ratio > 70:
-                    score += 0.8 * (category_ratio / 100)
-        
-        # Check tags relevance with fuzzy matching
-        for tag in self.get_tags_list():
-            tag_lower = tag.lower()
-            if query_lower in tag_lower:
-                score += 1.0
-            else:
-                # Fuzzy match with tags
-                tag_ratio = fuzz.partial_ratio(query_lower, tag_lower)
-                if tag_ratio > 70:
-                    score += 0.8 * (tag_ratio / 100)
-        
-        # Enhanced content relevance with fuzzy matching
+        # Content matching
         if self.extracted_text:
             content_lower = self.extracted_text.lower()
-            # Full query match (higher score)
             if query_lower in content_lower:
                 score += 0.5
             else:
-                # Enhanced individual word matches with fuzzy matching
-                query_words = query_lower.split()
-                for word in query_words:
-                    if len(word) > 2:  # Skip very short words
-                        if word in content_lower:
-                            score += 0.1
-                        else:
-                            # Fuzzy match individual words in content
-                            content_words = content_lower.split()
-                            best_match = process.extractOne(word, content_words, scorer=fuzz.ratio)
-                            if best_match and best_match[1] > 80:  # High similarity for content words
-                                score += 0.08 * (best_match[1] / 100)  # Slightly lower than exact match
-        
-        # Enhanced summary matching with fuzzy matching
-        if self.ai_summary:
-            summary_lower = self.ai_summary.lower()
-            if query_lower in summary_lower:
-                score += 0.8
-            else:
-                # Enhanced individual word matches in summary with fuzzy matching
                 query_words = query_lower.split()
                 for word in query_words:
                     if len(word) > 2:
-                        if word in summary_lower:
-                            score += 0.15
-                        else:
-                            # Fuzzy match words in summary
-                            summary_words = summary_lower.split()
-                            best_match = process.extractOne(word, summary_words, scorer=fuzz.ratio)
-                            if best_match and best_match[1] > 80:  # High similarity for summary words
-                                score += 0.12 * (best_match[1] / 100)
+                        if word in content_lower:
+                            score += 0.1
         
-        # Boost score based on effectiveness and usage
-        score *= (1 + self.effectiveness_score / 10)
-        score *= (1 + min(self.reference_count / 100, 0.5))
+        return score
+    
+    def _get_semantic_relevance_score(self, query: str) -> float:
+        """Semantic concept matching score"""
+        query_lower = query.lower()
+        text_lower = self.extracted_text.lower() if self.extracted_text else ""
+        score = 0.0
+        
+        # Universal semantic concept mappings for any industry
+        semantic_concepts = {
+            'support': ['assistance', 'help', 'service', 'care', 'maintenance', 'guidance', 'aid'],
+            'price': ['cost', 'fee', 'rate', 'charge', 'payment', 'billing', 'quote', 'estimate'],
+            'quality': ['standard', 'excellence', 'performance', 'reliability', 'effectiveness'],
+            'time': ['schedule', 'timeline', 'duration', 'deadline', 'delivery', 'timeframe'],
+            'process': ['procedure', 'method', 'workflow', 'system', 'approach', 'technique'],
+            'team': ['staff', 'personnel', 'employee', 'expert', 'specialist', 'professional'],
+            'product': ['item', 'goods', 'offering', 'solution', 'service', 'package'],
+            'customer': ['client', 'user', 'consumer', 'buyer', 'patron', 'account'],
+            'company': ['business', 'organization', 'firm', 'corporation', 'enterprise'],
+            'contact': ['reach', 'communicate', 'connect', 'call', 'email', 'inquiry'],
+            'order': ['purchase', 'buy', 'transaction', 'booking', 'request'],
+            'delivery': ['shipping', 'transport', 'distribution', 'fulfillment'],
+            'return': ['refund', 'exchange', 'replacement', 'cancel'],
+            'warranty': ['guarantee', 'coverage', 'protection', 'insurance'],
+            'training': ['education', 'learning', 'instruction', 'course'],
+            'location': ['address', 'place', 'site', 'facility', 'office'],
+            'problem': ['issue', 'trouble', 'difficulty', 'challenge', 'concern']
+        }
+        
+        # Check for semantic matches
+        for concept, related_terms in semantic_concepts.items():
+            if concept in query_lower:
+                # Look for related terms in document
+                for term in related_terms:
+                    if term in text_lower:
+                        score += 1.0 if term in query_lower else 0.7
+        
+        return score
+    
+    def _get_keyword_density_score(self, query: str) -> float:
+        """Calculate keyword density and proximity score"""
+        if not self.extracted_text:
+            return 0.0
+        
+        text_lower = self.extracted_text.lower()
+        query_lower = query.lower()
+        
+        # Extract meaningful keywords
+        stop_words = {'the', 'and', 'are', 'you', 'for', 'with', 'this', 'that', 'have', 'can', 'what', 'how'}
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2 and word.strip() not in stop_words]
+        
+        if not query_words:
+            return 0.0
+        
+        # Calculate keyword density
+        matches = sum(1 for word in query_words if word in text_lower)
+        density_score = (matches / len(query_words)) * 2.0
+        
+        # Check for phrase proximity (words appearing near each other)
+        proximity_bonus = 0.0
+        for i, word1 in enumerate(query_words[:-1]):
+            word2 = query_words[i + 1]
+            if word1 in text_lower and word2 in text_lower:
+                # Check if words appear within 50 characters of each other
+                word1_pos = text_lower.find(word1)
+                word2_pos = text_lower.find(word2, word1_pos)
+                if word2_pos != -1 and word2_pos - word1_pos < 50:
+                    proximity_bonus += 0.5
+        
+        return density_score + proximity_bonus
+    
+    def _get_qa_pattern_score(self, query: str) -> float:
+        """Calculate Q&A pattern matching score"""
+        if not self.extracted_text:
+            return 0.0
+        
+        text_lower = self.extracted_text.lower()
+        query_lower = query.lower()
+        
+        # Look for Q&A patterns
+        import re
+        score = 0.0
+        
+        # Find questions in the document
+        question_patterns = [r'q:\s*([^?]+\?)', r'question:\s*([^?]+\?)']
+        
+        for pattern in question_patterns:
+            matches = re.finditer(pattern, text_lower, re.IGNORECASE)
+            for match in matches:
+                question = match.group(1) if match.groups() else match.group(0)
+                
+                # Calculate similarity between user query and document question
+                question_words = set(question.lower().split())
+                query_words = set(query_lower.split())
+                overlap = len(question_words & query_words)
+                
+                if overlap > 0:
+                    similarity = overlap / max(len(question_words), len(query_words))
+                    score += similarity * 3.0  # High score for Q&A matches
         
         return score
     
@@ -468,34 +541,79 @@ class Document(models.Model):
         
         return score
     
+    def clean_text_for_chatbot(self, text: str) -> str:
+        """Clean document text for chatbot consumption by removing formatting characters"""
+        if not text:
+            return ""
+        
+        # Remove markdown-style formatting
+        cleaned_text = text
+        
+        # Remove ** bold markers but preserve the text between them
+        # Handle both **text** and *text* patterns
+        import re
+        
+        # Replace **bold text** with just the text
+        cleaned_text = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_text)
+        
+        # Replace *italic text* with just the text  
+        cleaned_text = re.sub(r'\*(.*?)\*', r'\1', cleaned_text)
+        
+        # Clean up any remaining standalone asterisks
+        cleaned_text = re.sub(r'\*+', '', cleaned_text)
+        
+        # Clean up excessive whitespace that might result from removing formatting
+        cleaned_text = re.sub(r'\s+', ' ', cleaned_text)
+        
+        # Clean up any double spaces or newlines
+        cleaned_text = re.sub(r'\n\s*\n', '\n\n', cleaned_text)
+        
+        return cleaned_text.strip()
+
     def get_excerpt(self, query: str = None, max_length: int = 300) -> str:
-        """Get relevant excerpt from document for context with semantic matching"""
+        """Get relevant excerpt from document using hybrid LLM + keyword search"""
         if not self.extracted_text:
-            return self.ai_summary[:max_length] if self.ai_summary else ""
+            return self.clean_text_for_chatbot(self.ai_summary[:max_length]) if self.ai_summary else ""
         
         if not query:
             # Return beginning of text if no query
-            return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
+            excerpt = self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
+            return self.clean_text_for_chatbot(excerpt)
         
-        # Enhanced excerpt generation with semantic matching
-        text = self.extracted_text.lower()
-        query_lower = query.lower()
-        query_words = query_lower.split()
+        # HYBRID SEARCH: Try multiple strategies and score them
+        candidates = []
         
-        # First try exact phrase match
-        query_pos = text.find(query_lower)
-        if query_pos != -1:
-            # Found exact match, extract context around it
-            start = max(0, query_pos - max_length // 2)
-            end = min(len(self.extracted_text), start + max_length)
-            excerpt = self.extracted_text[start:end]
+        # Strategy 1: Exact phrase match (highest priority)
+        exact_match = self._find_exact_phrase_excerpt(query, max_length)
+        if exact_match:
+            candidates.append(("exact", exact_match, 10.0))
+        
+        # Strategy 2: Keyword-based search (multiple keywords)
+        keyword_excerpts = self._find_keyword_excerpts(query, max_length)
+        for excerpt, score in keyword_excerpts:
+            candidates.append(("keyword", excerpt, score))
+        
+        # Strategy 3: Semantic/conceptual search (related terms)
+        semantic_excerpts = self._find_semantic_excerpts(query, max_length)
+        for excerpt, score in semantic_excerpts:
+            candidates.append(("semantic", excerpt, score))
+        
+        # Strategy 4: Question/Answer pattern matching
+        qa_excerpt = self._find_qa_pattern_excerpt(query, max_length)
+        if qa_excerpt:
+            candidates.append(("qa", qa_excerpt, 8.0))
+        
+        # Choose the best candidate
+        if candidates:
+            # Sort by score (descending)
+            candidates.sort(key=lambda x: x[2], reverse=True)
+            best_strategy, best_excerpt, best_score = candidates[0]
             
-            # Add ellipsis if needed
-            if start > 0:
-                excerpt = "..." + excerpt
-            if end < len(self.extracted_text):
-                excerpt = excerpt + "..."
-            return excerpt
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Excerpt strategy '{best_strategy}' (score: {best_score:.2f}) for query: '{query[:50]}...'")
+            
+            return self.clean_text_for_chatbot(best_excerpt)
         
         # Split into larger chunks (paragraphs and sections) for better semantic matching
         # Look for question sections, paragraphs, or logical sections
@@ -518,17 +636,9 @@ class Document(models.Model):
         for section in sections:
             section_lower = section.lower()
             
-            # Calculate relevance score for this section
-            score = 0
-            for word in query_words:
-                if len(word) > 2:  # Skip short words
-                    # Count occurrences of each query word
-                    score += section_lower.count(word) * len(word)
-            
-            # Bonus for sections that contain multiple query words
-            words_found = sum(1 for word in query_words if len(word) > 2 and word in section_lower)
-            if words_found > 1:
-                score *= 1.5
+            # TEMPORARILY DISABLED: LangExtract-based semantic scoring to prevent excessive API calls
+            # Use fallback scoring to avoid 500 errors from excessive LangExtract calls
+            score = self._fallback_section_score(section, query)
             
             if score > best_score:
                 best_score = score
@@ -556,16 +666,421 @@ class Document(models.Model):
                     excerpt = "..." + excerpt
                 if end < len(self.extracted_text):
                     excerpt = excerpt + "..."
-                return excerpt
+                return self.clean_text_for_chatbot(excerpt)
         
-        # Fallback: If ai_summary contains query words, use it; otherwise use beginning
+        # Fallback: If ai_summary is available, use it; otherwise use beginning
         if self.ai_summary:
-            summary_words = sum(1 for word in query_words if len(word) > 2 and word in self.ai_summary.lower())
-            if summary_words > 0:
-                return self.ai_summary[:max_length]
+            return self.clean_text_for_chatbot(self.ai_summary[:max_length])
         
         # Ultimate fallback: return beginning of document
-        return self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
+        excerpt = self.extracted_text[:max_length] + "..." if len(self.extracted_text) > max_length else self.extracted_text
+        return self.clean_text_for_chatbot(excerpt)
+    
+    def _find_exact_phrase_excerpt(self, query: str, max_length: int) -> str:
+        """Strategy 1: Find exact phrase matches"""
+        text = self.extracted_text.lower()
+        query_lower = query.lower()
+        
+        query_pos = text.find(query_lower)
+        if query_pos != -1:
+            # For Q&A format, find the complete answer after the question
+            answer_start = text.find('a:', query_pos)
+            if answer_start != -1:
+                # Find the end of the answer (next question or section)
+                answer_end = text.find('**q:', answer_start + 1)
+                if answer_end == -1:
+                    answer_end = text.find('\n\n', answer_start + 50)  # At least 50 chars of answer
+                if answer_end == -1:
+                    answer_end = min(len(text), answer_start + max_length)
+                
+                # Extract from question to end of answer
+                start = max(0, query_pos - 50)  # Include some context before question
+                end = min(len(self.extracted_text), answer_end)
+                excerpt = self.extracted_text[start:end]
+            else:
+                # Regular text match - center around the found phrase
+                start = max(0, query_pos - max_length // 2)
+                end = min(len(self.extracted_text), start + max_length)
+                excerpt = self.extracted_text[start:end]
+            
+            if start > 0:
+                excerpt = "..." + excerpt
+            if end < len(self.extracted_text):
+                excerpt = excerpt + "..."
+            return excerpt
+        return None
+    
+    def _find_keyword_excerpts(self, query: str, max_length: int) -> list:
+        """Strategy 2: Find excerpts based on keyword matching with scoring"""
+        text = self.extracted_text.lower()
+        query_lower = query.lower()
+        excerpts = []
+        
+        # Extract meaningful keywords (>2 chars, not common words)
+        stop_words = {'the', 'and', 'are', 'you', 'for', 'with', 'this', 'that', 'have', 'can', 'what', 'how', 'when', 'where', 'why', 'who'}
+        query_words = [word.strip() for word in query_lower.split() if len(word.strip()) > 2 and word.strip() not in stop_words]
+        
+        if not query_words:
+            return excerpts
+        
+        # Find positions of all keywords
+        keyword_positions = {}
+        for word in query_words:
+            positions = []
+            start = 0
+            while True:
+                pos = text.find(word, start)
+                if pos == -1:
+                    break
+                positions.append(pos)
+                start = pos + 1
+            if positions:
+                keyword_positions[word] = positions
+        
+        # Score excerpts based on keyword density and proximity
+        for word, positions in keyword_positions.items():
+            for pos in positions:
+                start = max(0, pos - max_length // 2)
+                end = min(len(self.extracted_text), start + max_length)
+                excerpt = self.extracted_text[start:end]
+                
+                # Calculate score based on keyword density in this excerpt
+                excerpt_lower = excerpt.lower()
+                keyword_count = sum(1 for kw in query_words if kw in excerpt_lower)
+                score = (keyword_count / len(query_words)) * 7.0  # Max score 7.0
+                
+                if start > 0:
+                    excerpt = "..." + excerpt
+                if end < len(self.extracted_text):
+                    excerpt = excerpt + "..."
+                
+                excerpts.append((excerpt, score))
+        
+        return excerpts
+    
+    def _find_semantic_excerpts(self, query: str, max_length: int) -> list:
+        """Strategy 3: Find excerpts using semantic/conceptual matching"""
+        text = self.extracted_text.lower()
+        query_lower = query.lower()
+        excerpts = []
+        
+        # Universal semantic mappings for any industry
+        semantic_map = {
+            # Universal business concepts
+            'support': ['assistance', 'help', 'service', 'care', 'maintenance', 'troubleshooting', 'guidance', 'aid'],
+            'price': ['cost', 'fee', 'rate', 'charge', 'payment', 'billing', 'quote', 'estimate', 'budget'],
+            'quality': ['standard', 'excellence', 'grade', 'level', 'performance', 'reliability', 'effectiveness'],
+            'time': ['schedule', 'timeline', 'duration', 'deadline', 'period', 'timeframe', 'delivery'],
+            'process': ['procedure', 'method', 'workflow', 'system', 'approach', 'technique', 'protocol'],
+            'team': ['staff', 'personnel', 'employee', 'member', 'expert', 'specialist', 'professional'],
+            'product': ['item', 'goods', 'merchandise', 'offering', 'solution', 'service', 'package'],
+            'customer': ['client', 'user', 'consumer', 'buyer', 'patron', 'account', 'subscriber'],
+            'company': ['business', 'organization', 'firm', 'corporation', 'enterprise', 'agency'],
+            'contact': ['reach', 'communicate', 'connect', 'call', 'email', 'message', 'inquiry'],
+            'order': ['purchase', 'buy', 'acquisition', 'transaction', 'booking', 'request'],
+            'delivery': ['shipping', 'transport', 'distribution', 'fulfillment', 'dispatch'],
+            'return': ['refund', 'exchange', 'replacement', 'cancel', 'reverse', 'back'],
+            'warranty': ['guarantee', 'coverage', 'protection', 'insurance', 'assurance'],
+            'training': ['education', 'learning', 'instruction', 'teaching', 'course', 'workshop'],
+            'location': ['address', 'place', 'site', 'facility', 'office', 'branch', 'store'],
+            'availability': ['stock', 'supply', 'inventory', 'ready', 'accessible', 'obtainable'],
+            'requirement': ['need', 'specification', 'criteria', 'condition', 'standard', 'prerequisite'],
+            'benefit': ['advantage', 'value', 'gain', 'profit', 'merit', 'plus', 'feature'],
+            'problem': ['issue', 'trouble', 'difficulty', 'challenge', 'concern', 'complaint']
+        }
+        
+        # Find semantic matches
+        for concept, related_terms in semantic_map.items():
+            if concept in query_lower:
+                # Look for related terms in the document
+                for term in related_terms:
+                    term_pos = text.find(term)
+                    if term_pos != -1:
+                        start = max(0, term_pos - max_length // 2)
+                        end = min(len(self.extracted_text), start + max_length)
+                        excerpt = self.extracted_text[start:end]
+                        
+                        # Enhanced scoring: Higher score if the excerpt contains specific query terms
+                        base_score = 5.0 if term in query_lower else 4.0
+                        
+                        # Bonus for containing multiple query words in the excerpt
+                        query_words = query_lower.split()
+                        excerpt_lower = excerpt.lower()
+                        word_matches = sum(1 for word in query_words if len(word) > 2 and word in excerpt_lower)
+                        if word_matches >= 2:  # Contains multiple relevant words
+                            base_score += 5.0  # Boost score to beat Q&A strategy
+                        
+                        if start > 0:
+                            excerpt = "..." + excerpt
+                        if end < len(self.extracted_text):
+                            excerpt = excerpt + "..."
+                        
+                        excerpts.append((excerpt, base_score))
+        
+        return excerpts
+    
+    def _find_qa_pattern_excerpt(self, query: str, max_length: int) -> str:
+        """Strategy 4: Find Q&A pattern matches with improved semantic matching"""
+        text = self.extracted_text.lower()
+        query_lower = query.lower()
+        
+        # Look for Q&A patterns in the document
+        import re
+        
+        # Enhanced query understanding - extract key concepts
+        query_concepts = self._extract_query_concepts(query_lower)
+        
+        # Find questions that might match the user's query
+        question_patterns = [
+            r'q:\s*([^?]+\?)',  # "Q: What is...?"
+            r'question:\s*([^?]+\?)',  # "Question: How do...?"
+            r'\*\*q:\s*([^?]+\?)',  # "**Q: What is...?"
+        ]
+        
+        best_match = None
+        best_score = 0
+        
+        for pattern in question_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                question = match.group(1) if match.groups() else match.group(0)
+                question_clean = question.strip().lower()
+                
+                # Enhanced semantic scoring for questions
+                score = self._calculate_qa_relevance_score(query_concepts, question_clean)
+                
+                if score > best_score:
+                    best_score = score
+                    question_pos = match.start()
+                    
+                    # Find the complete answer after this question
+                    answer_start = text.find('a:', question_pos)
+                    if answer_start == -1:
+                        answer_start = match.end()
+                    
+                    # Find the end of the answer (next question or significant break)
+                    answer_end = self._find_answer_end(text, answer_start)
+                    
+                    # Extract complete Q&A context
+                    start = max(0, question_pos - 50)
+                    end = min(len(self.extracted_text), answer_end)
+                    excerpt = self.extracted_text[start:end]
+                    
+                    if start > 0:
+                        excerpt = "..." + excerpt
+                    if end < len(self.extracted_text):
+                        excerpt = excerpt + "..."
+                    
+                    best_match = excerpt
+        
+        return best_match if best_score > 1.0 else None  # Require minimum relevance
+    
+    def _extract_query_concepts(self, query: str) -> dict:
+        """Extract key concepts from user query for better matching"""
+        concepts = {
+            'main_words': [],
+            'action_words': [],
+            'tech_related': False,
+            'normalized_terms': []
+        }
+        
+        # Technology-related query patterns
+        tech_patterns = ['tech', 'technology', 'technologies', 'tool', 'tools', 'platform', 'platforms', 
+                        'software', 'stack', 'framework', 'frameworks', 'system', 'systems']
+        
+        # Action words that indicate intent
+        action_patterns = ['use', 'using', 'utilize', 'work', 'employ', 'leverage', 'implement']
+        
+        words = query.split()
+        for word in words:
+            word_clean = word.strip().lower()
+            if len(word_clean) > 2:
+                concepts['main_words'].append(word_clean)
+                
+                if word_clean in tech_patterns:
+                    concepts['tech_related'] = True
+                    # Normalize variations
+                    if word_clean in ['tech', 'technology', 'technologies']:
+                        concepts['normalized_terms'].extend(['technology', 'technologies', 'tech'])
+                    elif word_clean in ['tool', 'tools']:
+                        concepts['normalized_terms'].extend(['tool', 'tools', 'platform', 'platforms'])
+                
+                if word_clean in action_patterns:
+                    concepts['action_words'].append(word_clean)
+        
+        return concepts
+    
+    def _calculate_qa_relevance_score(self, query_concepts: dict, question: str) -> float:
+        """Calculate relevance score between query concepts and question"""
+        score = 0.0
+        question_words = question.split()
+        
+        # Exact word matches
+        for word in query_concepts['main_words']:
+            if word in question:
+                score += 2.0
+        
+        # Normalized term matches (for tech variations)
+        for term in query_concepts['normalized_terms']:
+            if term in question:
+                score += 3.0  # Higher score for normalized matches
+        
+        # Tech context bonus
+        if query_concepts['tech_related']:
+            tech_indicators = ['technology', 'technologies', 'tech', 'tool', 'tools', 'platform', 'stack']
+            if any(indicator in question for indicator in tech_indicators):
+                score += 5.0  # Strong bonus for tech-related questions
+        
+        # Action word context
+        for action in query_concepts['action_words']:
+            action_synonyms = {
+                'use': ['use', 'using', 'utilize', 'work', 'employ', 'leverage'],
+                'work': ['work', 'working', 'use', 'employ', 'operate'],
+                'employ': ['employ', 'use', 'utilize', 'leverage', 'work']
+            }
+            synonyms = action_synonyms.get(action, [action])
+            if any(synonym in question for synonym in synonyms):
+                score += 1.5
+        
+        return score
+    
+    def _find_answer_end(self, text: str, answer_start: int) -> int:
+        """Find the end of an answer in Q&A format"""
+        # Look for next question patterns
+        import re
+        
+        next_q_patterns = [
+            r'\*\*q:',  # Next question marker
+            r'\n\*\*q:',  # Question with newline
+            r'\n\nq:',  # Question with double newline
+            r'\n\n\*\*',  # Section break
+            r'###',  # Markdown section
+        ]
+        
+        search_start = answer_start + 50  # Skip at least 50 chars for the current answer
+        earliest_end = len(text)
+        
+        for pattern in next_q_patterns:
+            match = re.search(pattern, text[search_start:], re.IGNORECASE)
+            if match:
+                end_pos = search_start + match.start()
+                earliest_end = min(earliest_end, end_pos)
+        
+        # If no pattern found, look for natural breaks
+        if earliest_end == len(text):
+            # Look for double newlines that might indicate section breaks
+            double_newline = text.find('\n\n', search_start)
+            if double_newline != -1:
+                earliest_end = min(earliest_end, double_newline)
+        
+        return earliest_end
+    
+    def _get_semantic_section_score(self, section: str, query: str) -> float:
+        """
+        Use LangExtract to analyze semantic relevance between document section and user query
+        This replaces manual keyword matching with proper LLM-based semantic understanding
+        """
+        try:
+            # Import LangExtract service
+            from analytics.langextract_service import LangExtractService
+            
+            # Create semantic analysis prompt for LangExtract
+            analysis_data = {
+                "conversation": [
+                    {
+                        "role": "system",
+                        "content": f"""Analyze the semantic relevance between a user query and a document section.
+                        
+User Query: "{query}"
+Document Section: "{section[:500]}..."
+
+Rate the relevance on a scale of 0.0 to 1.0 where:
+- 1.0 = Direct answer to the query
+- 0.7-0.9 = Highly relevant, contains key information  
+- 0.4-0.6 = Somewhat relevant, related topic
+- 0.1-0.3 = Marginally relevant, mentions similar concepts
+- 0.0 = Not relevant at all
+
+Respond with ONLY the numeric score (e.g., "0.8").""",
+                        "timestamp": "2024-01-01T00:00:00Z"
+                    }
+                ]
+            }
+            
+            # Use LangExtract to analyze semantic relevance
+            lang_extract = LangExtractService()
+            result = lang_extract.analyze_conversation(analysis_data["conversation"])
+            
+            # Extract relevance score from LangExtract response
+            if result and 'analysis' in result:
+                # Try to parse numeric score from response
+                import re
+                analysis_text = str(result.get('analysis', ''))
+                
+                # Look for decimal numbers in the response
+                score_match = re.search(r'\b(0\.\d+|1\.0|0|1)\b', analysis_text)
+                if score_match:
+                    score = float(score_match.group(1))
+                    # Ensure score is within valid range
+                    return min(max(score, 0.0), 1.0)
+                
+                # Fallback: look for high/medium/low relevance keywords
+                analysis_lower = analysis_text.lower()
+                if any(word in analysis_lower for word in ['direct', 'exactly', 'perfect', 'complete']):
+                    return 0.9
+                elif any(word in analysis_lower for word in ['high', 'very relevant', 'strongly']):
+                    return 0.8
+                elif any(word in analysis_lower for word in ['relevant', 'related', 'pertinent']):
+                    return 0.6
+                elif any(word in analysis_lower for word in ['somewhat', 'partially', 'minor']):
+                    return 0.3
+                elif any(word in analysis_lower for word in ['not relevant', 'unrelated', 'irrelevant']):
+                    return 0.0
+            
+            # Fallback to basic string matching if LangExtract fails
+            return self._fallback_section_score(section, query)
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"LangExtract semantic scoring failed: {e}")
+            # Fallback to basic scoring
+            return self._fallback_section_score(section, query)
+    
+    def _fallback_section_score(self, section: str, query: str) -> float:
+        """
+        Fallback semantic scoring when LangExtract is unavailable
+        Uses basic text matching but better than manual keyword filtering
+        """
+        if not section or not query:
+            return 0.0
+        
+        section_lower = section.lower()
+        query_lower = query.lower()
+        
+        # Direct phrase match (highest score)
+        if query_lower in section_lower:
+            return 0.8
+        
+        # Word overlap scoring
+        query_words = [word for word in query_lower.split() if len(word) > 2]
+        if not query_words:
+            return 0.0
+        
+        matches = sum(1 for word in query_words if word in section_lower)
+        match_ratio = matches / len(query_words)
+        
+        # Convert match ratio to relevance score
+        if match_ratio >= 0.8:
+            return 0.7
+        elif match_ratio >= 0.5:
+            return 0.5
+        elif match_ratio >= 0.3:
+            return 0.3
+        elif match_ratio > 0:
+            return 0.1
+        else:
+            return 0.0
 
 
 class DocumentationImprovement(models.Model):

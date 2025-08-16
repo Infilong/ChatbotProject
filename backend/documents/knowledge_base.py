@@ -12,12 +12,23 @@ from .models import Document
 
 logger = logging.getLogger(__name__)
 
-# Try to import hybrid search, fallback gracefully if dependencies missing
+# Try to import advanced RAG service first, then fallback to basic hybrid search
+try:
+    from .advanced_rag_service import advanced_rag_service, SearchResult as AdvancedSearchResult
+    ADVANCED_RAG_AVAILABLE = True
+    logger.info("Advanced RAG service available - using modern hybrid search with contextual retrieval")
+except ImportError as e:
+    logger.warning(f"Advanced RAG not available: {e}. Falling back to basic hybrid search.")
+    ADVANCED_RAG_AVAILABLE = False
+    advanced_rag_service = None
+    AdvancedSearchResult = None
+
+# Try to import basic hybrid search as fallback
 try:
     from .hybrid_search import hybrid_search_service, SearchResult
     HYBRID_SEARCH_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"Hybrid search not available: {e}. Falling back to basic search.")
+    logger.warning(f"Basic hybrid search not available: {e}. Falling back to simple search.")
     HYBRID_SEARCH_AVAILABLE = False
     hybrid_search_service = None
     SearchResult = None
@@ -34,41 +45,84 @@ class KnowledgeBase:
         min_score: float = 0.1
     ) -> List[Document]:
         """
-        Async version with modern hybrid search (BM25 + Vector Embeddings) if available,
-        otherwise falls back to basic search
+        Async version with modern RAG (2024-2025) using:
+        1. Advanced hybrid search (BM25 + Vector Embeddings)
+        2. Contextual retrieval with chunk contextualization
+        3. Intelligent reranking
         """
         if not query.strip():
             return []
         
-        # Check if hybrid search is available
-        if not HYBRID_SEARCH_AVAILABLE or hybrid_search_service is None:
-            logger.info("Hybrid search not available, using fallback search")
-            return await cls._fallback_search_async(query, limit, min_score)
-        
-        try:
-            # Use hybrid search service
-            from asgiref.sync import sync_to_async
-            
-            # Run hybrid search in thread pool to avoid blocking
-            search_func = sync_to_async(hybrid_search_service.hybrid_search)
-            search_results = await search_func(query, top_k=limit, min_score=min_score)
-            
-            if search_results:
-                logger.info(f"Hybrid search for '{query}' found {len(search_results)} results:")
-                for i, result in enumerate(search_results[:3]):
-                    logger.info(f"  {i+1}. {result.document.name} (hybrid: {result.hybrid_score:.3f}, "
-                              f"bm25: {result.bm25_score:.3f}, vector: {result.vector_score:.3f})")
+        # Try advanced RAG service first (best performance)
+        if ADVANCED_RAG_AVAILABLE and advanced_rag_service is not None:
+            try:
+                logger.info(f"Using Advanced RAG for query: '{query}'")
                 
-                # Return documents from search results
-                return [result.document for result in search_results]
-            else:
-                logger.info(f"Hybrid search for '{query}' found no relevant documents")
+                # Initialize if needed
+                await advanced_rag_service.initialize()
+                
+                # Perform hybrid search with contextual retrieval
+                search_results = await advanced_rag_service.hybrid_search(
+                    query=query, 
+                    top_k=limit, 
+                    min_score=min_score,
+                    bm25_weight=0.6,  # Favor exact matches slightly
+                    vector_weight=0.4  # But still consider semantic similarity
+                )
+                
+                # Apply reranking for improved precision
+                if search_results:
+                    reranked_results = await advanced_rag_service.rerank_results(
+                        query=query,
+                        results=search_results,
+                        top_k=limit
+                    )
+                    
+                    if reranked_results:
+                        logger.info(f"Advanced RAG for '{query}' found {len(reranked_results)} results after reranking:")
+                        for i, result in enumerate(reranked_results[:3]):
+                            logger.info(f"  {i+1}. {result.document.name} (hybrid: {result.hybrid_score:.3f}, "
+                                      f"bm25: {result.bm25_score:.3f}, vector: {result.vector_score:.3f})")
+                        
+                        # Return documents from reranked results
+                        return [result.document for result in reranked_results]
+                
+                logger.info(f"Advanced RAG for '{query}' found no relevant documents")
                 return []
-            
-        except Exception as e:
-            logger.error(f"Error in async hybrid search: {e}")
-            # Fallback to traditional search
-            return await cls._fallback_search_async(query, limit, min_score)
+                
+            except Exception as e:
+                logger.error(f"Error in advanced RAG search: {e}")
+                # Fallback to basic hybrid search
+        
+        # Fallback to basic hybrid search if available
+        if HYBRID_SEARCH_AVAILABLE and hybrid_search_service is not None:
+            logger.info("Advanced RAG failed, using basic hybrid search")
+            try:
+                # Use basic hybrid search service
+                from asgiref.sync import sync_to_async
+                
+                # Run hybrid search in thread pool to avoid blocking
+                search_func = sync_to_async(hybrid_search_service.hybrid_search)
+                search_results = await search_func(query, top_k=limit, min_score=min_score)
+                
+                if search_results:
+                    logger.info(f"Basic hybrid search for '{query}' found {len(search_results)} results:")
+                    for i, result in enumerate(search_results[:3]):
+                        logger.info(f"  {i+1}. {result.document.name} (hybrid: {result.hybrid_score:.3f}, "
+                                  f"bm25: {result.bm25_score:.3f}, vector: {result.vector_score:.3f})")
+                    
+                    # Return documents from search results
+                    return [result.document for result in search_results]
+                else:
+                    logger.info(f"Basic hybrid search for '{query}' found no relevant documents")
+                    return []
+                
+            except Exception as e:
+                logger.error(f"Error in basic hybrid search: {e}")
+        
+        # Final fallback to simple search
+        logger.info("All advanced search methods failed, using simple fallback search")
+        return await cls._fallback_search_async(query, limit, min_score)
     
     @classmethod
     async def _fallback_search_async(cls, query: str, limit: int, min_score: float) -> List[Document]:

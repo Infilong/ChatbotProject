@@ -2,6 +2,149 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: AI-Driven RAG System Architecture
+
+**ALWAYS USE THE PROPER LLM-DRIVEN WORKFLOW - NEVER PRIMITIVE PATTERN MATCHING:**
+
+### **🤖 Required AI-Driven RAG Flow:**
+
+```
+User Input → LLM Intent Analysis → Vector/RAG Search → LLM Response Generation → Frontend
+```
+
+## CRITICAL: Learning from Implementation Mistakes 
+
+**Why it took so long to implement the proper AI-driven RAG system - Lessons learned:**
+
+### **❌ Major Mistakes That Caused Delays:**
+
+1. **Defaulting to Primitive Solutions First:**
+   - **MISTAKE**: Immediately reaching for simple pattern matching instead of proper AI-driven approaches
+   - **WHY THIS HAPPENED**: Default to "easy" solutions without considering the user's explicit requirements for advanced AI systems
+   - **COST**: Wasted multiple implementation cycles before getting to the right solution
+   - **LESSON**: When user asks for "RAG and vector and latest tech", implement proper vector embeddings from the start
+
+2. **Not Reading User Requirements Carefully:**
+   - **MISTAKE**: User explicitly said "we use rag and vector and some latest tech to get the meaning" but I kept implementing primitive keyword matching
+   - **WHY THIS HAPPENED**: Focused on getting "something working" instead of the specified architecture
+   - **COST**: User had to repeatedly explain that they wanted proper AI-driven workflow
+   - **LESSON**: Read and understand the full scope of requirements before starting implementation
+
+3. **Underestimating the Complexity of Modern RAG:**
+   - **MISTAKE**: Thinking hybrid search meant simple keyword + basic similarity instead of proper vector embeddings + BM25 + semantic reranking
+   - **WHY THIS HAPPENED**: Not researching 2024-2025 RAG best practices upfront
+   - **COST**: Multiple failed attempts with insufficient search quality
+   - **LESSON**: Research current best practices BEFORE implementing, not during debugging
+
+4. **Missing Package Dependencies:**
+   - **MISTAKE**: Trying to implement vector search without installing `sentence-transformers`, `rank-bm25`, `faiss-cpu`, `torch`
+   - **WHY THIS HAPPENED**: Assumed packages would be available or tried to work around missing dependencies
+   - **COST**: System couldn't work properly, requiring multiple debugging sessions
+   - **LESSON**: Install ALL required dependencies for the intended architecture upfront
+
+5. **Ignoring User Feedback About Quality:**
+   - **MISTAKE**: When user said "the hybrid search doesn't work well, terrible", I tried minor fixes instead of fundamental architecture changes
+   - **WHY THIS HAPPENED**: Defensive about existing implementation rather than listening to quality feedback
+   - **COST**: Continued with broken approach instead of implementing proper solution
+   - **LESSON**: When user reports poor quality, the architecture is likely wrong, not just the implementation details
+
+6. **Overcomplicating Simple Intent Analysis:**
+   - **MISTAKE**: Creating complex LLM prompts that triggered Gemini safety filters instead of simple, focused intent extraction
+   - **WHY THIS HAPPENED**: Overthinking the prompt design instead of using minimal, reliable approaches
+   - **COST**: System failures due to safety filter issues and timeout problems
+   - **LESSON**: Use simple, focused LLM prompts for intent analysis - just extract keywords, nothing complex
+
+### **✅ What Should Have Been Done from the Start:**
+
+1. **Proper Requirements Analysis:**
+   - User said "universal LLM system" → Should have immediately planned industry-agnostic architecture
+   - User mentioned "rag and vector and latest tech" → Should have researched 2024-2025 RAG best practices
+   - User wanted "any industry can use it" → Should have made semantic mappings configurable
+
+2. **Correct Technical Implementation Order:**
+   ```
+   1. Research current RAG best practices (Anthropic contextual retrieval, hybrid search)
+   2. Install ALL required packages (sentence-transformers, rank-bm25, faiss-cpu, torch)
+   3. Implement vector embeddings with proven models (all-MiniLM-L6-v2)
+   4. Build hybrid search (BM25 + Vector + Semantic reranking)
+   5. Create simple LLM intent analysis (focused prompts, fallback patterns)
+   6. Test end-to-end workflow before claiming completion
+   ```
+
+3. **Quality-First Mindset:**
+   - Test with actual user queries before marking as "working"
+   - Don't accept partial matches when full document content exists
+   - Implement proper chunk extraction that preserves complete answers
+   - Validate that query variations ("what tech do you use" vs "technologies you use") work equally well
+
+### **🔄 Process Improvements for Future:**
+
+1. **Always Ask: "What's the Modern Best Practice?"**
+   - Don't assume 2022-era approaches are still optimal
+   - Research latest papers and implementations (Anthropic's contextual retrieval, advanced chunking)
+   - Start with proper architecture, not "quick wins"
+
+2. **Install Dependencies FIRST:**
+   - When planning vector search, install vector packages immediately
+   - Don't try to work around missing dependencies with primitive alternatives
+   - Check requirements.txt and install everything needed for the planned architecture
+
+3. **Listen to Quality Feedback Immediately:**
+   - If user says "terrible" or "doesn't work well", the ARCHITECTURE is wrong
+   - Don't debug implementation details when architecture is fundamentally insufficient
+   - Implement proper solution instead of incremental fixes to broken approach
+
+4. **Test Real User Queries:**
+   - Test exact queries user mentioned: "What technologies do you primarily use", "what tech do you use"
+   - Verify that variations and synonyms work equally well
+   - Ensure complete answers are extracted, not partial snippets
+
+### **🎯 Success Pattern for Future RAG Implementations:**
+
+```
+1. User Request Analysis → Identify modern AI architecture requirements
+2. Research Best Practices → Find 2024-2025 papers and implementations  
+3. Install Dependencies → All packages needed for proper implementation
+4. Implement Core Architecture → Vector embeddings + Hybrid search + LLM integration
+5. Test with Real Queries → User's actual questions, variations, edge cases
+6. Verify Quality → Complete answers, not partial matches
+7. Document Architecture → Ensure no regression to primitive approaches
+```
+
+**Remember: The user explicitly told me they wanted proper AI-driven RAG, not primitive pattern matching. I should have implemented that from the beginning instead of requiring multiple cycles of feedback to get to the right solution.**
+
+**Implementation Details:**
+
+1. **🧠 LLM Intent Analysis** (`chat/llm_services.py::_analyze_user_intent`):
+   - User query → LLM semantic understanding → Enhanced search terms
+   - Example: "what tech do you use" → "what tech do you use technology technologies tools platforms software stack frameworks systems"
+   - **NEVER use primitive pattern matching as primary method**
+
+2. **🔍 Vector/RAG Search** (`documents/advanced_rag_service.py`):
+   - Enhanced query → Vector embeddings (`all-MiniLM-L6-v2`) → Semantic similarity search
+   - Hybrid search: Vector embeddings + BM25 keyword matching + Contextual chunking
+   - **Required packages**: `sentence-transformers`, `rank-bm25`, `faiss-cpu`, `torch`
+
+3. **📄 Knowledge Retrieval** (`documents/knowledge_base.py`):
+   - Vector search results → Document chunking → Q&A extraction → Context formatting
+   - Semantic reranking for improved precision
+
+4. **💬 LLM Response Generation** (`chat/llm_services.py::generate_chat_response`):
+   - Retrieved context + User query → LLM → Natural language response
+   - Context-aware, accurate answers based on document knowledge
+
+### **🚫 What NOT to Do:**
+- **Pattern-based intent analysis as primary method** (only as fallback)
+- **Simple keyword matching without LLM understanding**
+- **Direct document search without semantic enhancement**
+- **Missing any step in the AI-driven pipeline**
+
+### **✅ Success Metrics:**
+- Vector embeddings working: `INFO Built vector index with X embeddings`
+- Semantic search active: `INFO Vector search returned X results`
+- LLM intent analysis: `INFO Intent analysis (LLM-based): 'query' → 'enhanced_terms'`
+- Quality responses with specific details from documents
+
 ## CRITICAL: Code Maintainability Standards
 
 **ALWAYS FOLLOW ENTERPRISE-LEVEL CODING PRACTICES:**

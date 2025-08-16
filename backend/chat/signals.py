@@ -27,84 +27,93 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
     try:
         conversation = instance.conversation
         
-        # 1. IMMEDIATE MESSAGE-LEVEL ANALYSIS for user messages
-        if instance.sender_type == 'user' and not instance.message_analysis:
-            logger.info(f"Triggering immediate message-level analysis for user message {instance.uuid}")
+        # 1. DELAYED MESSAGE-LEVEL ANALYSIS - trigger only after bot response
+        if instance.sender_type == 'bot' and not instance.message_analysis:
+            # Find the corresponding user message that triggered this bot response
+            user_msg = conversation.messages.filter(
+                sender_type='user',
+                timestamp__lt=instance.timestamp
+            ).order_by('-timestamp').first()
             
-            def analyze_message_async():
-                """Analyze individual message in background using hybrid approach"""
-                try:
-                    import time
-                    import asyncio
-                    from core.services.hybrid_analysis_service import hybrid_analysis_service
-                    from django.db import transaction, connections
-                    
-                    # Small delay to ensure message is fully committed
-                    time.sleep(0.1)
-                    
-                    # Close any existing database connections to avoid threading issues
-                    connections.close_all()
-                    
-                    # Create new event loop for async analysis
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    
+            if user_msg and not user_msg.message_analysis:
+                logger.info(f"Bot response completed, scheduling delayed analysis for user message {user_msg.uuid}")
+                
+                def analyze_message_async():
+                    """Analyze individual message in background using hybrid approach"""
                     try:
-                        # Use atomic transaction to ensure data consistency
-                        with transaction.atomic():
-                            # Re-fetch the message to avoid potential conflicts
-                            try:
-                                fresh_message = Message.objects.select_for_update().get(uuid=instance.uuid)
-                            except Message.DoesNotExist:
-                                logger.warning(f"Message {instance.uuid} not found during analysis")
-                                return
-                            
-                            # Skip if already analyzed (check for non-empty dict)
-                            if fresh_message.message_analysis and fresh_message.message_analysis != {}:
-                                logger.debug(f"Message {fresh_message.uuid} already has analysis, skipping")
-                                return
-                            
-                            # Analyze this specific message using hybrid approach
-                            analysis_result = loop.run_until_complete(
-                                hybrid_analysis_service.analyze_message_hybrid(fresh_message)
-                            )
-                            
-                            if analysis_result and 'error' not in analysis_result:
-                                # Save analysis to message
-                                fresh_message.message_analysis = analysis_result
-                                fresh_message.save(update_fields=['message_analysis'])
-                                
-                                # Log which method was used
-                                analysis_source = analysis_result.get('analysis_source', 'Unknown')
-                                logger.info(f"Message {fresh_message.uuid} analyzed successfully using {analysis_source}")
-                                
-                                # Verify the save worked
-                                verification = Message.objects.get(uuid=fresh_message.uuid)
-                                if not verification.message_analysis or verification.message_analysis == {}:
-                                    logger.error(f"Analysis save verification failed for {fresh_message.uuid}")
-                                else:
-                                    logger.debug(f"Analysis save verified for {fresh_message.uuid}")
-                            else:
-                                logger.warning(f"Hybrid message analysis failed for {fresh_message.uuid}: {analysis_result.get('error', 'Unknown error')}")
-                                
-                    finally:
-                        loop.close()
+                        import time
+                        import asyncio
+                        from core.services.hybrid_analysis_service import hybrid_analysis_service
+                        from django.db import transaction, connections
                         
-                except Exception as e:
-                    logger.error(f"Error in hybrid message analysis {instance.uuid}: {e}")
-                    import traceback
-                    logger.error(f"Full traceback: {traceback.format_exc()}")
-                    
-                    # No local fallback - LLM-only analysis with retry mechanism
-                    logger.info(f"Hybrid analysis failed for {instance.uuid}, will rely on retry mechanism")
-            
-            # Start message analysis in background thread
-            import threading
-            analysis_thread = threading.Thread(target=analyze_message_async, daemon=True)
-            analysis_thread.start()
-            
-            # Start retry mechanism for this message
-            start_message_analysis_retry_monitor(instance)
+                        # 5-second delay to prioritize frontend API usage over backend analysis
+                        logger.info(f"Backend analysis: Waiting 5 seconds after frontend response to avoid API rate limits")
+                        time.sleep(5)
+                        logger.info(f"Backend analysis: Starting message analysis for {user_msg.uuid}")
+                        
+                        # Close any existing database connections to avoid threading issues
+                        connections.close_all()
+                        
+                        # Create new event loop for async analysis
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        
+                        try:
+                            # Use atomic transaction to ensure data consistency
+                            with transaction.atomic():
+                                # Re-fetch the user message to avoid potential conflicts
+                                try:
+                                    fresh_message = Message.objects.select_for_update().get(uuid=user_msg.uuid)
+                                except Message.DoesNotExist:
+                                    logger.warning(f"Message {user_msg.uuid} not found during analysis")
+                                    return
+                                
+                                # Skip if already analyzed (check for non-empty dict)
+                                if fresh_message.message_analysis and fresh_message.message_analysis != {}:
+                                    logger.debug(f"Message {fresh_message.uuid} already has analysis, skipping")
+                                    return
+                                
+                                # Analyze this specific message using hybrid approach
+                                analysis_result = loop.run_until_complete(
+                                    hybrid_analysis_service.analyze_message_hybrid(fresh_message)
+                                )
+                                
+                                if analysis_result and 'error' not in analysis_result:
+                                    # Save analysis to message
+                                    fresh_message.message_analysis = analysis_result
+                                    fresh_message.save(update_fields=['message_analysis'])
+                                    
+                                    # Log which method was used
+                                    analysis_source = analysis_result.get('analysis_source', 'Unknown')
+                                    logger.info(f"Message {fresh_message.uuid} analyzed successfully using {analysis_source}")
+                                    
+                                    # Verify the save worked
+                                    verification = Message.objects.get(uuid=fresh_message.uuid)
+                                    if not verification.message_analysis or verification.message_analysis == {}:
+                                        logger.error(f"Analysis save verification failed for {fresh_message.uuid}")
+                                    else:
+                                        logger.debug(f"Analysis save verified for {fresh_message.uuid}")
+                                else:
+                                    logger.warning(f"Hybrid message analysis failed for {fresh_message.uuid}: {analysis_result.get('error', 'Unknown error')}")
+                                    
+                        finally:
+                            loop.close()
+                            
+                    except Exception as e:
+                        logger.error(f"Error in hybrid message analysis {user_msg.uuid}: {e}")
+                        import traceback
+                        logger.error(f"Full traceback: {traceback.format_exc()}")
+                        
+                        # No local fallback - LLM-only analysis with retry mechanism
+                        logger.info(f"Hybrid analysis failed for {user_msg.uuid}, will rely on retry mechanism")
+                
+                # Start message analysis in background thread
+                import threading
+                analysis_thread = threading.Thread(target=analyze_message_async, daemon=True)
+                analysis_thread.start()
+                
+                # Start retry mechanism for the user message
+                start_message_analysis_retry_monitor(user_msg)
         
         # 2. CONVERSATION-LEVEL ANALYSIS (enhanced)
         message_count = conversation.total_messages
@@ -126,8 +135,10 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
                     from core.services.hybrid_analysis_service import hybrid_analysis_service
                     from django.db import transaction, connections
                     
-                    # Wait a moment for the message to be committed
-                    time.sleep(1)
+                    # 5-second delay to prioritize frontend API usage over backend analysis
+                    logger.info(f"Backend analysis: Waiting 5 seconds after frontend response to avoid API rate limits")
+                    time.sleep(5)
+                    logger.info(f"Backend analysis: Starting conversation analysis for {conversation.uuid}")
                     
                     # Close database connections for threading
                     connections.close_all()

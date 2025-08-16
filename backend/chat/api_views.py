@@ -115,24 +115,67 @@ class ConversationViewSet(ModelViewSet):
         language = serializer.validated_data.get('language', 'en')
         
         try:
-            # Save user message
-            ConversationService.save_message_to_session(
-                request=request,
-                conversation_id=str(conversation.uuid),
-                role='user',
-                content=user_message
-            )
+            # Check for duplicate user message in the last 5 minutes to prevent resend duplicates
+            recent_cutoff = timezone.now() - timedelta(minutes=5)
+            existing_msg = conversation.messages.filter(
+                content=user_message,
+                sender_type='user',
+                timestamp__gte=recent_cutoff
+            ).first()
+            
+            if existing_msg:
+                # Message already exists - check if it has a bot response
+                bot_response_exists = conversation.messages.filter(
+                    sender_type='bot',
+                    timestamp__gte=existing_msg.timestamp
+                ).exists()
+                
+                if bot_response_exists:
+                    # Complete conversation already exists, return the existing bot response
+                    latest_bot_msg = conversation.messages.filter(
+                        sender_type='bot',
+                        timestamp__gte=existing_msg.timestamp
+                    ).first()
+                    
+                    response_serializer = LLMChatResponseSerializer({
+                        'response': latest_bot_msg.content,
+                        'conversation_id': conversation.uuid,
+                        'message_id': latest_bot_msg.uuid,
+                        'timestamp': latest_bot_msg.timestamp,
+                        'provider': latest_bot_msg.metadata.get('provider', 'unknown') if latest_bot_msg.metadata else 'unknown',
+                        'model': latest_bot_msg.llm_model_used or 'unknown',
+                        'response_time': latest_bot_msg.response_time or 0,
+                        'tokens_used': latest_bot_msg.tokens_used,
+                        'metadata': latest_bot_msg.metadata or {},
+                        'note': 'Returned existing response (duplicate message detected)'
+                    })
+                    
+                    return Response(response_serializer.data, status=status.HTTP_200_OK)
+                else:
+                    # User message exists but no bot response - this is a retry after API error
+                    user_msg = existing_msg
+                    print(f"ConversationViewSet: Retrying LLM call for existing message: {user_msg.id}")
+            else:
+                # Save new user message
+                user_msg = ConversationService.save_message_to_session(
+                    request=request,
+                    conversation_id=str(conversation.uuid),
+                    role='user',
+                    content=user_message
+                )
             
             # Get conversation history (last 10 messages)
             history = list(conversation.messages.all().order_by('-timestamp')[:10])
             history.reverse()  # Reverse to get chronological order
             
-            # Generate LLM response using Django's async_to_sync
+            # Generate LLM response using Django's async_to_sync with proper context
             bot_response, metadata = async_to_sync(LLMManager.generate_chat_response)(
                 user_message=user_message,
                 conversation_history=history,
                 provider=provider,
-                language=language
+                language=language,
+                conversation_id=conversation.id,
+                message_id=user_msg.id
             )
             
             # Save bot message
@@ -160,11 +203,20 @@ class ConversationViewSet(ModelViewSet):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
             
         except LLMError as e:
+            error_msg = str(e)
             logger.error(f"LLM error in conversation {conversation.uuid}: {e}")
-            return Response(
-                {'error': 'Failed to generate response', 'details': str(e)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            
+            # Handle rate limit errors with appropriate status code
+            if "rate limit" in error_msg.lower() or "quota" in error_msg.lower():
+                return Response(
+                    {'error': 'API rate limit exceeded', 'details': error_msg},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            else:
+                return Response(
+                    {'error': 'Failed to generate response', 'details': error_msg},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
         except Exception as e:
             logger.error(f"Unexpected error in conversation {conversation.uuid}: {e}")
             return Response(
@@ -497,29 +549,87 @@ class LLMChatAPIView(APIView):
                         status=status.HTTP_404_NOT_FOUND
                     )
             else:
-                # Create new conversation only if no conversation_id provided
-                conversation = Conversation.objects.create(user=user)
-                print(f"Created new conversation: {conversation.uuid}")
+                # Check if user already has a recent conversation with the same message to prevent duplicate conversations
+                recent_cutoff = timezone.now() - timedelta(minutes=5)
+                existing_conversation = Conversation.objects.filter(
+                    user=user,
+                    created_at__gte=recent_cutoff,
+                    messages__content=user_message,
+                    messages__sender_type='user'
+                ).first()
+                
+                if existing_conversation:
+                    print(f"Found existing conversation with same message: {existing_conversation.uuid}")
+                    conversation = existing_conversation
+                else:
+                    # Create new conversation only if no recent conversation with same message exists
+                    conversation = Conversation.objects.create(user=user)
+                    print(f"Created new conversation: {conversation.uuid}")
             
             # Get conversation history (last 10 messages)
             history = list(conversation.messages.all().order_by('-timestamp')[:10])
             history.reverse()  # Reverse to get chronological order
             
-            # Generate LLM response using Django's async_to_sync
+            # Check for duplicate user message in the last 5 minutes to prevent resend duplicates
+            recent_cutoff = timezone.now() - timedelta(minutes=5)
+            existing_msg = conversation.messages.filter(
+                content=user_message,
+                sender_type='user',
+                timestamp__gte=recent_cutoff
+            ).first()
+            
+            if existing_msg:
+                # Message already exists - check if it has a bot response
+                bot_response_exists = conversation.messages.filter(
+                    sender_type='bot',
+                    timestamp__gte=existing_msg.timestamp
+                ).exists()
+                
+                if bot_response_exists:
+                    # Complete conversation already exists, return the existing bot response
+                    latest_bot_msg = conversation.messages.filter(
+                        sender_type='bot',
+                        timestamp__gte=existing_msg.timestamp
+                    ).first()
+                    
+                    response_data = {
+                        'response': latest_bot_msg.content,
+                        'conversation_id': conversation.uuid,
+                        'message_id': latest_bot_msg.uuid,
+                        'timestamp': latest_bot_msg.timestamp,
+                        'provider': latest_bot_msg.metadata.get('provider', 'unknown') if latest_bot_msg.metadata else 'unknown',
+                        'model': latest_bot_msg.llm_model_used or 'unknown',
+                        'response_time': latest_bot_msg.response_time or 0,
+                        'tokens_used': latest_bot_msg.tokens_used,
+                        'metadata': latest_bot_msg.metadata or {},
+                        'note': 'Returned existing response (duplicate message detected)'
+                    }
+                    
+                    response_serializer = LLMChatResponseSerializer(response_data)
+                    return Response(response_serializer.data, status=status.HTTP_200_OK)
+                else:
+                    # User message exists but no bot response - this is a retry after API error
+                    user_msg = existing_msg
+                    print(f"Retrying LLM call for existing message: {user_msg.id}")
+            else:
+                # New message - save user message first to get its ID for document usage tracking
+                user_msg = Message.objects.create(
+                    conversation=conversation,
+                    content=user_message,
+                    sender_type='user'
+                )
+            
+            # Generate LLM response using Django's async_to_sync with proper context
             bot_response, metadata = async_to_sync(LLMManager.generate_chat_response)(
                 user_message=user_message,
                 conversation_history=history,
                 provider=provider,
-                language=language
+                language=language,
+                conversation_id=conversation.id,
+                message_id=user_msg.id
             )
             
-            # Save messages
-            user_msg = Message.objects.create(
-                conversation=conversation,
-                content=user_message,
-                sender_type='user'
-            )
-            
+            # Create bot message
             bot_msg = Message.objects.create(
                 conversation=conversation,
                 content=bot_response,
@@ -547,11 +657,20 @@ class LLMChatAPIView(APIView):
             return Response(response_serializer.data, status=status.HTTP_201_CREATED)
             
         except LLMError as e:
+            error_msg = str(e)
             logger.error(f"LLM error: {e}")
-            return Response(
-                {'error': 'Failed to generate response', 'details': str(e)},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE
-            )
+            
+            # Handle rate limit errors with appropriate status code
+            if "rate limit" in error_msg.lower() or "quota" in error_msg.lower():
+                return Response(
+                    {'error': 'API rate limit exceeded', 'details': error_msg},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+            else:
+                return Response(
+                    {'error': 'Failed to generate response', 'details': error_msg},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
+                )
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             return Response(
