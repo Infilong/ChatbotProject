@@ -514,7 +514,7 @@ class LLMManager:
                     
                     # STAGE 2: Use enhanced search terms to find relevant documents  
                     relevant_docs = await KnowledgeBase.search_relevant_documents_async(
-                        search_terms, limit=2, min_score=0.05  # Reduced from 3 to 2 documents
+                        search_terms, limit=2, min_score=0.05  # Keep original threshold - let RAG do its job
                     )
                     
                     if relevant_docs:
@@ -556,8 +556,9 @@ class LLMManager:
                         referenced_docs = []
                     
                     if knowledge_context:
-                        # UNIVERSAL CONTEXT FOR ANY INDUSTRY
-                        system_prompt = f"Answer based on this information. Give direct, helpful answers: {knowledge_context[:300]}..."
+                        # Use proper system prompt with knowledge context
+                        base_prompt = service.get_system_prompt('system', language)
+                        system_prompt = f"{base_prompt}\n\nCompany information: {knowledge_context[:500]}"
                         metadata_docs = [
                             {"name": doc.name, "category": doc.category, "uuid": str(doc.uuid)}
                             for doc in referenced_docs
@@ -623,97 +624,7 @@ class LLMManager:
             metadata['referenced_documents'] = metadata_docs
             metadata['document_count'] = len(referenced_docs)
             
-            # Record document usage (will be updated with feedback later)
-            if referenced_docs:
-                try:
-                    from asgiref.sync import sync_to_async
-                    from django.db import transaction
-                    from django.utils import timezone
-                    
-                    # Create async-safe document usage recording function
-                    @sync_to_async
-                    def record_usage_atomic():
-                        with transaction.atomic():
-                            from analytics.models import DocumentUsage
-                            import re
-                            
-                            for i, doc in enumerate(referenced_docs):
-                                # Increment reference count atomically
-                                doc.reference_count += 1
-                                doc.last_referenced = timezone.now()
-                                # Update effectiveness score based on positive feedback
-                                doc.effectiveness_score = min(doc.effectiveness_score + 0.1, 10.0)
-                                doc.save(update_fields=['reference_count', 'last_referenced', 'effectiveness_score'])
-                                
-                                # Extract keywords from user message for tracking
-                                keywords_matched = []
-                                search_terms = user_message.lower().split()
-                                doc_text_lower = (doc.extracted_text or '').lower()
-                                for term in search_terms:
-                                    if len(term) > 2 and term in doc_text_lower:
-                                        keywords_matched.append(term)
-                                
-                                # Get the excerpt that was used (from knowledge context)
-                                excerpt_used = ""
-                                excerpt_start_pos = None
-                                excerpt_length = None
-                                
-                                if doc.extracted_text:
-                                    # Try to find the excerpt in the original document
-                                    excerpt = doc.get_excerpt(user_message, max_length=600)
-                                    if excerpt:
-                                        excerpt_used = excerpt
-                                        # Find position in original text
-                                        start_pos = doc.extracted_text.find(excerpt[:100])  # Use first 100 chars to find position
-                                        if start_pos != -1:
-                                            excerpt_start_pos = start_pos
-                                            excerpt_length = len(excerpt)
-                                
-                                # Determine user intent from message
-                                user_intent = "general_inquiry"
-                                intent_keywords = {
-                                    'compliance': ['gdpr', 'ccpa', 'regulation', 'compliance', 'privacy'],
-                                    'services': ['service', 'offer', 'provide', 'solution', 'help'],
-                                    'pricing': ['price', 'cost', 'fee', 'pricing', 'charge'],
-                                    'support': ['support', 'help', 'assistance', 'problem', 'issue'],
-                                    'technical': ['how to', 'setup', 'configure', 'install', 'technical']
-                                }
-                                
-                                for intent, terms in intent_keywords.items():
-                                    if any(term in user_message.lower() for term in terms):
-                                        user_intent = intent
-                                        break
-                                
-                                # Create detailed usage record with proper context
-                                try:
-                                    if conversation_id and message_id:
-                                        usage = DocumentUsage.objects.create(
-                                            document=doc,
-                                            conversation_id=conversation_id,
-                                            message_id=message_id,
-                                            search_query=user_message[:500],  # Truncate to fit field
-                                            relevance_score=doc.get_relevance_score(user_message),
-                                            usage_type='excerpt',
-                                            excerpt_used=excerpt_used,
-                                            excerpt_start_position=excerpt_start_pos,
-                                            excerpt_length=excerpt_length,
-                                            keywords_matched=keywords_matched,
-                                            context_category=doc.category or 'general',
-                                            user_intent=user_intent,
-                                            llm_model_used=metadata.get('model', 'unknown'),
-                                            processing_time=metadata.get('response_time', 0.0)
-                                        )
-                                        logger.info(f"Created detailed usage record for document: {doc.name}")
-                                    else:
-                                        logger.warning(f"Skipping usage record creation - missing conversation_id or message_id")
-                                except Exception as usage_error:
-                                    logger.warning(f"Failed to create detailed usage record: {usage_error}")
-                                
-                                logger.info(f"Updated usage for document: {doc.name} (score: {doc.effectiveness_score:.2f})")
-                    
-                    await record_usage_atomic()
-                except Exception as e:
-                    logger.warning(f"Failed to record document usage: {e}")
+            # Document usage tracking removed per user request
             
             return response_text, metadata
             

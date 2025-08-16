@@ -8,5 +8,5 @@ class AnalyticsConfig(AppConfig):
     verbose_name = _('Chat Analytics')
     
     def ready(self):
-        """Import signals when Django starts"""
-        import analytics.signals  # noqa
+        """Analytics signals removed per user request"""
+        pass
