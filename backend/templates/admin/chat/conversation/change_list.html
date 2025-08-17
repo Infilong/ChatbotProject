@@ -4,14 +4,7 @@
 {{ block.super }}
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function() {
-    // Improve action select placeholder
-    const actionSelect = document.querySelector('select[name="action"]');
-    if (actionSelect) {
-        const firstOption = actionSelect.querySelector('option[value=""]');
-        if (firstOption && firstOption.textContent.trim() === '---------') {
-            firstOption.textContent = 'Choose an action';
-        }
-    }
+    // Note: Action selector improvement is now handled globally in base.html
     
     // Simple progress indication for analysis actions
     const actionForm = document.querySelector('#changelist-action-form');

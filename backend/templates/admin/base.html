@@ -2,8 +2,67 @@
 
 {% block extrahead %}
 {{ block.super }}
+<style type="text/css">
+/* Ensure all action selectors have consistent font styling */
+select[name="action"] {
+    font-family: inherit;
+    font-size: inherit;
+    font-weight: inherit;
+}
+</style>
 <script type="text/javascript">
 document.addEventListener('DOMContentLoaded', function() {
+    // Global action selector improvement for all admin pages
+    function improveActionSelectors() {
+        const actionSelectors = document.querySelectorAll('select[name="action"]');
+        actionSelectors.forEach(function(actionSelect) {
+            const firstOption = actionSelect.querySelector('option[value=""]');
+            if (firstOption) {
+                const currentText = firstOption.textContent.trim();
+                // Replace various default placeholders with consistent text
+                if (currentText === '---------' || 
+                    currentText === 'Select action' || 
+                    currentText === 'Select Action' ||
+                    currentText === '操作を選択' ||
+                    currentText === 'アクションを選択') {
+                    // Check user's language preference from Django's language setting
+                    const htmlLang = document.documentElement.lang || 'en';
+                    const isJapanese = htmlLang.startsWith('ja');
+                    
+                    // Set appropriate text based on language
+                    firstOption.textContent = isJapanese ? 'アクションを選択' : 'Choose an action';
+                }
+            }
+        });
+    }
+    
+    // Run improvement immediately and after any dynamic content changes
+    improveActionSelectors();
+    
+    // Also run when navigating between admin pages (for SPAs or dynamic content)
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                // Check if new action selectors were added
+                const hasNewSelectors = Array.from(mutation.addedNodes).some(function(node) {
+                    return node.nodeType === 1 && (
+                        node.matches && node.matches('select[name="action"]') ||
+                        node.querySelector && node.querySelector('select[name="action"]')
+                    );
+                });
+                if (hasNewSelectors) {
+                    setTimeout(improveActionSelectors, 100);
+                }
+            }
+        });
+    });
+    
+    // Observe the document for dynamic changes
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
     // Silent timezone detection for Django admin (no popup, no auto-refresh)
     function detectAndSetTimezone() {
         // Check if timezone is already detected in this session

@@ -5,14 +5,8 @@
 {{ block.super }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // Change the action dropdown default text
-    var actionSelect = document.querySelector('select[name="action"]');
-    if (actionSelect) {
-        var firstOption = actionSelect.querySelector('option[value=""]');
-        if (firstOption) {
-            firstOption.textContent = '{% trans "Select Action" %}';
-        }
-    }
+    // Note: Action selector improvement is now handled globally in base.html
+    // This will automatically set "Choose an action" / "アクションを選択"
     
     // Change the Go button text to Confirm
     var goButton = document.querySelector('button[name="index"]');
