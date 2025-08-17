@@ -89,6 +89,54 @@ class Message(models.Model):
             # Note: Automatic analysis is now handled by Django signals in chat/signals.py
 
 
+class ConversationSummary(models.Model):
+    """Automatic LLM-generated conversation analysis and insights"""
+    
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, editable=False, verbose_name=_('UUID'))
+    
+    # LLM-generated content (main field)
+    llm_analysis = models.TextField(default='', verbose_name=_('LLM Analysis'))
+    
+    # Analysis period (automatically determined)
+    analysis_period = models.CharField(
+        max_length=50,
+        default='Unknown',
+        verbose_name=_('Analysis Period'),
+        help_text=_('Time period covered by this analysis (e.g., "Last 24 hours", "Today", "This week")')
+    )
+    
+    # Automatic metadata
+    messages_analyzed_count = models.IntegerField(default=0, verbose_name=_('Messages Analyzed'))
+    critical_issues_found = models.IntegerField(default=0, verbose_name=_('Critical Issues Found'))
+    
+    # Auto-generation metadata
+    generated_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Generated At'))
+    trigger_reason = models.CharField(
+        max_length=100,
+        default='legacy_migration',
+        verbose_name=_('Generation Trigger'),
+        help_text=_('What triggered this automatic summary generation')
+    )
+    
+    # LLM metadata
+    llm_model_used = models.CharField(max_length=50, blank=True, verbose_name=_('LLM Model Used'))
+    llm_response_time = models.FloatField(null=True, blank=True, verbose_name=_('LLM Response Time'))
+    
+    class Meta:
+        verbose_name = _('Conversation Summary')
+        verbose_name_plural = _('Conversation Summaries')
+        ordering = ['-generated_at']
+    
+    def __str__(self):
+        return f"Summary - {self.analysis_period} ({self.generated_at.strftime('%Y-%m-%d %H:%M')})"
+    
+    def get_preview(self, length=200):
+        """Get preview of LLM analysis"""
+        if len(self.llm_analysis) <= length:
+            return self.llm_analysis
+        return self.llm_analysis[:length] + "..."
+
+
 class UserSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sessions', verbose_name=_('User'))
     session_id = models.CharField(max_length=100, unique=True, verbose_name=_('Session ID'))

@@ -5,8 +5,14 @@ from django.utils.translation import gettext_lazy as _
 from django import forms
 from django.utils import timezone
 from django.conf import settings
+from django.contrib import messages
+from django.http import HttpResponseRedirect
+from datetime import datetime, timedelta
 import uuid
-from .models import Conversation, Message, UserSession, APIConfiguration, AdminPrompt
+import json
+import asyncio
+from asgiref.sync import sync_to_async
+from .models import Conversation, Message, UserSession, APIConfiguration, AdminPrompt, ConversationSummary
 
 
 # Custom form for message content
@@ -1503,4 +1509,89 @@ def llm_chat_admin_view(request):
     }
     
     return TemplateResponse(request, 'admin/chat/llm_chat.html', context)
+
+
+
+
+@admin.register(ConversationSummary)
+class ConversationSummaryAdmin(admin.ModelAdmin):
+    """Admin interface for automatic LLM-generated conversation summaries"""
+    
+    list_display = [
+        'summary_preview', 'analysis_period', 'messages_analyzed_count', 
+        'critical_issues_found', 'trigger_reason', 'generated_at_display'
+    ]
+    list_filter = ['trigger_reason', 'generated_at', 'critical_issues_found']
+    readonly_fields = [
+        'uuid', 'llm_analysis', 'analysis_period', 'messages_analyzed_count',
+        'critical_issues_found', 'generated_at', 'trigger_reason',
+        'llm_model_used', 'llm_response_time'
+    ]
+    search_fields = ['llm_analysis', 'trigger_reason']
+    
+    # Make all fields read-only (no manual creation)
+    def has_add_permission(self, request):
+        return False  # Disable manual creation
+    
+    def has_change_permission(self, request, obj=None):
+        return False  # Make read-only
+    
+    fieldsets = [
+        (_('LLM Analysis'), {
+            'fields': ['llm_analysis_display'],
+        }),
+        (_('Summary Information'), {
+            'fields': ['analysis_period', 'messages_analyzed_count', 'critical_issues_found'],
+        }),
+        (_('Generation Details'), {
+            'fields': ['trigger_reason', 'generated_at', 'llm_model_used', 'llm_response_time'],
+            'classes': ['collapse']
+        }),
+        (_('System Information'), {
+            'fields': ['uuid'],
+            'classes': ['collapse']
+        })
+    ]
+    
+    actions = ['generate_automatic_summary']
+    
+    def generate_automatic_summary(self, request, queryset):
+        """Admin action to generate new automatic summary"""
+        try:
+            import asyncio
+            from .services.automatic_summary_service import AutomaticSummaryService
+            
+            async def create_summary():
+                return await AutomaticSummaryService.generate_automatic_summary("admin_manual_trigger")
+            
+            summary = asyncio.run(create_summary())
+            
+            if summary:
+                messages.success(request, f"Automatic summary generated successfully: {summary}")
+            else:
+                messages.warning(request, "No summary generated - no recent messages found")
+                
+        except Exception as e:
+            messages.error(request, f"Failed to generate summary: {str(e)}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Admin summary generation error: {e}")
+    
+    generate_automatic_summary.short_description = _("Generate New Automatic Summary")
+    
+    def summary_preview(self, obj):
+        preview = obj.get_preview(80)
+        return preview
+    summary_preview.short_description = _('Summary Preview')
+    
+    def generated_at_display(self, obj):
+        return obj.generated_at.strftime('%Y-%m-%d %H:%M')
+    generated_at_display.short_description = _('Generated At')
+    
+    def llm_analysis_display(self, obj):
+        return format_html(
+            '<div style="max-height: 500px; overflow-y: auto; padding: 15px; background: #f8f9fa; border-radius: 4px; white-space: pre-wrap; font-family: Arial, sans-serif; line-height: 1.5;">{}</div>', 
+            obj.llm_analysis
+        )
+    llm_analysis_display.short_description = _('LLM Analysis')
 
