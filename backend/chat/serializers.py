@@ -82,6 +82,7 @@ class UserSerializer(serializers.ModelSerializer):
 class ConversationSerializer(serializers.ModelSerializer):
     """Serializer for Conversation model"""
     
+    id = serializers.CharField(source='uuid', read_only=True)  # Use UUID as ID
     user = UserSerializer(read_only=True)
     message_count = serializers.SerializerMethodField()
     last_message_time = serializers.SerializerMethodField()
@@ -89,12 +90,12 @@ class ConversationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Conversation
         fields = [
-            'id', 'uuid', 'user', 'title', 'created_at', 'updated_at',
+            'id', 'user', 'title', 'created_at', 'updated_at',
             'is_active', 'total_messages', 'satisfaction_score', 'langextract_analysis', 
             'message_count', 'last_message_time'
         ]
         read_only_fields = [
-            'id', 'uuid', 'user', 'created_at', 'updated_at', 'message_count', 'total_messages'
+            'id', 'user', 'created_at', 'updated_at', 'message_count', 'total_messages'
         ]
     
     
@@ -111,17 +112,19 @@ class ConversationSerializer(serializers.ModelSerializer):
 class MessageSerializer(serializers.ModelSerializer):
     """Serializer for Message model"""
     
+    id = serializers.CharField(source='uuid', read_only=True)  # Use UUID as ID
+    conversation = serializers.CharField(source='conversation.uuid', read_only=True)  # Use conversation UUID
     conversation_title = serializers.CharField(source='conversation.get_title', read_only=True)
     
     class Meta:
         model = Message
         fields = [
-            'id', 'uuid', 'conversation', 'conversation_title', 'content', 
+            'id', 'conversation', 'conversation_title', 'content', 
             'sender_type', 'timestamp', 'feedback', 'file_attachment',
             'metadata', 'response_time', 'llm_model_used', 'tokens_used'
         ]
         read_only_fields = [
-            'id', 'uuid', 'timestamp', 'response_time', 'llm_model_used', 
+            'id', 'conversation', 'timestamp', 'response_time', 'llm_model_used', 
             'tokens_used', 'conversation_title'
         ]
 
@@ -253,12 +256,18 @@ class LLMTestResponseSerializer(serializers.Serializer):
 class ConversationListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for conversation lists"""
     
+    id = serializers.CharField(source='uuid', read_only=True)  # Use UUID as ID
+    title = serializers.SerializerMethodField()
     preview_text = serializers.SerializerMethodField()
     message_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Conversation
-        fields = ['id', 'uuid', 'title', 'preview_text', 'message_count', 'updated_at']
+        fields = ['id', 'title', 'preview_text', 'message_count', 'updated_at']
+    
+    def get_title(self, obj):
+        """Get computed title using model's get_title() method"""
+        return obj.get_title()
     
     def get_preview_text(self, obj):
         """Get preview from first user message"""

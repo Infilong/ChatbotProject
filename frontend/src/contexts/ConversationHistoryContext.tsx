@@ -18,6 +18,7 @@ interface ConversationHistoryContextType {
   startNewConversation: () => void;
   clearLocalStorage: () => void;
   syncWithBackend: () => Promise<void>;
+  refreshConversations: () => Promise<void>;
 }
 
 const ConversationHistoryContext = createContext<ConversationHistoryContextType | undefined>(undefined);
@@ -59,7 +60,18 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
           // Clear localStorage when using backend to avoid confusion
           try {
             localStorage.removeItem('conversationHistory');
-            console.log('Cleared localStorage after loading from backend');
+            console.log('Cleared localStorage conversation history after loading from backend');
+            
+            // Also clear current conversation cache if it no longer exists in backend
+            const currentConversationId = localStorage.getItem('currentConversationId');
+            if (currentConversationId) {
+              const conversationExists = conversations.some(conv => conv.id === currentConversationId);
+              if (!conversationExists) {
+                localStorage.removeItem('currentConversationId');
+                localStorage.removeItem('chatMessages');
+                console.log('Cleared stale current conversation cache - conversation no longer exists in backend');
+              }
+            }
           } catch (error) {
             console.error('Error clearing localStorage:', error);
           }
@@ -118,6 +130,21 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
           ...prev, 
           conversations: backendConversations
         }));
+        
+        // Check if current conversation cache is stale during auto-refresh
+        try {
+          const currentConversationId = localStorage.getItem('currentConversationId');
+          if (currentConversationId) {
+            const conversationExists = backendConversations.some(conv => conv.id === currentConversationId);
+            if (!conversationExists) {
+              localStorage.removeItem('currentConversationId');
+              localStorage.removeItem('chatMessages');
+              console.log('Auto-refresh: Cleared stale current conversation cache');
+            }
+          }
+        } catch (error) {
+          console.error('Error checking conversation cache during auto-refresh:', error);
+        }
         
         console.log(`Auto-refresh: ${backendConversations.length} conversations from backend`);
       } catch (error) {
@@ -198,14 +225,14 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
       // Add messages to the conversation using UUID
       for (const message of messages) {
         await conversationService.addMessage(
-          backendConv.uuid,  // Use UUID instead of id
+          backendConv.id,  // Backend now returns UUID as id field
           message.text,
           message.sender === 'user' ? 'user' : 'bot'
         );
       }
 
       // Get the full conversation with messages using UUID
-      const fullConversation = await conversationService.getConversation(backendConv.uuid);
+      const fullConversation = await conversationService.getConversation(backendConv.id);
       const frontendConv = conversationService.convertToFrontendFormat(fullConversation);
       frontendConv.username = username;
       frontendConv.language = language;
@@ -213,11 +240,11 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
       setState(prev => ({
         ...prev,
         conversations: [frontendConv, ...prev.conversations],
-        currentConversationId: backendConv.uuid,
+        currentConversationId: backendConv.id,
       }));
 
-      console.log(`Saved conversation to backend: ${backendConv.uuid}`);
-      return backendConv.uuid;
+      console.log(`Saved conversation to backend: ${backendConv.id}`);
+      return backendConv.id;
     } catch (error) {
       console.error('Error saving conversation to backend:', error);
       
@@ -492,6 +519,46 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
     }
   }, []);
 
+  const refreshConversations = useCallback(async () => {
+    if (!authService.isAuthenticated()) {
+      console.log('User not authenticated, skipping refresh');
+      return;
+    }
+
+    try {
+      console.log('🔄 Refreshing conversations immediately...');
+      const response = await conversationService.getConversations(1, 100);
+      
+      const backendConversations = response.results.map((backendConv: any) => 
+        conversationService.convertToFrontendFormat(backendConv)
+      );
+
+      setState(prev => ({ 
+        ...prev, 
+        conversations: backendConversations
+      }));
+      
+      // Check if current conversation cache is stale during refresh
+      try {
+        const currentConversationId = localStorage.getItem('currentConversationId');
+        if (currentConversationId) {
+          const conversationExists = backendConversations.some(conv => conv.id === currentConversationId);
+          if (!conversationExists) {
+            localStorage.removeItem('currentConversationId');
+            localStorage.removeItem('chatMessages');
+            console.log('Refresh: Cleared stale current conversation cache');
+          }
+        }
+      } catch (error) {
+        console.error('Error checking conversation cache during refresh:', error);
+      }
+      
+      console.log(`✅ Immediate refresh: ${backendConversations.length} conversations loaded`);
+    } catch (error) {
+      console.error('Error during immediate conversation refresh:', error);
+    }
+  }, []);
+
   const contextValue: ConversationHistoryContextType = {
     state,
     saveConversation,
@@ -506,6 +573,7 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
     startNewConversation,
     clearLocalStorage,
     syncWithBackend,
+    refreshConversations,
   };
 
   return (

@@ -42,6 +42,7 @@ interface ConversationHistoryPanelProps {
   open: boolean;
   onClose: () => void;
   onLoadConversation: (conversationId: string) => void;
+  onConversationDeleted?: (deletedConversationId: string) => void;
   currentUsername: string;
 }
 
@@ -49,6 +50,7 @@ const ConversationHistoryPanel: React.FC<ConversationHistoryPanelProps> = ({
   open,
   onClose,
   onLoadConversation,
+  onConversationDeleted,
   currentUsername,
 }) => {
   const { language } = useLanguage();
@@ -124,6 +126,9 @@ const ConversationHistoryPanel: React.FC<ConversationHistoryPanelProps> = ({
       );
     }
     
+    // Debug: Log conversation IDs in the list
+    console.log('📋 Conversation list IDs:', filtered.map(c => ({ id: c.id, title: c.title })));
+    
     return filtered;
   }, [getConversationSummaries, searchQuery]);
 
@@ -133,6 +138,7 @@ const ConversationHistoryPanel: React.FC<ConversationHistoryPanelProps> = ({
 
   const handleDeleteClick = useCallback((conversationId: string, event: React.MouseEvent) => {
     event.stopPropagation();
+    console.log('🔍 Delete button clicked for conversation ID:', conversationId);
     setConversationToDelete(conversationId);
     setDeleteDialogOpen(true);
   }, []);
@@ -140,18 +146,28 @@ const ConversationHistoryPanel: React.FC<ConversationHistoryPanelProps> = ({
   const handleDeleteConfirm = useCallback(async () => {
     if (conversationToDelete) {
       try {
+        console.log('🗑️ Deleting conversation in history panel:', conversationToDelete);
         await deleteConversation(conversationToDelete);
+        
+        // Notify parent component that this conversation was deleted
+        if (onConversationDeleted) {
+          console.log('🔔 Calling onConversationDeleted callback with ID:', conversationToDelete);
+          onConversationDeleted(conversationToDelete);
+        } else {
+          console.warn('⚠️ No onConversationDeleted callback provided');
+        }
+        
         setDeleteDialogOpen(false);
         setConversationToDelete(null);
-        // Success - conversation deleted successfully
+        console.log('✅ Conversation deletion completed successfully');
       } catch (error) {
-        console.error('Failed to delete conversation:', error);
+        console.error('❌ Failed to delete conversation:', error);
         // Keep dialog open to allow user to retry or cancel
         // Could add toast notification here for better UX
         alert('Failed to delete conversation. Please try again.');
       }
     }
-  }, [conversationToDelete, deleteConversation]);
+  }, [conversationToDelete, deleteConversation, onConversationDeleted]);
 
   const handleDeleteCancel = useCallback(() => {
     setDeleteDialogOpen(false);

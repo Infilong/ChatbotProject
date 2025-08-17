@@ -6,7 +6,7 @@
 import authService from './authService';
 
 export interface BackendMessage {
-  id: string;
+  id: string;  // Now always UUID from backend
   conversation: string;
   content: string;
   sender_type: 'user' | 'bot';
@@ -18,8 +18,7 @@ export interface BackendMessage {
 }
 
 export interface BackendConversation {
-  id: string;
-  uuid: string;
+  id: string;  // Now always UUID from backend (no separate uuid field)
   user: number;
   title: string;
   is_active: boolean;
@@ -286,10 +285,10 @@ class ConversationService {
    */
   convertToFrontendFormat(backendConv: BackendConversation): any {
     return {
-      id: backendConv.uuid,  // Use UUID as primary identifier
+      id: backendConv.id,  // Backend now returns UUID as id field
       title: backendConv.title,
       messages: backendConv.messages?.map(msg => ({
-        id: msg.id,  // Messages still use ID for now, UUID later
+        id: msg.id,  // Messages now also use UUID as id field
         text: msg.content,
         sender: msg.sender_type === 'user' ? 'user' : 'bot',
         timestamp: new Date(msg.timestamp),

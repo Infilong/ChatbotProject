@@ -45,7 +45,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
   const { 
     loadConversation, 
     startNewConversation,
-    setCurrentConversation
+    setCurrentConversation,
+    refreshConversations
   } = useConversationHistory();
 
   // Language translations
@@ -118,11 +119,29 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       setIsTyping(true);
 
       // Generate bot response
+      const previousConversationId = chatService.getCurrentConversationId();
       const response = await chatService.generateResponse(userMessage, language, {});
+      const newConversationId = chatService.getCurrentConversationId();
+      
+      // Check if a new conversation was created (conversation ID changed from null to a value)
+      const isNewConversation = !previousConversationId && newConversationId;
       
       // Hide typing indicator and add bot message
       setIsTyping(false);
       setMessages(prev => [...prev, response.message]);
+      
+      // If a new conversation was created, immediately refresh the conversation history
+      if (isNewConversation) {
+        console.log('🆕 New conversation detected! Refreshing conversation history immediately');
+        console.log('  - Previous conversation ID:', previousConversationId);
+        console.log('  - New conversation ID:', newConversationId);
+        try {
+          await refreshConversations();
+          console.log('✅ Conversation history refreshed successfully');
+        } catch (error) {
+          console.error('Failed to refresh conversation history:', error);
+        }
+      }
       
     } catch (error) {
       setIsTyping(false);
@@ -136,7 +155,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       showError(chatError.message);
       console.error('Error generating bot response:', error);
     }
-  }, [showError, language]);
+  }, [showError, language, refreshConversations]);
 
   const handleRetryMessage = useCallback(async (messageId: string) => {
     const message = messages.find(m => m.id === messageId);
@@ -148,7 +167,12 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     try {
       setIsTyping(true);
       
+      const previousConversationId = chatService.getCurrentConversationId();
       const response = await chatService.retryMessage(message, language, {}, message.retryCount || 0);
+      const newConversationId = chatService.getCurrentConversationId();
+      
+      // Check if a new conversation was created during retry
+      const isNewConversation = !previousConversationId && newConversationId;
       
       setIsTyping(false);
       
@@ -159,6 +183,17 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       
       // Add bot response
       setMessages(prev => [...prev, response.message]);
+      
+      // If a new conversation was created, immediately refresh the conversation history
+      if (isNewConversation) {
+        console.log('🆕 New conversation detected during retry! Refreshing conversation history');
+        try {
+          await refreshConversations();
+          console.log('✅ Conversation history refreshed after retry');
+        } catch (error) {
+          console.error('Failed to refresh conversation history after retry:', error);
+        }
+      }
       
       showSuccess('Message sent successfully!');
       
@@ -172,7 +207,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       
       showError(chatError.message);
     }
-  }, [messages, showError, showSuccess, language]);
+  }, [messages, showError, showSuccess, language, refreshConversations]);
 
   const handleFeedback = useCallback((messageId: string, feedback: 'up' | 'down') => {
     setMessages(prev => messageUtils.updateMessageFeedback(prev, messageId, feedback));
@@ -218,7 +253,8 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
         // Sync the conversation ID with chatService
         chatService.setCurrentConversationId(conversationId);
         
-        console.log('Loaded conversation and synced with chatService:', conversationId);
+        console.log('📂 Loaded conversation and synced with chatService:', conversationId);
+        console.log('📂 ChatService now stores conversation ID:', chatService.getCurrentConversationId());
         showSuccess(t.loadSuccess);
       }
     } catch (error) {
@@ -226,6 +262,50 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
       console.error('Error loading conversation:', error);
     }
   }, [loadConversation, showSuccess, showError, t]);
+
+  const handleConversationDeleted = useCallback(async (deletedConversationId: string) => {
+    // Check if the deleted conversation is the currently active one
+    const currentConversationId = chatService.getCurrentConversationId();
+    
+    console.log('🔍 Conversation deleted callback triggered:');
+    console.log('  - Deleted conversation ID:', deletedConversationId);
+    console.log('  - Current conversation ID:', currentConversationId);
+    console.log('  - IDs match:', currentConversationId === deletedConversationId);
+    
+    if (currentConversationId === deletedConversationId) {
+      console.log('🧹 Clearing chat window - IDs match!');
+      
+      // Clear the current conversation and start fresh
+      setMessages([]);
+      chatService.setCurrentConversationId(null);
+      
+      // CRITICAL: Clear localStorage cache to prevent restoration on page refresh
+      try {
+        localStorage.removeItem('chatMessages');
+        localStorage.removeItem('currentConversationId');
+        console.log('🧹 Cleared localStorage cache: chatMessages, currentConversationId');
+      } catch (error) {
+        console.error('Failed to clear localStorage cache:', error);
+      }
+      
+      // Start a new conversation
+      startNewConversation();
+      
+      // Clear the chat service conversation ID
+      await chatService.startNewConversation();
+      
+      // Ensure context is synchronized for new conversation  
+      setCurrentConversation(null);
+      
+      // Add welcome message for new conversation
+      const welcomeMessage = messageUtils.createWelcomeMessage(username, language);
+      setMessages([welcomeMessage]);
+      
+      console.log('✅ Chat window cleared, localStorage cleared, new conversation started with welcome message');
+    } else {
+      console.log('ℹ️ Not clearing chat window - different conversation was deleted');
+    }
+  }, [startNewConversation, setCurrentConversation, username, language]);
 
   const handleHistoryToggle = useCallback(() => {
     setHistoryPanelOpen(prev => !prev);
@@ -461,6 +541,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
         open={historyPanelOpen}
         onClose={handleHistoryClose}
         onLoadConversation={handleLoadConversation}
+        onConversationDeleted={handleConversationDeleted}
         currentUsername={username}
       />
     </Box>
