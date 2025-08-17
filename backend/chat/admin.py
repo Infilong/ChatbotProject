@@ -330,16 +330,16 @@ class ConversationAdmin(admin.ModelAdmin):
         
         if overall_quality >= 80:
             color = 'green'
-            rating = 'Excellent'
+            rating = _('Excellent')
         elif overall_quality >= 60:
             color = 'orange'
-            rating = 'Good'
+            rating = _('Good')
         elif overall_quality >= 40:
             color = 'blue'
-            rating = 'Average'
+            rating = _('Average')
         else:
             color = 'red'
-            rating = 'Poor'
+            rating = _('Poor')
         
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}</span><br><small>{}%</small>',
@@ -358,7 +358,7 @@ class ConversationAdmin(admin.ModelAdmin):
         top_issues = issue_analysis.get('top_issues', [])
         
         if total_issues == 0:
-            return format_html('<span style="color: green;">No issues</span>')
+            return format_html('<span style="color: green;">{}</span>', _('No issues'))
         
         # Show top 2 issues
         issue_display = []
@@ -366,7 +366,27 @@ class ConversationAdmin(admin.ModelAdmin):
             count = data['count']
             confidence = data.get('average_confidence', 0)
             color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
-            issue_display.append(f'<span style="color: {color};">{issue_type} ({count})</span>')
+            
+            # Translate issue types
+            issue_translations = {
+                'question': _('Question'),
+                'technical_critical_hardware': _('Critical Hardware Issue'),
+                'technical_urgent': _('Urgent Technical Issue'),
+                'technical_problem': _('Technical Problem'),
+                'billing_issue': _('Billing Issue'),
+                'login_problem': _('Login Problem'),
+                'performance_issue': _('Performance Issue'),
+                'security_concern': _('Security Concern'),
+                'feature_request': _('Feature Request'),
+                'integration_issue': _('Integration Issue'),
+                'data_issue': _('Data Issue'),
+                'documentation_gap': _('Documentation Gap'),
+                'ui_ux_feedback': _('UI/UX Feedback'),
+            }
+            
+            translated_issue = issue_translations.get(issue_type, issue_type)
+            
+            issue_display.append(f'<span style="color: {color};">{translated_issue} ({count})</span>')
         
         result = '<br>'.join(issue_display)
         if len(top_issues) > 2:
@@ -410,16 +430,16 @@ class ConversationAdmin(admin.ModelAdmin):
         
         # Determine overall satisfaction level
         if satisfied_pct > 50:
-            level = 'Satisfied'
+            level = _('Satisfied')
             color = 'green'
         elif dissatisfied_pct > 30:
-            level = 'Dissatisfied'  
+            level = _('Dissatisfied')  
             color = 'red'
         elif satisfied_pct > 20:
-            level = 'Mixed'
+            level = _('Mixed')
             color = 'orange'
         else:
-            level = 'Neutral'
+            level = _('Neutral')
             color = 'blue'
         
         return format_html(
@@ -1163,11 +1183,11 @@ class MessageAdmin(admin.ModelAdmin):
     def issues_summary(self, obj):
         """Display summary of detected issues"""
         if not obj.message_analysis or not obj.message_analysis.get('issues_raised'):
-            return format_html('<span style="color: #999;">No issues</span>')
+            return format_html('<span style="color: #999;">{}</span>', _('No issues'))
         
         issues = obj.message_analysis.get('issues_raised', [])
         if not issues:
-            return format_html('<span style="color: #999;">No issues</span>')
+            return format_html('<span style="color: #999;">{}</span>', _('No issues'))
         
         # Show top 2 issues with confidence
         issue_summaries = []
@@ -1175,7 +1195,26 @@ class MessageAdmin(admin.ModelAdmin):
             issue_type = issue.get('issue_type', 'Unknown')
             confidence = issue.get('confidence', 0)
             color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
-            issue_summaries.append(f'<span style="color: {color};">{issue_type} ({confidence:.0f}%)</span>')
+            
+            # Translate issue types
+            issue_translations = {
+                'question': _('Question'),
+                'technical_critical_hardware': _('Critical Hardware Issue'),
+                'technical_urgent': _('Urgent Technical Issue'),
+                'technical_problem': _('Technical Problem'),
+                'billing_issue': _('Billing Issue'),
+                'login_problem': _('Login Problem'),
+                'performance_issue': _('Performance Issue'),
+                'security_concern': _('Security Concern'),
+                'feature_request': _('Feature Request'),
+                'integration_issue': _('Integration Issue'),
+                'data_issue': _('Data Issue'),
+                'documentation_gap': _('Documentation Gap'),
+                'ui_ux_feedback': _('UI/UX Feedback'),
+            }
+            translated_issue = issue_translations.get(issue_type, issue_type)
+            
+            issue_summaries.append(f'<span style="color: {color};">{translated_issue} ({confidence:.0f}%)</span>')
         
         result = '<br>'.join(issue_summaries)
         if len(issues) > 2:
@@ -1201,10 +1240,19 @@ class MessageAdmin(admin.ModelAdmin):
             'unknown': 'gray'
         }
         
+        # Translation mapping for satisfaction levels
+        level_translations = {
+            'satisfied': _('Satisfied'),
+            'dissatisfied': _('Dissatisfied'),
+            'neutral': _('Neutral'),
+            'unknown': _('Unknown')
+        }
+        
         color = color_map.get(level, 'gray')
+        translated_level = level_translations.get(level, level.title())
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span><br><small>Score: {} ({}%)</small>',
-            color, level.title(), f'{score:.1f}', int(confidence)
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{}: {} ({}%)</small>',
+            color, translated_level, _('Score'), f'{score:.1f}', int(confidence)
         )
     satisfaction_display.short_description = _('Satisfaction')
     
@@ -1224,10 +1272,26 @@ class MessageAdmin(admin.ModelAdmin):
             'low': 'green'
         }
         
+        # Translation mapping for importance levels
+        level_translations = {
+            'high': _('High'),
+            'medium': _('Medium'),
+            'low': _('Low'),
+            'critical': _('Critical'),
+            'normal': _('Normal'),
+            'urgent': _('Urgent'),
+            'technical': _('Technical'),
+            'hardware': _('Hardware'),
+            'documentation': _('Documentation'),
+            'question': _('Question')
+        }
+        
         color = color_map.get(level, 'gray')
+        translated_level = level_translations.get(level, level)
+        translated_priority = level_translations.get(priority, priority)
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{} priority ({})</small>',
-            color, level.title(), priority.title(), urgency_score
+            '<span style="color: {}; font-weight: bold;">{}</span><br><small>{} {} ({})</small>',
+            color, translated_level, translated_priority, _('priority'), urgency_score
         )
     importance_display.short_description = _('Importance')
     
@@ -1247,12 +1311,20 @@ class MessageAdmin(admin.ModelAdmin):
             'low': 'green'
         }
         
+        # Translation mapping for potential levels
+        level_translations = {
+            'high': _('High'),
+            'medium': _('Medium'),
+            'low': _('Low')
+        }
+        
         color = color_map.get(potential_level, 'gray')
-        areas_text = ', '.join(improvement_areas[:2]) if improvement_areas else 'None'
+        translated_level = level_translations.get(potential_level, potential_level.title())
+        areas_text = ', '.join(improvement_areas[:2]) if improvement_areas else _('None')
         
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}</span><br><small>{}% - {}</small>',
-            color, potential_level.title(), score, areas_text[:30] + '...' if len(areas_text) > 30 else areas_text
+            color, translated_level, score, areas_text[:30] + '...' if len(str(areas_text)) > 30 else areas_text
         )
     doc_potential_display.short_description = _('Doc Potential')
     
@@ -1273,12 +1345,20 @@ class MessageAdmin(admin.ModelAdmin):
             'low': 'green'
         }
         
+        # Translation mapping for potential levels
+        level_translations = {
+            'high': _('High'),
+            'medium': _('Medium'),
+            'low': _('Low')
+        }
+        
         color = color_map.get(potential_level, 'gray')
+        translated_level = level_translations.get(potential_level, potential_level.title())
         add_indicator = ' [ADD]' if should_add else ''
         
         return format_html(
             '<span style="color: {}; font-weight: bold;">{}{}</span><br><small>{}% - {}</small>',
-            color, potential_level.title(), add_indicator, score, question_type.replace('_', ' ').title()
+            color, translated_level, add_indicator, score, question_type.replace('_', ' ').title()
         )
     faq_potential_display.short_description = _('FAQ Potential')
 
@@ -1518,8 +1598,8 @@ class ConversationSummaryAdmin(admin.ModelAdmin):
     """Admin interface for automatic LLM-generated conversation summaries"""
     
     list_display = [
-        'summary_preview', 'analysis_period', 'messages_analyzed_count', 
-        'critical_issues_found', 'trigger_reason', 'generated_at_display'
+        'summary_preview', 'analysis_period_display', 'messages_analyzed_count_display', 
+        'critical_issues_found_display', 'trigger_reason_display', 'generated_at_display'
     ]
     list_filter = ['trigger_reason', 'generated_at', 'critical_issues_found']
     readonly_fields = [
@@ -1594,4 +1674,31 @@ class ConversationSummaryAdmin(admin.ModelAdmin):
             obj.llm_analysis
         )
     llm_analysis_display.short_description = _('LLM Analysis')
+    
+    def analysis_period_display(self, obj):
+        return obj.analysis_period
+    analysis_period_display.short_description = _('Analysis Period')
+    analysis_period_display.admin_order_field = 'analysis_period'
+    
+    def messages_analyzed_count_display(self, obj):
+        return obj.messages_analyzed_count
+    messages_analyzed_count_display.short_description = _('Messages Analyzed')
+    messages_analyzed_count_display.admin_order_field = 'messages_analyzed_count'
+    
+    def critical_issues_found_display(self, obj):
+        return obj.critical_issues_found
+    critical_issues_found_display.short_description = _('Critical Issues Found')
+    critical_issues_found_display.admin_order_field = 'critical_issues_found'
+    
+    def trigger_reason_display(self, obj):
+        # Map trigger reason codes to user-friendly text
+        trigger_translations = {
+            'recent_activity': _('Recent activity'),
+            'admin_manual_trigger': _('Manual trigger'),
+            'scheduled': _('Scheduled'),
+            'legacy_migration': _('Legacy migration'),
+        }
+        return trigger_translations.get(obj.trigger_reason, obj.trigger_reason)
+    trigger_reason_display.short_description = _('Generation Trigger')
+    trigger_reason_display.admin_order_field = 'trigger_reason'
 

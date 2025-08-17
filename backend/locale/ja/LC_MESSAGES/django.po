@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-17 17:13+0900\n"
+"POT-Creation-Date: 2025-08-17 22:30+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -30,7 +30,8 @@ msgstr "ポジティブ"
 msgid "Negative"
 msgstr "ネガティブ"
 
-#: .\analytics\models.py:11 .\documents\models.py:1099
+#: .\analytics\models.py:11 .\chat\admin.py:442 .\chat\admin.py:1247
+#: .\documents\models.py:1099
 msgid "Neutral"
 msgstr "中立"
 
@@ -46,7 +47,7 @@ msgstr "保留中"
 msgid "Escalated"
 msgstr "エスカレーション"
 
-#: .\analytics\models.py:20 .\analytics\models.py:115 .\chat\admin.py:1125
+#: .\analytics\models.py:20 .\analytics\models.py:115 .\chat\admin.py:1145
 #: .\chat\models.py:26 .\chat\models.py:55 .\documents\models.py:1117
 #: .\templates\admin\analytics\message_details.html:194
 msgid "Conversation"
@@ -107,7 +108,7 @@ msgstr "分析"
 
 #: .\analytics\models.py:50 .\authentication\admin.py:112
 #: .\authentication\admin.py:126 .\authentication\admin.py:146
-#: .\chat\admin.py:156 .\chat\admin.py:1304 .\chat\models.py:13
+#: .\chat\admin.py:156 .\chat\admin.py:1384 .\chat\models.py:13
 #: .\chat\models.py:44 .\chat\models.py:141
 #: .\templates\admin\analytics\message_details.html:193
 msgid "User"
@@ -189,7 +190,7 @@ msgstr "平均応答時間"
 msgid "Bot vs Human Ratio"
 msgstr "ボット対人間比率"
 
-#: .\analytics\models.py:92 .\authentication\models.py:35 .\chat\admin.py:443
+#: .\analytics\models.py:92 .\authentication\models.py:35 .\chat\admin.py:463
 #: .\chat\models.py:15 .\chat\models.py:192 .\chat\models.py:259
 #: .\documents\models.py:207 .\documents\models.py:1170
 #: .\templates\admin\documents\file_info.html:57
@@ -327,7 +328,7 @@ msgstr "未活動"
 msgid "Last Active"
 msgstr "最終アクティブ"
 
-#: .\authentication\admin.py:91 .\chat\admin.py:459
+#: .\authentication\admin.py:91 .\chat\admin.py:479
 msgid "User Information"
 msgstr "ユーザー情報"
 
@@ -335,7 +336,7 @@ msgstr "ユーザー情報"
 msgid "Contact Details"
 msgstr "連絡先詳細"
 
-#: .\authentication\admin.py:100 .\chat\admin.py:1419
+#: .\authentication\admin.py:100 .\chat\admin.py:1499
 msgid "Usage Statistics"
 msgstr "使用統計"
 
@@ -355,8 +356,8 @@ msgstr "AI設定"
 msgid "Privacy Settings"
 msgstr "プライバシー設定"
 
-#: .\authentication\admin.py:138 .\chat\admin.py:132 .\chat\admin.py:1347
-#: .\chat\admin.py:1423 .\chat\models.py:63
+#: .\authentication\admin.py:138 .\chat\admin.py:132 .\chat\admin.py:1427
+#: .\chat\admin.py:1503 .\chat\models.py:63
 msgid "Metadata"
 msgstr "メタデータ"
 
@@ -405,7 +406,7 @@ msgid "Total Messages Sent"
 msgstr "送信メッセージ総数"
 
 #: .\authentication\models.py:36 .\authentication\models.py:85
-#: .\chat\admin.py:1375 .\chat\admin.py:1480 .\chat\models.py:16
+#: .\chat\admin.py:1455 .\chat\admin.py:1560 .\chat\models.py:16
 #: .\chat\models.py:193 .\chat\models.py:260 .\documents\models.py:208
 #: .\documents\models.py:1171
 msgid "Updated At"
@@ -539,7 +540,7 @@ msgstr ""
 msgid "Essential conversation metadata and technical information"
 msgstr ""
 
-#: .\chat\admin.py:150 .\chat\admin.py:1117 .\chat\admin.py:1298
+#: .\chat\admin.py:150 .\chat\admin.py:1137 .\chat\admin.py:1378
 msgid "ID"
 msgstr "ID"
 
@@ -561,303 +562,440 @@ msgstr "分析サマリー"
 msgid "Analysis Source"
 msgstr "分析ソース"
 
+#: .\chat\admin.py:333
+msgid "Excellent"
+msgstr "優秀"
+
+#: .\chat\admin.py:336
+msgid "Good"
+msgstr "良好"
+
+#: .\chat\admin.py:339
+msgid "Average"
+msgstr "平均的"
+
+#: .\chat\admin.py:342
+msgid "Poor"
+msgstr "不良"
+
 #: .\chat\admin.py:348
 msgid "Quality"
 msgstr "品質"
 
-#: .\chat\admin.py:377 .\chat\admin.py:1185 .\documents\admin.py:477
+#: .\chat\admin.py:361 .\chat\admin.py:1186 .\chat\admin.py:1190
+msgid "No issues"
+msgstr "問題なし"
+
+# Issue type translations for LangExtract analysis
+#: .\chat\admin.py:372 .\chat\admin.py:1201 .\chat\admin.py:1286
+msgid "Question"
+msgstr "質問"
+
+#: .\chat\admin.py:373 .\chat\admin.py:1202
+msgid "Critical Hardware Issue"
+msgstr "重要なハードウェア問題"
+
+#: .\chat\admin.py:374 .\chat\admin.py:1203
+msgid "Urgent Technical Issue"
+msgstr "緊急技術問題"
+
+#: .\chat\admin.py:375 .\chat\admin.py:1204
+msgid "Technical Problem"
+msgstr "技術的問題"
+
+#: .\chat\admin.py:376 .\chat\admin.py:1205
+msgid "Billing Issue"
+msgstr "請求問題"
+
+#: .\chat\admin.py:377 .\chat\admin.py:1206
+msgid "Login Problem"
+msgstr "ログイン問題"
+
+#: .\chat\admin.py:378 .\chat\admin.py:1207
+msgid "Performance Issue"
+msgstr "パフォーマンス問題"
+
+#: .\chat\admin.py:379 .\chat\admin.py:1208
+msgid "Security Concern"
+msgstr "セキュリティ懸念"
+
+#: .\chat\admin.py:380 .\chat\admin.py:1209
+msgid "Feature Request"
+msgstr "機能要求"
+
+#: .\chat\admin.py:381 .\chat\admin.py:1210
+msgid "Integration Issue"
+msgstr "統合問題"
+
+#: .\chat\admin.py:382 .\chat\admin.py:1211
+msgid "Data Issue"
+msgstr "データ問題"
+
+#: .\chat\admin.py:383 .\chat\admin.py:1212
+msgid "Documentation Gap"
+msgstr "文書化ギャップ"
+
+#: .\chat\admin.py:384 .\chat\admin.py:1213
+msgid "UI/UX Feedback"
+msgstr "UI/UXフィードバック"
+
+#: .\chat\admin.py:397 .\chat\admin.py:1224 .\documents\admin.py:477
 #: .\documents\models.py:1130
 msgid "Issues Detected"
 msgstr "検出された問題"
 
-#: .\chat\admin.py:429 .\chat\admin.py:1209
+#: .\chat\admin.py:433 .\chat\admin.py:1245 .\documents\models.py:1100
+msgid "Satisfied"
+msgstr "満足"
+
+#: .\chat\admin.py:436 .\chat\admin.py:1246 .\documents\models.py:1098
+msgid "Dissatisfied"
+msgstr "不満足"
+
+#: .\chat\admin.py:439
+msgid "Mixed"
+msgstr "混合"
+
+#: .\chat\admin.py:449 .\chat\admin.py:1257
 msgid "Satisfaction"
 msgstr "満足度"
 
-#: .\chat\admin.py:495
+#: .\chat\admin.py:515
 #, fuzzy
 #| msgid "Conversations"
 msgid "Conversation Statistics"
 msgstr "会話"
 
-#: .\chat\admin.py:532
+#: .\chat\admin.py:552
 #, fuzzy
 #| msgid "File Details"
 msgid "Technical Details"
 msgstr "ファイル詳細"
 
-#: .\chat\admin.py:585
+#: .\chat\admin.py:605
 msgid "Add Sample Messages to Empty Conversations"
 msgstr "空の会話にサンプルメッセージを追加"
 
-#: .\chat\admin.py:744
+#: .\chat\admin.py:764
 msgid "Analyze with LangExtract"
 msgstr "LangExtractで分析"
 
-#: .\chat\admin.py:829
+#: .\chat\admin.py:849
 msgid "Verify API Connection"
 msgstr "API接続を確認"
 
-#: .\chat\admin.py:840
+#: .\chat\admin.py:860
 msgid "LangExtract not configured. Please set up API keys first."
 msgstr "LangExtractが設定されていません。まずAPIキーを設定してください。"
 
-#: .\chat\admin.py:872
+#: .\chat\admin.py:892
 msgid "Bulk Analyze Unanalyzed Conversations"
 msgstr "未分析会話の一括分析"
 
-#: .\chat\admin.py:957
+#: .\chat\admin.py:977
 msgid "Auto-Analyze with Smart Criteria"
 msgstr "スマート条件での自動分析"
 
-#: .\chat\admin.py:962
+#: .\chat\admin.py:982
 msgid "Filter by Issue Type"
 msgstr "問題タイプでフィルター"
 
-#: .\chat\admin.py:967
+#: .\chat\admin.py:987
 msgid "Issue Type: Login Problems"
 msgstr "問題タイプ: ログイン問題"
 
-#: .\chat\admin.py:968
+#: .\chat\admin.py:988
 msgid "Issue Type: Billing Issues"
 msgstr "問題タイプ: 請求問題"
 
-#: .\chat\admin.py:969
+#: .\chat\admin.py:989
 msgid "Issue Type: Technical Problems"
 msgstr "問題タイプ: 技術的問題"
 
-#: .\chat\admin.py:970
+#: .\chat\admin.py:990
 msgid "Issue Type: Feature Requests"
 msgstr "問題タイプ: 機能要求"
 
-#: .\chat\admin.py:971
+#: .\chat\admin.py:991
 msgid "Issue Type: Integration Issues"
 msgstr "問題タイプ: 統合問題"
 
-#: .\chat\admin.py:972
+#: .\chat\admin.py:992
 msgid "Issue Type: Performance Issues"
 msgstr "問題タイプ: パフォーマンス問題"
 
-#: .\chat\admin.py:973
+#: .\chat\admin.py:993
 msgid "Issue Type: Data Issues"
 msgstr "問題タイプ: データ問題"
 
-#: .\chat\admin.py:974
+#: .\chat\admin.py:994
 msgid "Issue Type: UI/UX Feedback"
 msgstr "問題タイプ: UI/UXフィードバック"
 
-#: .\chat\admin.py:975
+#: .\chat\admin.py:995
 msgid "Issue Type: Documentation Gaps"
 msgstr "問題タイプ: 文書化ギャップ"
 
-#: .\chat\admin.py:976
+#: .\chat\admin.py:996
 msgid "Issue Type: Security Concerns"
 msgstr "問題タイプ: セキュリティ懸念"
 
-#: .\chat\admin.py:1000
+#: .\chat\admin.py:1020
 msgid "Filter by Satisfaction"
 msgstr "満足度でフィルター"
 
-#: .\chat\admin.py:1005
+#: .\chat\admin.py:1025
 msgid "Satisfaction: Satisfied"
 msgstr "満足度: 満足"
 
-#: .\chat\admin.py:1006
+#: .\chat\admin.py:1026
 msgid "Satisfaction: Dissatisfied"
 msgstr "満足度: 不満足"
 
-#: .\chat\admin.py:1007
+#: .\chat\admin.py:1027
 msgid "Satisfaction: Neutral"
 msgstr "満足度: 中立"
 
-#: .\chat\admin.py:1008
+#: .\chat\admin.py:1028
 msgid "Satisfaction: Unknown"
 msgstr "満足度: 不明"
 
-#: .\chat\admin.py:1018
+#: .\chat\admin.py:1038
 msgid "Filter by Importance"
 msgstr "重要度でフィルター"
 
-#: .\chat\admin.py:1023
+#: .\chat\admin.py:1043
 msgid "Importance: High"
 msgstr "重要度: 高"
 
-#: .\chat\admin.py:1024
+#: .\chat\admin.py:1044
 msgid "Importance: Medium"
 msgstr "重要度: 中"
 
-#: .\chat\admin.py:1025
+#: .\chat\admin.py:1045
 msgid "Importance: Low"
 msgstr "重要度: 低"
 
-#: .\chat\admin.py:1035
+#: .\chat\admin.py:1055
 msgid "Filter by Doc Potential"
 msgstr "文書化ポテンシャルでフィルター"
 
-#: .\chat\admin.py:1040
+#: .\chat\admin.py:1060
 msgid "Doc Potential: High"
 msgstr "文書化ポテンシャル: 高"
 
-#: .\chat\admin.py:1041
+#: .\chat\admin.py:1061
 msgid "Doc Potential: Medium"
 msgstr "文書化ポテンシャル: 中"
 
-#: .\chat\admin.py:1042
+#: .\chat\admin.py:1062
 msgid "Doc Potential: Low"
 msgstr "文書化ポテンシャル: 低"
 
-#: .\chat\admin.py:1052
+#: .\chat\admin.py:1072
 msgid "Filter by FAQ Potential"
 msgstr "FAQポテンシャルでフィルター"
 
-#: .\chat\admin.py:1057
+#: .\chat\admin.py:1077
 msgid "FAQ Potential: High"
 msgstr "FAQポテンシャル: 高"
 
-#: .\chat\admin.py:1058
+#: .\chat\admin.py:1078
 msgid "FAQ Potential: Medium"
 msgstr "FAQポテンシャル: 中"
 
-#: .\chat\admin.py:1059
+#: .\chat\admin.py:1079
 msgid "FAQ Potential: Low"
 msgstr "FAQポテンシャル: 低"
 
-#: .\chat\admin.py:1069
+#: .\chat\admin.py:1089
 msgid "Filter by Analysis Status"
 msgstr "分析ステータスでフィルター"
 
-#: .\chat\admin.py:1074
+#: .\chat\admin.py:1094
 #, fuzzy
 #| msgid "Completed"
 msgid "Analysis: Completed"
 msgstr "完了"
 
-#: .\chat\admin.py:1075
+#: .\chat\admin.py:1095
 #, fuzzy
 #| msgid "Analysis"
 msgid "Analysis: Not Done"
 msgstr "分析"
 
-#: .\chat\admin.py:1076
+#: .\chat\admin.py:1096
 msgid "Type: User Messages Only"
 msgstr "タイプ: ユーザーメッセージのみ"
 
-#: .\chat\admin.py:1130 .\chat\models.py:56
+#: .\chat\admin.py:1150 .\chat\models.py:56
 msgid "Content"
 msgstr "コンテンツ"
 
-#: .\chat\admin.py:1137
+#: .\chat\admin.py:1157
 msgid "-"
 msgstr "-"
 
-#: .\chat\admin.py:1138 .\chat\models.py:61
+#: .\chat\admin.py:1158 .\chat\models.py:61
 msgid "Feedback"
 msgstr "フィードバック"
 
-#: .\chat\admin.py:1161
+#: .\chat\admin.py:1181
 msgid "Source"
 msgstr "ソース"
 
-#: .\chat\admin.py:1232
-msgid "Importance"
-msgstr "重要度"
-
-#: .\chat\admin.py:1257
-msgid "Doc Potential"
-msgstr "文書化ポテンシャル"
-
-#: .\chat\admin.py:1283
-msgid "FAQ Potential"
-msgstr "FAQポテンシャル"
-
-#: .\chat\admin.py:1309 .\chat\models.py:142
-msgid "Session ID"
-msgstr "セッションID"
-
-#: .\chat\admin.py:1318 .\documents\admin.py:291
-msgid "Active"
-msgstr "アクティブ"
-
-#: .\chat\admin.py:1319 .\chat\admin.py:1470 .\documents\admin.py:298
-#: .\documents\models.py:233 .\templates\admin\documents\file_info.html:54
+#: .\chat\admin.py:1248 .\chat\admin.py:1399 .\chat\admin.py:1550
+#: .\documents\admin.py:298 .\documents\models.py:233
+#: .\templates\admin\documents\file_info.html:54
 msgid "Unknown"
 msgstr "不明"
 
-#: .\chat\admin.py:1320
+#: .\chat\admin.py:1255
+msgid "Score"
+msgstr "スコア"
+
+#: .\chat\admin.py:1277 .\chat\admin.py:1316 .\chat\admin.py:1350
+#: .\documents\models.py:1092
+msgid "High"
+msgstr "高"
+
+#: .\chat\admin.py:1278 .\chat\admin.py:1317 .\chat\admin.py:1351
+#: .\documents\models.py:1091
+msgid "Medium"
+msgstr "中"
+
+#: .\chat\admin.py:1279 .\chat\admin.py:1318 .\chat\admin.py:1352
+#: .\documents\models.py:1090
+msgid "Low"
+msgstr "低"
+
+#: .\chat\admin.py:1280
+msgid "Critical"
+msgstr "緊急"
+
+#: .\chat\admin.py:1281
+msgid "Normal"
+msgstr "通常"
+
+#: .\chat\admin.py:1282 .\documents\models.py:1093
+msgid "Urgent"
+msgstr "緊急"
+
+#: .\chat\admin.py:1283
+msgid "Technical"
+msgstr "技術的"
+
+#: .\chat\admin.py:1284
+msgid "Hardware"
+msgstr "ハードウェア"
+
+#: .\chat\admin.py:1285
+msgid "Documentation"
+msgstr "文書化"
+
+#: .\chat\admin.py:1294
+msgid "priority"
+msgstr "優先度"
+
+#: .\chat\admin.py:1296
+msgid "Importance"
+msgstr "重要度"
+
+#: .\chat\admin.py:1323
+msgid "None"
+msgstr "なし"
+
+#: .\chat\admin.py:1329
+msgid "Doc Potential"
+msgstr "文書化ポテンシャル"
+
+#: .\chat\admin.py:1363
+msgid "FAQ Potential"
+msgstr "FAQポテンシャル"
+
+#: .\chat\admin.py:1389 .\chat\models.py:142
+msgid "Session ID"
+msgstr "セッションID"
+
+#: .\chat\admin.py:1398 .\documents\admin.py:291
+msgid "Active"
+msgstr "アクティブ"
+
+#: .\chat\admin.py:1400
 msgid "Duration"
 msgstr "継続時間"
 
-#: .\chat\admin.py:1336
+#: .\chat\admin.py:1416
 msgid "Input Model Name"
 msgstr "モデル名を入力"
 
-#: .\chat\admin.py:1340
+#: .\chat\admin.py:1420
 msgid "Provider Information"
 msgstr "プロバイダー情報"
 
-#: .\chat\admin.py:1343
+#: .\chat\admin.py:1423
 msgid "API Settings"
 msgstr "API設定"
 
-#: .\chat\admin.py:1345
+#: .\chat\admin.py:1425
 msgid "Configure API parameters for this provider"
 msgstr "このプロバイダーのAPIパラメータを設定"
 
-#: .\chat\admin.py:1355 .\chat\models.py:181
+#: .\chat\admin.py:1435 .\chat\models.py:181
 msgid "Provider"
 msgstr "プロバイダー"
 
-#: .\chat\admin.py:1360 .\chat\models.py:189
+#: .\chat\admin.py:1440 .\chat\models.py:189
 msgid "Model Name"
 msgstr "モデル名"
 
-#: .\chat\admin.py:1365 .\chat\admin.py:1458 .\chat\models.py:17
+#: .\chat\admin.py:1445 .\chat\admin.py:1538 .\chat\models.py:17
 #: .\chat\models.py:145 .\chat\models.py:191 .\chat\models.py:235
 #: .\documents\models.py:124
 msgid "Is Active"
 msgstr "アクティブ"
 
-#: .\chat\admin.py:1386 .\chat\models.py:184
+#: .\chat\admin.py:1466 .\chat\models.py:184
 msgid "API Key"
 msgstr "APIキー"
 
-#: .\chat\admin.py:1408
+#: .\chat\admin.py:1488
 msgid "Prompt Information"
 msgstr "プロンプト情報"
 
-#: .\chat\admin.py:1411
+#: .\chat\admin.py:1491
 msgid "Prompt Content"
 msgstr "プロンプト内容"
 
-#: .\chat\admin.py:1413 .\chat\models.py:228
+#: .\chat\admin.py:1493 .\chat\models.py:228
 msgid "The actual prompt text that will be sent to the LLM"
 msgstr "LLMに送信される実際のプロンプトテキスト"
 
-#: .\chat\admin.py:1415
+#: .\chat\admin.py:1495
 msgid "Settings"
 msgstr "設定"
 
-#: .\chat\admin.py:1417
+#: .\chat\admin.py:1497
 msgid "Only one default prompt per type and language is allowed"
 msgstr "タイプと言語ごとに1つのデフォルトプロンプトのみ許可されます"
 
-#: .\chat\admin.py:1436 .\documents\admin.py:270
+#: .\chat\admin.py:1516 .\documents\admin.py:270
 msgid "Name"
 msgstr "名前"
 
-#: .\chat\admin.py:1441 .\chat\models.py:224
+#: .\chat\admin.py:1521 .\chat\models.py:224
 msgid "Prompt Type"
 msgstr "プロンプトタイプ"
 
-#: .\chat\admin.py:1446 .\chat\models.py:245
+#: .\chat\admin.py:1526 .\chat\models.py:245
 msgid "Language"
 msgstr "言語"
 
-#: .\chat\admin.py:1453 .\chat\models.py:238
+#: .\chat\admin.py:1533 .\chat\models.py:238
 msgid "Is Default"
 msgstr "デフォルト"
 
-#: .\chat\admin.py:1464 .\chat\models.py:249
+#: .\chat\admin.py:1544 .\chat\models.py:249
 #: .\templates\admin\analytics\document_usage_analytics.html:223
 #: .\templates\admin\analytics\document_usage_analytics.html:304
 #: .\templates\admin\analytics\document_usage_grouped_list.html:176
@@ -865,59 +1003,82 @@ msgstr "デフォルト"
 msgid "Usage Count"
 msgstr "使用回数"
 
-#: .\chat\admin.py:1471 .\chat\models.py:257
+#: .\chat\admin.py:1551 .\chat\models.py:257
 msgid "Created By"
 msgstr "作成者"
 
-#: .\chat\admin.py:1485
+#: .\chat\admin.py:1565
 msgid "Chatbot Administration"
 msgstr "チャットボット管理システム"
 
-#: .\chat\admin.py:1486
+#: .\chat\admin.py:1566
 msgid "Chatbot Admin"
 msgstr "チャットボット管理"
 
-#: .\chat\admin.py:1487
+#: .\chat\admin.py:1567
 msgid "Welcome to Chatbot Administration"
 msgstr "チャットボット管理へようこそ"
 
-#: .\chat\admin.py:1540 .\chat\admin.py:1596 .\chat\models.py:98
-#, fuzzy
-#| msgid "Analysis"
+#: .\chat\admin.py:1620 .\chat\admin.py:1676 .\chat\models.py:98
 msgid "LLM Analysis"
-msgstr "分析"
+msgstr "LLM分析"
 
-#: .\chat\admin.py:1543
-#, fuzzy
-#| msgid "Key Information"
+#: .\chat\admin.py:1623
 msgid "Summary Information"
-msgstr "重要情報"
+msgstr "サマリー情報"
 
-#: .\chat\admin.py:1546
-#, fuzzy
-#| msgid "Contact Details"
+#: .\chat\admin.py:1626
 msgid "Generation Details"
-msgstr "連絡先詳細"
+msgstr "生成詳細"
 
-#: .\chat\admin.py:1550 .\documents\admin.py:448
-#, fuzzy
-#| msgid "User Information"
+#: .\chat\admin.py:1630 .\documents\admin.py:448
 msgid "System Information"
-msgstr "ユーザー情報"
+msgstr "システム情報"
 
-#: .\chat\admin.py:1580
+#: .\chat\admin.py:1660
 msgid "Generate New Automatic Summary"
 msgstr "新しい自動サマリーを生成"
 
-#: .\chat\admin.py:1585
+#: .\chat\admin.py:1665
 msgid "Summary Preview"
 msgstr "サマリープレビュー"
 
-#: .\chat\admin.py:1589 .\chat\models.py:113
-#, fuzzy
-#| msgid "Created At"
+#: .\chat\admin.py:1669 .\chat\models.py:113
 msgid "Generated At"
-msgstr "作成日時"
+msgstr "生成日時"
+
+#: .\chat\admin.py:1680 .\chat\models.py:104
+msgid "Analysis Period"
+msgstr "分析期間"
+
+#: .\chat\admin.py:1685 .\chat\models.py:109
+msgid "Messages Analyzed"
+msgstr "分析されたメッセージ数"
+
+#: .\chat\admin.py:1690 .\chat\models.py:110
+msgid "Critical Issues Found"
+msgstr "検出された重要問題"
+
+# ConversationSummary admin translations
+#: .\chat\admin.py:1696
+msgid "Recent activity"
+msgstr "最近のアクティビティ"
+
+#: .\chat\admin.py:1697
+msgid "Manual trigger"
+msgstr "手動トリガー"
+
+#: .\chat\admin.py:1698
+msgid "Scheduled"
+msgstr "スケジュール済み"
+
+#: .\chat\admin.py:1699
+msgid "Legacy migration"
+msgstr "レガシー移行"
+
+#: .\chat\admin.py:1702 .\chat\models.py:117
+msgid "Generation Trigger"
+msgstr "生成トリガー"
 
 #: .\chat\apps.py:8
 msgid "Chat Bot"
@@ -957,20 +1118,12 @@ msgid "Tokens Used"
 msgstr "使用トークン数"
 
 #: .\chat\models.py:71
-#, fuzzy
-#| msgid "Analysis"
 msgid "Message Analysis"
-msgstr "分析"
+msgstr "メッセージ分析"
 
 #: .\chat\models.py:76
 msgid "Messages"
 msgstr "メッセージ"
-
-#: .\chat\models.py:104
-#, fuzzy
-#| msgid "Analysis"
-msgid "Analysis Period"
-msgstr "分析"
 
 #: .\chat\models.py:105
 msgid ""
@@ -978,31 +1131,13 @@ msgid ""
 "\"This week\")"
 msgstr ""
 
-#: .\chat\models.py:109
-#, fuzzy
-#| msgid "Messages"
-msgid "Messages Analyzed"
-msgstr "メッセージ"
-
-#: .\chat\models.py:110
-#, fuzzy
-#| msgid "Total Issues Raised"
-msgid "Critical Issues Found"
-msgstr "提起された問題総数"
-
-#: .\chat\models.py:117
-msgid "Generation Trigger"
-msgstr "生成トリガー"
-
 #: .\chat\models.py:118
 msgid "What triggered this automatic summary generation"
 msgstr "この自動サマリー生成をトリガーした要因"
 
 #: .\chat\models.py:123
-#, fuzzy
-#| msgid "Response Time"
 msgid "LLM Response Time"
-msgstr "応答時間"
+msgstr "LLM応答時間"
 
 #: .\chat\models.py:127
 msgid "Summaries"
@@ -1606,35 +1741,9 @@ msgstr ""
 msgid "How useful this document is for answering questions"
 msgstr ""
 
-#: .\documents\models.py:1090
-msgid "Low"
-msgstr "低"
-
-#: .\documents\models.py:1091
-msgid "Medium"
-msgstr "中"
-
-#: .\documents\models.py:1092
-msgid "High"
-msgstr "高"
-
-#: .\documents\models.py:1093
-msgid "Urgent"
-msgstr ""
-
 #: .\documents\models.py:1097
 msgid "Very Dissatisfied"
 msgstr ""
-
-#: .\documents\models.py:1098
-msgid "Dissatisfied"
-msgstr ""
-
-#: .\documents\models.py:1100
-#, fuzzy
-#| msgid "Identified"
-msgid "Satisfied"
-msgstr "特定済み"
 
 #: .\documents\models.py:1101
 msgid "Very Satisfied"
@@ -2022,12 +2131,7 @@ msgstr ""
 msgid "Loading history..."
 msgstr ""
 
-# Admin interface customizations
-#: .\templates\admin\documents\document\change_list.html:13
-msgid "Select Action"
-msgstr "操作を選択"
-
-#: .\templates\admin\documents\document\change_list.html:20
+#: .\templates\admin\documents\document\change_list.html:14
 msgid "Confirm"
 msgstr "実行"
 
@@ -2071,6 +2175,10 @@ msgstr "一覧に戻る"
 msgid "LLM Chat Interface"
 msgstr "LLMチャットインターフェース"
 
+# Admin interface customizations
+#~ msgid "Select Action"
+#~ msgstr "操作を選択"
+
 #~ msgid "Pos/Neg Ratio"
 #~ msgstr "ポジ/ネガ比率"
 
@@ -2088,9 +2196,6 @@ msgstr "LLMチャットインターフェース"
 
 #~ msgid "Document Versions"
 #~ msgstr "文書バージョン"
-
-#~ msgid "Critical"
-#~ msgstr "緊急"
 
 #~ msgid "In Progress"
 #~ msgstr "進行中"
@@ -2378,8 +2483,8 @@ msgstr "LLMチャットインターフェース"
 #~ msgid "Reset {} failed tasks for retry."
 #~ msgstr "{}個の失敗タスクを再試行用にリセットしました。"
 
-msgid "Choose an action"
-msgstr "アクションを選択"
+#~ msgid "Choose an action"
+#~ msgstr "アクションを選択"
 
 #~ msgid "Reset {} stuck processing tasks."
 #~ msgstr "{}個のスタック処理タスクをリセットしました。"
