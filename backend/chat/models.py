@@ -123,8 +123,8 @@ class ConversationSummary(models.Model):
     llm_response_time = models.FloatField(null=True, blank=True, verbose_name=_('LLM Response Time'))
     
     class Meta:
-        verbose_name = _('Conversation Summary')
-        verbose_name_plural = _('Conversation Summaries')
+        verbose_name = _('Summary')
+        verbose_name_plural = _('Summaries')
         ordering = ['-generated_at']
     
     def __str__(self):
