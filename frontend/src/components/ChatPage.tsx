@@ -209,9 +209,23 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
     }
   }, [messages, showError, showSuccess, language, refreshConversations]);
 
-  const handleFeedback = useCallback((messageId: string, feedback: 'up' | 'down') => {
+  const handleFeedback = useCallback(async (messageId: string, feedback: 'up' | 'down') => {
+    // Update local state immediately for responsive UI
     setMessages(prev => messageUtils.updateMessageFeedback(prev, messageId, feedback));
-  }, []);
+    
+    try {
+      // Convert frontend feedback to backend format
+      const backendFeedback = feedback === 'up' ? 'positive' : 'negative';
+      
+      // Submit feedback to backend API
+      await chatService.submitFeedback(messageId, backendFeedback);
+      
+      console.log(`✅ Feedback submitted: ${messageId} -> ${backendFeedback}`);
+    } catch (error) {
+      console.error('Failed to submit feedback to backend:', error);
+      showError('Failed to submit feedback. Please try again.');
+    }
+  }, [showError]);
 
   const handleHumanService = useCallback(() => {
     const serviceMessage = chatService.createHumanServiceMessage(language);

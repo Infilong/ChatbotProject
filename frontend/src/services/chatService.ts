@@ -117,16 +117,26 @@ class ChatService {
       const apiResponse = await this.makeApiCall('/api/chat/', requestData);
       
       // Store conversation ID for future messages
+      console.log('🔍 Full API Response:', apiResponse);
       console.log('API response conversation ID:', apiResponse.conversation_id);
+      console.log('API response message_id:', apiResponse.message_id);
       this.currentConversationId = apiResponse.conversation_id;
       this.saveConversationToStorage(apiResponse.conversation_id);
       console.log('Updated current conversation ID to:', this.currentConversationId);
       
-      // Create bot message from API response
+      // Create bot message from API response using backend-provided UUID
       const botMessage = messageUtils.createMessage(
         apiResponse.response,
         'bot'
       );
+      
+      // CRITICAL: Use the backend-generated UUID instead of local ID
+      if (apiResponse.message_id) {
+        botMessage.id = apiResponse.message_id;
+        console.log(`✅ Updated bot message ID from local to backend UUID: ${apiResponse.message_id}`);
+      } else {
+        console.warn('⚠️ No message_id returned from backend API');
+      }
 
       return {
         message: botMessage,

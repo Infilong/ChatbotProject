@@ -1131,9 +1131,59 @@ class MessageAdmin(admin.ModelAdmin):
         """Optimize queryset for admin performance"""
         return super().get_queryset(request).select_related('conversation__user')
     
+    def get_object(self, request, object_id, from_field=None):
+        """Override get_object to handle UUID lookup for security"""
+        try:
+            # Try to parse as UUID first
+            uuid_obj = uuid.UUID(str(object_id))
+            return self.get_queryset(request).get(uuid=uuid_obj)
+        except (ValueError, TypeError):
+            # Fallback to PK for backward compatibility
+            try:
+                return self.get_queryset(request).get(pk=object_id)
+            except (ValueError, Message.DoesNotExist):
+                return None
+        except Message.DoesNotExist:
+            return None
+    
+    def get_urls(self):
+        """Override admin URLs with UUID-based ones for security"""
+        from django.urls import path
+        urls = super().get_urls()
+        
+        # Create wrapper views that convert UUID to string for admin compatibility
+        def uuid_change_view(request, object_id):
+            return self.change_view(request, str(object_id))
+        
+        def uuid_delete_view(request, object_id):
+            return self.delete_view(request, str(object_id))
+            
+        def uuid_history_view(request, object_id):
+            return self.history_view(request, str(object_id))
+        
+        # Custom UUID-based URLs (prioritized over default ones)
+        custom_urls = [
+            path('<uuid:object_id>/change/', uuid_change_view, name='chat_message_change'),
+            path('<uuid:object_id>/delete/', uuid_delete_view, name='chat_message_delete'),
+            path('<uuid:object_id>/history/', uuid_history_view, name='chat_message_history'),
+        ]
+        return custom_urls + urls
+    
+    def response_change(self, request, obj):
+        """Redirect to UUID-based URLs after form submission"""
+        import re
+        response = super().response_change(request, obj)
+        if hasattr(response, 'url') and response.url:
+            pattern = r'/admin/chat/message/\d+/'
+            replacement = f'/admin/chat/message/{obj.uuid}/'
+            response.url = re.sub(pattern, replacement, response.url)
+        return response
+    
     def uuid_short(self, obj):
-        """Display first 4 characters of UUID followed by ..."""
-        return f"{str(obj.uuid)[:4]}..."
+        """Display first 4 characters of UUID followed by ... as a clickable link"""
+        url = reverse('admin:chat_message_change', args=[obj.uuid])
+        uuid_display = f"{str(obj.uuid)[:4]}..."
+        return format_html('<a href="{}">{}</a>', url, uuid_display)
     uuid_short.short_description = _('ID')
     uuid_short.admin_order_field = 'uuid'
     

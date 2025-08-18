@@ -456,7 +456,7 @@ class MessageViewSet(ModelViewSet):
         serializer.save(conversation=conversation)
     
     @action(detail=True, methods=['post'])
-    def feedback(self, request, pk=None):
+    def feedback(self, request, uuid=None):
         """Submit feedback for a message"""
         message = self.get_object()
         
