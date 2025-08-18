@@ -12,11 +12,16 @@
       "Bash(python:*)",
       "Bash(cp:*)",
       "Bash(find:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(git push:*)",
+      "Bash(git add:*)",
+      "Bash(git rm:*)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "additionalDirectories": [
-      "C:\\c\\Users\\ytxqf\\Desktop\\Projects\\ChatbotProject"
+      "C:\\c\\Users\\ytxqf\\Desktop\\Projects\\ChatbotProject",
+      "C:\\c\\Users\\ytxqf\\Desktop\\Projects"
     ]
   }
 }
