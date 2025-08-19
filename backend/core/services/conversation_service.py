@@ -27,13 +27,13 @@ class ConversationService:
     
     @classmethod
     def get_conversation_history(cls, request, conversation_id: str) -> List[Dict[str, Any]]:
-        """Get chat history for a specific conversation"""
+        """Get chat history for a specific conversation from Django sessions"""
         session_key, _ = cls.get_session_keys(request.user.id, conversation_id)
         return request.session.get(session_key, [])
     
     @classmethod
     def get_all_conversations(cls, request) -> List[Dict[str, Any]]:
-        """Get all conversations for the current user"""
+        """Get all conversations for the current user from Django sessions"""
         _, conversations_key = cls.get_session_keys(request.user.id)
         return request.session.get(conversations_key, [])
     
@@ -61,8 +61,8 @@ class ConversationService:
                 response_time=metadata.get('response_time') if metadata else None
             )
             
-            # Update conversation title if needed
-            if not conversation.title and sender_type == 'user':
+            # Update conversation title if needed (check for None or empty string)
+            if (not conversation.title or conversation.title.strip() == '') and sender_type == 'user':
                 conversation.title = content[:50] + ('...' if len(content) > 50 else '')
                 conversation.save()
             

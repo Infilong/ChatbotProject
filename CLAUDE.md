@@ -2,6 +2,37 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## CRITICAL: Backend vs Frontend Architecture Understanding
+
+**VERY IMPORTANT - Admin Chat vs Frontend Chat Separation:**
+
+🔥 **Backend Admin Chat Interface (`/admin/llm/chat/`):**
+- This is Django templates + JavaScript running in the backend admin panel
+- Has its own separate conversation history stored in Django sessions
+- Used by admin staff to test the chatbot and analyze system data
+- Completely independent from the React frontend
+- Users: Admin staff members (admin, staff users)
+
+🔥 **Frontend React Chat Interface:**  
+- This is the React TypeScript frontend at `http://localhost:3000`
+- Has its own conversation history stored in Conversation/Message database models
+- Used by end customers to chat with the bot
+- Users: End customers (demo_user, etc.)
+
+**KEY MISTAKE TO AVOID:**
+- The admin chat history has NOTHING to do with the frontend React chat history
+- Database conversations from demo_user are from React frontend, not admin interface
+- When admin chat was working before, it used Django sessions, not database models
+- Never mix or combine these two separate chat systems
+
+**Architecture:**
+```
+Backend Admin Chat (/admin/llm/chat/) → Django Sessions → Admin staff testing
+React Frontend Chat (localhost:3000) → Database Models → Customer conversations
+```
+
+**Remember:** When working on admin chat issues, focus on Django sessions and admin users, NOT on React frontend or demo_user database conversations.
+
 ## CRITICAL: AI-Driven RAG System Architecture
 
 **ALWAYS USE THE PROPER LLM-DRIVEN WORKFLOW - NEVER PRIMITIVE PATTERN MATCHING:**

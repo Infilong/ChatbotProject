@@ -47,13 +47,6 @@
                 <h1 id="conversation-title">{% trans "Admin AI Assistant" %}</h1>
             </div>
             <div class="chat-config">
-                <select id="provider-select" class="provider-select">
-                    {% for provider in available_providers %}
-                        <option value="{{ provider }}" {% if provider == 'openai' %}selected{% endif %}>
-                            {% if provider == 'openai' %}GPT{% elif provider == 'gemini' %}Gemini{% elif provider == 'claude' %}Claude{% else %}{{ provider|title }}{% endif %}
-                        </option>
-                    {% endfor %}
-                </select>
                 <label class="knowledge-toggle">
                     <input type="checkbox" id="use-knowledge-base" checked>
                     <span>Knowledge Base</span>
@@ -112,7 +105,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const messageInput = document.getElementById('message-input');
     const sendButton = document.getElementById('send-button');
     const chatMessages = document.getElementById('chat-messages');
-    const providerSelect = document.getElementById('provider-select');
     const useKnowledgeBase = document.getElementById('use-knowledge-base');
     const csrfToken = document.getElementById('csrf-token').value;
     
@@ -381,10 +373,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     showWelcomeMessage();
                 } else {
                     // Add history messages
-                    history.forEach(item => {
+                    history.forEach((item) => {
                         if (item.type === 'user') {
                             addMessage(item.content, true);
-                        } else if (item.type === 'bot') {
+                        } else if (item.type === 'bot' || item.type === 'assistant') {
                             addMessage(item.content, false);
                         }
                     });
@@ -397,6 +389,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         behavior: 'instant'
                     });
                 }, 200);
+            } else {
+                addMessage("❌ Unable to load conversation history. Server error.", false);
             }
         } catch (error) {
             console.log('Could not load conversation history:', error);
@@ -432,10 +426,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const convElement = document.createElement('div');
             convElement.className = `conversation-item ${conv.id === currentConversationId ? 'active' : ''}`;
             
-            // Get meaningful title - use first user message or generated title
-            const displayTitle = conv.title && conv.title !== 'New Conversation' 
-                ? conv.title 
-                : (conv.message_count > 0 ? conv.title : 'New Conversation');
+            // Use the title from backend (which already handles empty titles)
+            const displayTitle = conv.title || 'New Conversation';
             
             convElement.innerHTML = `
                 <div class="conversation-content" data-conversation-id="${conv.id}">
@@ -605,7 +597,6 @@ document.addEventListener('DOMContentLoaded', function() {
             await createActualNewConversation();
         }
         
-        const provider = providerSelect.value;
         const useKB = useKnowledgeBase.checked;
         
         // Add user message
@@ -625,7 +616,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     message: message,
-                    provider: provider,
                     use_knowledge_base: useKB,
                     conversation_id: currentConversationId
                 })
@@ -861,6 +851,7 @@ html, body {
 .conversation-content {
     flex: 1;
     padding: 12px 16px;
+    min-width: 0; /* KEY FIX: Allow flex item to shrink below content size */
 }
 
 .conversation-title {
@@ -871,6 +862,8 @@ html, body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%; /* KEY FIX: Ensure ellipsis works within flex container */
+    display: block; /* KEY FIX: Make sure it's a block element for ellipsis */
 }
 
 .conversation-info {
@@ -958,14 +951,6 @@ html, body {
     gap: 16px;
 }
 
-.provider-select {
-    padding: 8px 12px;
-    border: 1px solid #d1d5db;
-    border-radius: 8px;
-    background: white;
-    font-size: 14px;
-    color: #374151;
-}
 
 .knowledge-toggle {
     display: flex;

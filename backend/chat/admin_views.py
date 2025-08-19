@@ -31,7 +31,7 @@ class AdminChatAPI(View):
         try:
             data = json.loads(request.body)
             message = data.get('message', '').strip()
-            provider = data.get('provider', 'openai')
+            provider = data.get('provider', 'auto')  # Use 'auto' to let backend choose active provider
             use_knowledge = data.get('use_knowledge_base', data.get('use_knowledge', False))
             conversation_id = data.get('conversation_id')
             

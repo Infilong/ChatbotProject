@@ -70,6 +70,9 @@ class ConversationAdmin(admin.ModelAdmin):
     actions_on_bottom = False
     inlines = [MessageInline]  # Add inline message editing
     
+    class Media:
+        js = ('admin/js/conversation_admin.js',)
+    
     def get_object(self, request, object_id, from_field=None):
         """Override get_object to handle UUID lookup for security"""
         try:
@@ -503,15 +506,39 @@ class ConversationAdmin(admin.ModelAdmin):
     satisfaction_level.short_description = _('Satisfaction')
     
     def langextract_insights(self, obj):
-        """Display LangExtract analysis insights in detailed format"""
+        """Display compact LangExtract analysis with expandable details"""
         if not obj.langextract_analysis or obj.langextract_analysis == {}:
             return format_html('<span style="color: #999;">No analysis</span>')
         
         analysis = obj.langextract_analysis
-        insights = []
         
-        # Customer insights section
+        # Build compact summary
+        compact_parts = []
+        
+        # Get key metrics for compact view
         customer_insights = analysis.get('customer_insights', {})
+        if customer_insights:
+            sentiment_analysis = customer_insights.get('sentiment_analysis', {})
+            overall_sentiment = sentiment_analysis.get('overall_sentiment', 'neutral')
+            satisfaction_score = sentiment_analysis.get('satisfaction_score', 0)
+            
+            urgency_assessment = customer_insights.get('urgency_assessment', {})
+            urgency_level = urgency_assessment.get('urgency_level', 'not_applicable')
+            
+            # Compact format: Sentiment (score) + urgency indicator
+            compact_parts.append(f'{overall_sentiment} ({satisfaction_score}/10)')
+            
+            if urgency_level in ['high', 'critical']:
+                compact_parts.append(f'⚠️ {urgency_level}')
+            elif urgency_level not in ['not_applicable', 'low']:
+                compact_parts.append(f'⚡ {urgency_level}')
+        
+        compact_summary = ' | '.join(compact_parts) if compact_parts else 'Analyzed'
+        
+        # Build detailed view (original detailed analysis)
+        detailed_insights = []
+        
+        # Customer insights section (detailed)
         if customer_insights:
             sentiment_analysis = customer_insights.get('sentiment_analysis', {})
             overall_sentiment = sentiment_analysis.get('overall_sentiment', 'neutral')
@@ -527,17 +554,17 @@ class ConversationAdmin(admin.ModelAdmin):
             business_intelligence = customer_insights.get('business_intelligence', {})
             customer_segment = business_intelligence.get('customer_segment', 'unknown')
             
-            insights.append(f'<strong>Sentiment:</strong> {overall_sentiment} ({satisfaction_score}/10)')
-            insights.append(f'<strong>Issues:</strong> {len(primary_issues)} detected')
+            detailed_insights.append(f'<strong>Sentiment:</strong> {overall_sentiment} ({satisfaction_score}/10)')
+            detailed_insights.append(f'<strong>Issues:</strong> {len(primary_issues)} detected')
             if urgency_level != 'not_applicable':
                 color = 'red' if urgency_level in ['high', 'critical'] else 'orange'
-                insights.append(f'<strong>Urgency:</strong> <span style="color: {color};">{urgency_level}</span>')
+                detailed_insights.append(f'<strong>Urgency:</strong> <span style="color: {color};">{urgency_level}</span>')
             if escalation_recommended:
-                insights.append('<strong>Escalation:</strong> <span style="color: red;">Recommended</span>')
+                detailed_insights.append('<strong>Escalation:</strong> <span style="color: red;">Recommended</span>')
             if customer_segment != 'unknown':
-                insights.append(f'<strong>Segment:</strong> {customer_segment}')
+                detailed_insights.append(f'<strong>Segment:</strong> {customer_segment}')
         
-        # Conversation patterns section
+        # Conversation patterns section (detailed)
         conversation_patterns = analysis.get('conversation_patterns', {})
         if conversation_patterns:
             conversation_flow = conversation_patterns.get('conversation_flow', {})
@@ -550,13 +577,13 @@ class ConversationAdmin(admin.ModelAdmin):
             technical_expertise = user_behavior.get('technical_expertise', 'unknown')
             engagement_level = user_behavior.get('engagement_level', 'unknown')
             
-            insights.append(f'<strong>Type:</strong> {conversation_type}')
-            insights.append(f'<strong>Quality:</strong> {conversation_quality}/10')
-            insights.append(f'<strong>Status:</strong> {resolution_status}')
-            insights.append(f'<strong>Expertise:</strong> {technical_expertise}')
-            insights.append(f'<strong>Engagement:</strong> {engagement_level}')
+            detailed_insights.append(f'<strong>Type:</strong> {conversation_type}')
+            detailed_insights.append(f'<strong>Quality:</strong> {conversation_quality}/10')
+            detailed_insights.append(f'<strong>Status:</strong> {resolution_status}')
+            detailed_insights.append(f'<strong>Expertise:</strong> {technical_expertise}')
+            detailed_insights.append(f'<strong>Engagement:</strong> {engagement_level}')
         
-        # Unknown patterns section
+        # Unknown patterns section (detailed)
         unknown_patterns = analysis.get('unknown_patterns', {})
         if unknown_patterns:
             requires_review = unknown_patterns.get('requires_review', False)
@@ -565,49 +592,79 @@ class ConversationAdmin(admin.ModelAdmin):
             new_intents = unknown_patterns.get('learning_opportunities', {}).get('new_intents', [])
             
             if requires_review:
-                insights.append('<strong>Review:</strong> <span style="color: orange;">Required</span>')
+                detailed_insights.append('<strong>Review:</strong> <span style="color: orange;">Required</span>')
             if unresolved_queries:
-                insights.append(f'<strong>Unresolved:</strong> {len(unresolved_queries)} queries')
+                detailed_insights.append(f'<strong>Unresolved:</strong> {len(unresolved_queries)} queries')
             if new_intents:
-                insights.append(f'<strong>New Intents:</strong> {len(new_intents)} detected')
+                detailed_insights.append(f'<strong>New Intents:</strong> {len(new_intents)} detected')
         
-        # Analysis metadata
+        # Analysis metadata (detailed)
         analysis_timestamp = analysis.get('analysis_timestamp', '')
         model_used = analysis.get('model_used') or analysis.get('llm_model', 'unknown')
         if analysis_timestamp:
             from datetime import datetime
             try:
                 timestamp = datetime.fromisoformat(analysis_timestamp.replace('Z', '+00:00'))
-                insights.append(f'<strong>Analyzed:</strong> {timestamp.strftime("%m-%d %H:%M")}')
+                detailed_insights.append(f'<strong>Analyzed:</strong> {timestamp.strftime("%m-%d %H:%M")}')
             except:
                 pass
-        insights.append(f'<strong>Model:</strong> {model_used}')
+        detailed_insights.append(f'<strong>Model:</strong> {model_used}')
         
-        return format_html('<br>'.join(insights))
-    langextract_insights.short_description = _('LangExtract Insights')
+        detailed_content = '<br>'.join(detailed_insights)
+        
+        # Create expandable HTML with toggle button and inline JavaScript
+        unique_id = f'langextract_{obj.id}'
+        return format_html('''
+            <div>
+                <div>{}</div>
+                <button type="button" onclick="
+                    var element = document.getElementById('{}');
+                    var button = this;
+                    if (element.style.display === 'none') {{
+                        element.style.display = 'block';
+                        button.textContent = 'Show Less';
+                    }} else {{
+                        element.style.display = 'none';
+                        button.textContent = 'Show More';
+                    }}
+                " style="font-size: 11px; padding: 2px 6px; margin-top: 4px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px;">
+                    Show More
+                </button>
+                <div id="{}" style="display: none; margin-top: 8px; padding: 8px; background: #f0f8ff; border-radius: 4px; border: 1px solid #b3d9ff; font-size: 12px;">
+                    {}
+                </div>
+            </div>
+        ''', compact_summary, unique_id, unique_id, detailed_content)
+    langextract_insights.short_description = _('LangExtract')
     
     def conversation_metadata(self, obj):
-        """Display conversation metadata that LLM can access"""
-        metadata_parts = []
-        
-        # Basic conversation info
-        metadata_parts.append(f'<strong>UUID:</strong> <code>{str(obj.uuid)[:8]}...</code>')
-        metadata_parts.append(f'<strong>Messages:</strong> {obj.total_messages}')
-        
-        # User information
-        user = obj.user
-        metadata_parts.append(f'<strong>User:</strong> {user.username} (ID: {user.id})')
-        
-        # Message breakdown
+        """Display compact conversation metadata with expandable details"""
+        # Get basic stats
         user_messages = obj.messages.filter(sender_type='user').count()
         bot_messages = obj.messages.filter(sender_type='bot').count()
-        metadata_parts.append(f'<strong>User/Bot:</strong> {user_messages}/{bot_messages}')
-        
-        # Feedback stats
         positive_feedback = obj.messages.filter(feedback='positive').count()
         negative_feedback = obj.messages.filter(feedback='negative').count()
+        
+        # Build compact summary
+        compact_parts = []
+        compact_parts.append(f'{user_messages}U/{bot_messages}B')
+        
         if positive_feedback > 0 or negative_feedback > 0:
-            metadata_parts.append(f'<strong>Feedback:</strong> +{positive_feedback}/-{negative_feedback}')
+            compact_parts.append(f'+{positive_feedback}/-{negative_feedback}')
+        
+        if obj.langextract_analysis:
+            compact_parts.append('📊')
+        
+        compact_summary = ' | '.join(compact_parts)
+        
+        # Build detailed view
+        detailed_parts = []
+        detailed_parts.append(f'<strong>UUID:</strong> <code>{str(obj.uuid)[:8]}...</code>')
+        detailed_parts.append(f'<strong>User:</strong> {obj.user.username} (ID: {obj.user.id})')
+        detailed_parts.append(f'<strong>Messages:</strong> {user_messages} user / {bot_messages} bot')
+        
+        if positive_feedback > 0 or negative_feedback > 0:
+            detailed_parts.append(f'<strong>Feedback:</strong> +{positive_feedback}/-{negative_feedback}')
         
         # Duration calculation
         messages = obj.messages.all()
@@ -616,19 +673,43 @@ class ConversationAdmin(admin.ModelAdmin):
             last_message = messages.order_by('timestamp').last()
             duration = last_message.timestamp - first_message.timestamp
             duration_hours = duration.total_seconds() / 3600
-            metadata_parts.append(f'<strong>Duration:</strong> {duration_hours:.1f}h')
+            detailed_parts.append(f'<strong>Duration:</strong> {duration_hours:.1f}h')
         
         # Latest LLM model used
         latest_bot_message = obj.messages.filter(sender_type='bot').order_by('-timestamp').first()
         if latest_bot_message and latest_bot_message.llm_model_used:
-            metadata_parts.append(f'<strong>LLM:</strong> {latest_bot_message.llm_model_used}')
+            detailed_parts.append(f'<strong>LLM:</strong> {latest_bot_message.llm_model_used}')
         
         # Analysis status
         if obj.langextract_analysis:
             analysis_size = len(str(obj.langextract_analysis))
-            metadata_parts.append(f'<strong>Analysis:</strong> {analysis_size} chars')
+            detailed_parts.append(f'<strong>Analysis:</strong> {analysis_size} chars')
         
-        return format_html('<br>'.join(metadata_parts))
+        detailed_content = '<br>'.join(detailed_parts)
+        
+        # Create expandable HTML with toggle button and inline JavaScript
+        unique_id = f'metadata_{obj.id}'
+        return format_html('''
+            <div>
+                <div>{}</div>
+                <button type="button" onclick="
+                    var element = document.getElementById('{}');
+                    var button = this;
+                    if (element.style.display === 'none') {{
+                        element.style.display = 'block';
+                        button.textContent = 'Show Less';
+                    }} else {{
+                        element.style.display = 'none';
+                        button.textContent = 'Show More';
+                    }}
+                " style="font-size: 11px; padding: 2px 6px; margin-top: 4px; cursor: pointer; background: #007cba; color: white; border: none; border-radius: 3px;">
+                    Show More
+                </button>
+                <div id="{}" style="display: none; margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; font-size: 12px;">
+                    {}
+                </div>
+            </div>
+        ''', compact_summary, unique_id, unique_id, detailed_content)
     conversation_metadata.short_description = _('Metadata')
     
     def created_at_local(self, obj):

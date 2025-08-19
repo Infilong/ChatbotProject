@@ -156,10 +156,13 @@ class LLMAdminService:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     try:
+                        # Use automatic provider selection if 'auto' is specified
+                        actual_provider = None if provider == 'auto' else provider
+                        
                         return loop.run_until_complete(
                             LLMManager.generate_chat_response(
                                 user_message=enhanced_message,
-                                provider=provider,
+                                provider=actual_provider,
                                 use_knowledge_base=use_knowledge,
                                 conversation_id=conversation_id
                             )
