@@ -32,7 +32,7 @@ class AdminChatAPI(View):
             data = json.loads(request.body)
             message = data.get('message', '').strip()
             provider = data.get('provider', 'openai')
-            use_knowledge = data.get('use_knowledge', False)
+            use_knowledge = data.get('use_knowledge_base', data.get('use_knowledge', False))
             conversation_id = data.get('conversation_id')
             
             if not message:
@@ -45,7 +45,9 @@ class AdminChatAPI(View):
             if not conversation_id:
                 conversation_id = ConversationService.create_new_conversation(request)
             
-            return LLMAdminService.process_chat_message(
+            # Use async_to_sync to properly handle the async call in Django view context
+            from asgiref.sync import async_to_sync
+            return async_to_sync(LLMAdminService.process_chat_message)(
                 request, message, provider, use_knowledge, conversation_id
             )
             
@@ -55,9 +57,19 @@ class AdminChatAPI(View):
                 'error': 'Invalid JSON data'
             }, status=400)
         except Exception as e:
+            import traceback
+            import logging
+            logger = logging.getLogger(__name__)
+            
+            # Log the full traceback for debugging
+            error_traceback = traceback.format_exc()
+            logger.error(f"Admin chat API error: {e}")
+            logger.error(f"Full traceback: {error_traceback}")
+            
             return JsonResponse({
                 'success': False,
-                'error': f'Server error: {str(e)}'
+                'error': f'Server error: {str(e)}',
+                'traceback': error_traceback
             }, status=500)
 
 

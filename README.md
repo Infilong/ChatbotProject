@@ -1,4 +1,4 @@
-# 🤖 Intelligent Chatbot Analysis System
+# Intelligent Chatbot Analysis System
 
 A comprehensive AI-driven chatbot and customer analytics platform built with Django, React, and modern machine learning technologies. Features advanced RAG (Retrieval-Augmented Generation), LLM integration, and multilingual support.
 

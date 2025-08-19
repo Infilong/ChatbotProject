@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **ALWAYS USE THE PROPER LLM-DRIVEN WORKFLOW - NEVER PRIMITIVE PATTERN MATCHING:**
 
-### **🤖 Required AI-Driven RAG Flow:**
+### **Required AI-Driven RAG Flow:**
 
 ```
 User Input → LLM Intent Analysis → Vector/RAG Search → LLM Response Generation → Frontend
@@ -422,7 +422,7 @@ def my_view(request):
 **NO EMOJIS OR NON-UNICODE CHARACTERS IN BACKEND CODE:**
 
 ❌ **STRICTLY FORBIDDEN in Django backend code:**
-- Emojis in templates, admin interfaces, or Python code (🤖, 📊, 🔒, etc.)
+- Emojis in templates, admin interfaces, or Python code (robot, chart, lock icons, etc.)
 - Special Unicode characters that may cause encoding issues
 - Non-ASCII characters in user interface elements
 - Emojis in admin action descriptions, success messages, or any user-facing text
@@ -435,17 +435,6 @@ def my_view(request):
 - Focus on functionality over visual styling with characters
 - Clean, professional admin action names and messages
 
-**Examples:**
-```python
-# ❌ Wrong - Using emojis in admin/templates
-<h2>🤖 {% trans "LLM Features" %}</h2>
-<h2>📊 {% trans "Quick Statistics" %}</h2>
-def some_action.short_description = "🔍 Analyze Data"
-
-# ✅ Correct - Clean text only
-<h2>{% trans "LLM Features" %}</h2>  
-<h2>{% trans "Quick Statistics" %}</h2>
-def some_action.short_description = _("Analyze Data")
 ```
 
 **Django Admin Standards:**
@@ -477,15 +466,6 @@ def some_action.short_description = _("Analyze Data")
 - Professional text-only output for management commands
 - Clean, readable console messages without decorative characters
 
-**Examples:**
-```python
-# ❌ Wrong - Using emojis in management commands
-self.stdout.write(f"🔍 Searching for unanalyzed messages...")
-self.stdout.write(self.style.SUCCESS("✅ Analysis completed!"))
-
-# ✅ Correct - Plain text only
-self.stdout.write("Searching for unanalyzed messages...")
-self.stdout.write(self.style.SUCCESS("Analysis completed successfully!"))
 ```
 
 **Testing Standards:**
@@ -741,7 +721,7 @@ uv run python manage.py test        # Run backend tests
 **Planned Tech Stack**:
 - **Frontend**: React + TypeScript (current implementation)
 - **Backend**: Django REST API with uv python environment
-- **Database**: PostgreSQL with Django ORM
+- **Database**: SQLite with Django ORM
 - **Communication**: Django REST Framework + Django Channels (WebSockets)
 - **LLM APIs**: OpenAI, Gemini, Claude for conversation analysis and insights
 - **Data Analysis**: Google LangExtract for structured conversation insights
@@ -857,12 +837,12 @@ When implementing features, always avoid logical errors and unnatural behaviors 
 **Requirements:**
 - Python 3.10+ with uv environment
 - API keys for cloud LLM models (Gemini/OpenAI)
-- PostgreSQL database setup
+- SQLite database setup
 - Integration with Django models for conversation storage
 
 ## Database & Communication Architecture
 
-### PostgreSQL Database
+### SQLite Database
 - JSON/JSONB support for LangExtract analysis results and message metadata
 - Full-text search capabilities for conversation history and admin filtering
 - Scalable design for large conversation datasets
@@ -944,29 +924,6 @@ When implementing features, always avoid logical errors and unnatural behaviors 
 - LLM API integration testing with rate limiting
 - Error handling and edge case testing
 
-## Deployment & Production
-
-### Development Environment
-- Docker Compose for local development
-- PostgreSQL container for database
-- Redis container for Django Channels (WebSocket scaling)
-- Hot reloading for both frontend and backend
-
-### Production Considerations
-- Docker containerization for backend and frontend
-- Nginx reverse proxy for static files and load balancing
-- PostgreSQL with connection pooling
-- Redis for WebSocket scaling and caching
-- Environment-specific configuration management
-- Automated backup strategy for conversation data
-- Monitoring and logging setup (Django logging, frontend error tracking)
-
-### Scaling Strategy
-- Horizontal scaling for Django backend
-- CDN for static assets
-- Database read replicas for analytics queries
-- Message queue for background LangExtract processing
-- Load balancer for WebSocket connections
 
 ## Django Admin Analytics & Document Management
 
