@@ -53,12 +53,13 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ['uuid_short', 'user_link', 'title_display', 'total_messages', 'analysis_summary', 'analysis_source_display', 'quality_score', 'issues_detected', 'satisfaction_level', 'created_at_local', 'is_active']
+    list_display = ['uuid_short', 'user_link', 'title_display', 'total_messages', 'analysis_summary', 'analysis_source_display', 'quality_score', 'issues_detected', 'satisfaction_level', 'langextract_insights', 'conversation_metadata', 'created_at_local', 'is_active']
     list_filter = ['is_active', 'created_at', 'updated_at', 'satisfaction_score']
     search_fields = ['user__username', 'user__email', 'title']
     readonly_fields = [
         'uuid', 'created_at', 'updated_at', 'total_messages',
-        'user_display_info', 'conversation_stats', 'technical_details'
+        'user_display_info', 'conversation_stats', 'technical_details',
+        'langextract_analysis_details', 'conversation_metadata_detailed'
     ]
     list_per_page = 25
     date_hierarchy = 'created_at'
@@ -128,6 +129,14 @@ class ConversationAdmin(admin.ModelAdmin):
             'fields': ('satisfaction_score', 'langextract_analysis'),
             'classes': ('collapse',),
             'description': _('Analytics data will be populated automatically after analysis')
+        }),
+        (_('LangExtract Analysis'), {
+            'fields': (
+                'langextract_analysis_details',
+                'conversation_metadata_detailed'
+            ),
+            'classes': ('collapse',),
+            'description': _('Detailed LangExtract analysis data and conversation metadata that LLM can access')
         }),
         (_('Metadata'), {
             'fields': (
@@ -271,35 +280,39 @@ class ConversationAdmin(admin.ModelAdmin):
         
         analysis = obj.langextract_analysis
         analysis_source = analysis.get('analysis_source', 'Missing Source')
-        analysis_method = analysis.get('analysis_method', 'unknown')
+        model_used = analysis.get('model_used') or analysis.get('llm_model', 'unknown')
         
-        # Color coding for different sources
-        if 'LLM' in analysis_source or 'gemini' in analysis_source.lower() or 'LangExtract' in analysis_source:
-            # LLM analysis - green
+        # Extract service name and format with model
+        if 'LangExtract' in analysis_source:
+            # Extract the main service name (e.g., "LangExtract" from "LangExtract (Google Gemini)")
+            service_name = 'LangExtract'
+            display_text = f'{service_name}(Model:{model_used})'
             color = 'green'
-            icon = '🤖'
+        elif 'LLM' in analysis_source:
+            # For direct LLM analysis
+            display_text = f'LLM(Model:{model_used})'
+            color = 'green'
         elif 'Local' in analysis_source:
-            # Local analysis - blue  
+            # Local analysis - no model info needed
+            display_text = 'Local Analysis'
             color = 'blue'
-            icon = '🔧'
         elif 'Fallback' in analysis_source or 'Emergency' in analysis_source:
-            # Fallback analysis - orange
+            # Fallback analysis
+            display_text = f'Fallback(Model:{model_used})'
             color = 'orange'
-            icon = '⚠️'
         elif analysis_source == 'Missing Source':
-            # Missing source - red (shouldn't happen after fix)
+            # Missing source
+            display_text = 'Missing Source'
             color = 'red'
-            icon = '❌'
-            analysis_source = 'Missing Source'
         else:
-            # Unknown/other - gray
+            # Unknown/other
+            display_text = f'Unknown(Model:{model_used})'
             color = 'gray'
-            icon = '❓'
         
-        # Display with icon and color
+        # Display with color
         return format_html(
-            '<span style="color: {}; font-weight: bold;">{} {}</span>',
-            color, icon, analysis_source
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, display_text
         )
     analysis_source_display.short_description = _('Analysis Source')
     
@@ -367,21 +380,62 @@ class ConversationAdmin(admin.ModelAdmin):
             confidence = data.get('average_confidence', 0)
             color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
             
-            # Translate issue types
+            # Translate issue types - handle both formats (with spaces and underscores)
             issue_translations = {
+                # Underscore format (database keys)
                 'question': _('Question'),
                 'technical_critical_hardware': _('Critical Hardware Issue'),
                 'technical_urgent': _('Urgent Technical Issue'),
                 'technical_problem': _('Technical Problem'),
+                'technical_query': _('Technical Query'),
+                'technical_damage': _('Technical Damage'),
                 'billing_issue': _('Billing Issue'),
                 'login_problem': _('Login Problem'),
                 'performance_issue': _('Performance Issue'),
                 'security_concern': _('Security Concern'),
+                'security_issue': _('Security Issue'),
                 'feature_request': _('Feature Request'),
                 'integration_issue': _('Integration Issue'),
                 'data_issue': _('Data Issue'),
                 'documentation_gap': _('Documentation Gap'),
                 'ui_ux_feedback': _('UI/UX Feedback'),
+                'network_issue': _('Network Issue'),
+                'database_issue': _('Database Issue'),
+                'api_issue': _('API Issue'),
+                'user_error': _('User Error'),
+                'configuration_issue': _('Configuration Issue'),
+                'compatibility_issue': _('Compatibility Issue'),
+                'timeout_issue': _('Timeout Issue'),
+                'access_denied': _('Access Denied'),
+                'permission_issue': _('Permission Issue'),
+                'authentication_issue': _('Authentication Issue'),
+                # Space format (as they appear in analysis data)
+                'Question': _('Question'),
+                'Technical Critical Hardware': _('Critical Hardware Issue'),
+                'Technical Urgent': _('Urgent Technical Issue'),
+                'Technical Problem': _('Technical Problem'),
+                'Technical Query': _('Technical Query'),
+                'Technical Damage': _('Technical Damage'),
+                'Billing Issue': _('Billing Issue'),
+                'Login Problem': _('Login Problem'),
+                'Performance Issue': _('Performance Issue'),
+                'Security Concern': _('Security Concern'),
+                'Security Issue': _('Security Issue'),
+                'Feature Request': _('Feature Request'),
+                'Integration Issue': _('Integration Issue'),
+                'Data Issue': _('Data Issue'),
+                'Documentation Gap': _('Documentation Gap'),
+                'UI/UX Feedback': _('UI/UX Feedback'),
+                'Network Issue': _('Network Issue'),
+                'Database Issue': _('Database Issue'),
+                'API Issue': _('API Issue'),
+                'User Error': _('User Error'),
+                'Configuration Issue': _('Configuration Issue'),
+                'Compatibility Issue': _('Compatibility Issue'),
+                'Timeout Issue': _('Timeout Issue'),
+                'Access Denied': _('Access Denied'),
+                'Permission Issue': _('Permission Issue'),
+                'Authentication Issue': _('Authentication Issue'),
             }
             
             translated_issue = issue_translations.get(issue_type, issue_type)
@@ -447,6 +501,135 @@ class ConversationAdmin(admin.ModelAdmin):
             color, level, f'{avg_score:.1f}', int(satisfied_pct)
         )
     satisfaction_level.short_description = _('Satisfaction')
+    
+    def langextract_insights(self, obj):
+        """Display LangExtract analysis insights in detailed format"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<span style="color: #999;">No analysis</span>')
+        
+        analysis = obj.langextract_analysis
+        insights = []
+        
+        # Customer insights section
+        customer_insights = analysis.get('customer_insights', {})
+        if customer_insights:
+            sentiment_analysis = customer_insights.get('sentiment_analysis', {})
+            overall_sentiment = sentiment_analysis.get('overall_sentiment', 'neutral')
+            satisfaction_score = sentiment_analysis.get('satisfaction_score', 0)
+            
+            issue_extraction = customer_insights.get('issue_extraction', {})
+            primary_issues = issue_extraction.get('primary_issues', [])
+            
+            urgency_assessment = customer_insights.get('urgency_assessment', {})
+            urgency_level = urgency_assessment.get('urgency_level', 'not_applicable')
+            escalation_recommended = urgency_assessment.get('escalation_recommended', False)
+            
+            business_intelligence = customer_insights.get('business_intelligence', {})
+            customer_segment = business_intelligence.get('customer_segment', 'unknown')
+            
+            insights.append(f'<strong>Sentiment:</strong> {overall_sentiment} ({satisfaction_score}/10)')
+            insights.append(f'<strong>Issues:</strong> {len(primary_issues)} detected')
+            if urgency_level != 'not_applicable':
+                color = 'red' if urgency_level in ['high', 'critical'] else 'orange'
+                insights.append(f'<strong>Urgency:</strong> <span style="color: {color};">{urgency_level}</span>')
+            if escalation_recommended:
+                insights.append('<strong>Escalation:</strong> <span style="color: red;">Recommended</span>')
+            if customer_segment != 'unknown':
+                insights.append(f'<strong>Segment:</strong> {customer_segment}')
+        
+        # Conversation patterns section
+        conversation_patterns = analysis.get('conversation_patterns', {})
+        if conversation_patterns:
+            conversation_flow = conversation_patterns.get('conversation_flow', {})
+            conversation_type = conversation_flow.get('conversation_type', 'unknown')
+            conversation_quality = conversation_flow.get('conversation_quality', 0)
+            resolution_status = conversation_flow.get('resolution_status', 'unknown')
+            
+            user_behavior = conversation_patterns.get('user_behavior_patterns', {})
+            communication_style = user_behavior.get('communication_style', 'unknown')
+            technical_expertise = user_behavior.get('technical_expertise', 'unknown')
+            engagement_level = user_behavior.get('engagement_level', 'unknown')
+            
+            insights.append(f'<strong>Type:</strong> {conversation_type}')
+            insights.append(f'<strong>Quality:</strong> {conversation_quality}/10')
+            insights.append(f'<strong>Status:</strong> {resolution_status}')
+            insights.append(f'<strong>Expertise:</strong> {technical_expertise}')
+            insights.append(f'<strong>Engagement:</strong> {engagement_level}')
+        
+        # Unknown patterns section
+        unknown_patterns = analysis.get('unknown_patterns', {})
+        if unknown_patterns:
+            requires_review = unknown_patterns.get('requires_review', False)
+            unknown_issues = unknown_patterns.get('unknown_issues', {})
+            unresolved_queries = unknown_issues.get('unresolved_queries', [])
+            new_intents = unknown_patterns.get('learning_opportunities', {}).get('new_intents', [])
+            
+            if requires_review:
+                insights.append('<strong>Review:</strong> <span style="color: orange;">Required</span>')
+            if unresolved_queries:
+                insights.append(f'<strong>Unresolved:</strong> {len(unresolved_queries)} queries')
+            if new_intents:
+                insights.append(f'<strong>New Intents:</strong> {len(new_intents)} detected')
+        
+        # Analysis metadata
+        analysis_timestamp = analysis.get('analysis_timestamp', '')
+        model_used = analysis.get('model_used') or analysis.get('llm_model', 'unknown')
+        if analysis_timestamp:
+            from datetime import datetime
+            try:
+                timestamp = datetime.fromisoformat(analysis_timestamp.replace('Z', '+00:00'))
+                insights.append(f'<strong>Analyzed:</strong> {timestamp.strftime("%m-%d %H:%M")}')
+            except:
+                pass
+        insights.append(f'<strong>Model:</strong> {model_used}')
+        
+        return format_html('<br>'.join(insights))
+    langextract_insights.short_description = _('LangExtract Insights')
+    
+    def conversation_metadata(self, obj):
+        """Display conversation metadata that LLM can access"""
+        metadata_parts = []
+        
+        # Basic conversation info
+        metadata_parts.append(f'<strong>UUID:</strong> <code>{str(obj.uuid)[:8]}...</code>')
+        metadata_parts.append(f'<strong>Messages:</strong> {obj.total_messages}')
+        
+        # User information
+        user = obj.user
+        metadata_parts.append(f'<strong>User:</strong> {user.username} (ID: {user.id})')
+        
+        # Message breakdown
+        user_messages = obj.messages.filter(sender_type='user').count()
+        bot_messages = obj.messages.filter(sender_type='bot').count()
+        metadata_parts.append(f'<strong>User/Bot:</strong> {user_messages}/{bot_messages}')
+        
+        # Feedback stats
+        positive_feedback = obj.messages.filter(feedback='positive').count()
+        negative_feedback = obj.messages.filter(feedback='negative').count()
+        if positive_feedback > 0 or negative_feedback > 0:
+            metadata_parts.append(f'<strong>Feedback:</strong> +{positive_feedback}/-{negative_feedback}')
+        
+        # Duration calculation
+        messages = obj.messages.all()
+        if messages.exists():
+            first_message = messages.order_by('timestamp').first()
+            last_message = messages.order_by('timestamp').last()
+            duration = last_message.timestamp - first_message.timestamp
+            duration_hours = duration.total_seconds() / 3600
+            metadata_parts.append(f'<strong>Duration:</strong> {duration_hours:.1f}h')
+        
+        # Latest LLM model used
+        latest_bot_message = obj.messages.filter(sender_type='bot').order_by('-timestamp').first()
+        if latest_bot_message and latest_bot_message.llm_model_used:
+            metadata_parts.append(f'<strong>LLM:</strong> {latest_bot_message.llm_model_used}')
+        
+        # Analysis status
+        if obj.langextract_analysis:
+            analysis_size = len(str(obj.langextract_analysis))
+            metadata_parts.append(f'<strong>Analysis:</strong> {analysis_size} chars')
+        
+        return format_html('<br>'.join(metadata_parts))
+    conversation_metadata.short_description = _('Metadata')
     
     def created_at_local(self, obj):
         """Display created_at converted from UTC to user's local timezone"""
@@ -550,6 +733,99 @@ class ConversationAdmin(admin.ModelAdmin):
         
         return format_html('<br>'.join(technical_info))
     technical_details.short_description = _('Technical Details')
+    
+    def langextract_analysis_details(self, obj):
+        """Display detailed LangExtract analysis data in JSON-like format for LLM access"""
+        if not obj.langextract_analysis or obj.langextract_analysis == {}:
+            return format_html('<div style="padding: 15px; background: #f8f9fa; border-radius: 4px; color: #666;">No LangExtract analysis data available</div>')
+        
+        import json
+        analysis_json = json.dumps(obj.langextract_analysis, indent=2, ensure_ascii=False)
+        
+        return format_html(
+            '<div style="background: #f8f9fa; border-radius: 4px; padding: 15px; font-family: monospace; white-space: pre-wrap; max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6;">{}</div>',
+            analysis_json
+        )
+    langextract_analysis_details.short_description = _('LangExtract Analysis Data')
+    
+    def conversation_metadata_detailed(self, obj):
+        """Display detailed conversation metadata that LLM can access"""
+        # Calculate comprehensive conversation statistics
+        messages = obj.messages.all()
+        user_messages = messages.filter(sender_type='user')
+        bot_messages = messages.filter(sender_type='bot')
+        
+        # Calculate response times
+        response_times = [msg.response_time for msg in bot_messages if msg.response_time]
+        avg_response_time = sum(response_times) / len(response_times) if response_times else 0
+        
+        # Calculate duration
+        duration_hours = 0
+        if messages.exists():
+            first_message = messages.order_by('timestamp').first()
+            last_message = messages.order_by('timestamp').last()
+            duration = last_message.timestamp - first_message.timestamp
+            duration_hours = duration.total_seconds() / 3600
+        
+        # Get feedback stats
+        positive_feedback = messages.filter(feedback='positive').count()
+        negative_feedback = messages.filter(feedback='negative').count()
+        
+        # Get user info
+        user = obj.user
+        
+        # Get latest LLM model
+        latest_bot_message = bot_messages.order_by('-timestamp').first()
+        latest_llm_model = latest_bot_message.llm_model_used if latest_bot_message else None
+        latest_response_time = latest_bot_message.response_time if latest_bot_message else None
+        latest_tokens = latest_bot_message.tokens_used if latest_bot_message else None
+        
+        # Calculate total tokens
+        total_tokens = sum(msg.tokens_used for msg in messages if msg.tokens_used)
+        
+        metadata = {
+            "conversation_uuid": str(obj.uuid),
+            "database_id": obj.id,
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            "updated_at": obj.updated_at.isoformat() if obj.updated_at else None,
+            "total_messages": messages.count(),
+            "user_messages": user_messages.count(),
+            "bot_messages": bot_messages.count(),
+            "conversation_duration_hours": round(duration_hours, 2),
+            "average_response_time_seconds": round(avg_response_time, 2),
+            "positive_feedback": positive_feedback,
+            "negative_feedback": negative_feedback,
+            "satisfaction_score": obj.satisfaction_score,
+            "is_active": obj.is_active,
+            "title": obj.get_title(),
+            "user_info": {
+                "username": user.username,
+                "email": user.email,
+                "full_name": user.get_full_name(),
+                "user_id": user.id,
+                "is_active": user.is_active,
+                "is_staff": user.is_staff,
+                "last_login": user.last_login.isoformat() if user.last_login else None,
+                "date_joined": user.date_joined.isoformat() if user.date_joined else None
+            },
+            "latest_llm_info": {
+                "model_used": latest_llm_model,
+                "response_time": latest_response_time,
+                "tokens_used": latest_tokens
+            },
+            "total_tokens_used": total_tokens or 0,
+            "langextract_analysis_available": bool(obj.langextract_analysis),
+            "langextract_analysis_size_chars": len(str(obj.langextract_analysis)) if obj.langextract_analysis else 0
+        }
+        
+        import json
+        metadata_json = json.dumps(metadata, indent=2, ensure_ascii=False)
+        
+        return format_html(
+            '<div style="background: #e7f3ff; border-radius: 4px; padding: 15px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; border: 1px solid #b3d9ff;">{}</div>',
+            metadata_json
+        )
+    conversation_metadata_detailed.short_description = _('Detailed Metadata for LLM')
     
     def add_sample_messages(self, request, queryset):
         """Admin action to quickly add sample messages to empty conversations"""
@@ -1208,26 +1484,45 @@ class MessageAdmin(admin.ModelAdmin):
     feedback_display.short_description = _('Feedback')
     
     def analysis_source_message(self, obj):
-        """Display analysis source for messages"""
+        """Display detailed analysis source for messages (matching conversation admin format)"""
         if not obj.message_analysis:
-            return format_html('<span style="color: #999;">-</span>')
+            return format_html('<span style="color: #999;">Not analyzed</span>')
         
-        analysis_source = obj.message_analysis.get('analysis_source', 'Missing')
+        analysis_source = obj.message_analysis.get('analysis_source', 'Missing Source')
+        model_used = obj.message_analysis.get('model_used') or obj.message_analysis.get('llm_model', 'unknown')
         
-        # Simplified display for message list
-        if 'LLM' in analysis_source or 'gemini' in analysis_source.lower():
-            return format_html('<span style="color: green; font-size: 11px;">🤖 LLM</span>')
+        # Extract service name and format with model (matching conversation admin)
+        if 'LangExtract' in analysis_source:
+            # Extract the main service name (e.g., "LangExtract" from "LangExtract Simple (gemini-2.5-flash)")
+            service_name = 'LangExtract'
+            display_text = f'{service_name}(Model:{model_used})'
+            color = 'green'
+        elif 'LLM' in analysis_source:
+            # For direct LLM analysis
+            display_text = f'LLM(Model:{model_used})'
+            color = 'green'
         elif 'Local' in analysis_source:
-            if 'Legacy' in analysis_source:
-                return format_html('<span style="color: #4169E1; font-size: 11px;">🔧 Local (Legacy)</span>')
-            else:
-                return format_html('<span style="color: blue; font-size: 11px;">🔧 Local</span>')
-        elif 'Fallback' in analysis_source:
-            return format_html('<span style="color: orange; font-size: 11px;">⚠️ Fallback</span>')
-        elif analysis_source == 'Missing':
-            return format_html('<span style="color: red; font-size: 11px;">❌ Missing</span>')
+            # Local analysis - no model info needed
+            display_text = 'Local Analysis'
+            color = 'blue'
+        elif 'Fallback' in analysis_source or 'Emergency' in analysis_source:
+            # Fallback analysis
+            display_text = f'Fallback(Model:{model_used})'
+            color = 'orange'
+        elif analysis_source == 'Missing Source':
+            # Missing source
+            display_text = 'Missing Source'
+            color = 'red'
         else:
-            return format_html('<span style="color: gray; font-size: 11px;">❓ {}</span>', analysis_source[:10])
+            # Unknown/other
+            display_text = f'Unknown(Model:{model_used})'
+            color = 'gray'
+        
+        # Display with color (matching conversation admin format)
+        return format_html(
+            '<span style="color: {}; font-weight: bold;">{}</span>',
+            color, display_text
+        )
     analysis_source_message.short_description = _('Source')
     
     def issues_summary(self, obj):
@@ -1246,21 +1541,62 @@ class MessageAdmin(admin.ModelAdmin):
             confidence = issue.get('confidence', 0)
             color = 'red' if confidence > 70 else 'orange' if confidence > 40 else 'gray'
             
-            # Translate issue types
+            # Translate issue types - handle both formats (with spaces and underscores)
             issue_translations = {
+                # Underscore format (database keys)
                 'question': _('Question'),
                 'technical_critical_hardware': _('Critical Hardware Issue'),
                 'technical_urgent': _('Urgent Technical Issue'),
                 'technical_problem': _('Technical Problem'),
+                'technical_query': _('Technical Query'),
+                'technical_damage': _('Technical Damage'),
                 'billing_issue': _('Billing Issue'),
                 'login_problem': _('Login Problem'),
                 'performance_issue': _('Performance Issue'),
                 'security_concern': _('Security Concern'),
+                'security_issue': _('Security Issue'),
                 'feature_request': _('Feature Request'),
                 'integration_issue': _('Integration Issue'),
                 'data_issue': _('Data Issue'),
                 'documentation_gap': _('Documentation Gap'),
                 'ui_ux_feedback': _('UI/UX Feedback'),
+                'network_issue': _('Network Issue'),
+                'database_issue': _('Database Issue'),
+                'api_issue': _('API Issue'),
+                'user_error': _('User Error'),
+                'configuration_issue': _('Configuration Issue'),
+                'compatibility_issue': _('Compatibility Issue'),
+                'timeout_issue': _('Timeout Issue'),
+                'access_denied': _('Access Denied'),
+                'permission_issue': _('Permission Issue'),
+                'authentication_issue': _('Authentication Issue'),
+                # Space format (as they appear in analysis data)
+                'Question': _('Question'),
+                'Technical Critical Hardware': _('Critical Hardware Issue'),
+                'Technical Urgent': _('Urgent Technical Issue'),
+                'Technical Problem': _('Technical Problem'),
+                'Technical Query': _('Technical Query'),
+                'Technical Damage': _('Technical Damage'),
+                'Billing Issue': _('Billing Issue'),
+                'Login Problem': _('Login Problem'),
+                'Performance Issue': _('Performance Issue'),
+                'Security Concern': _('Security Concern'),
+                'Security Issue': _('Security Issue'),
+                'Feature Request': _('Feature Request'),
+                'Integration Issue': _('Integration Issue'),
+                'Data Issue': _('Data Issue'),
+                'Documentation Gap': _('Documentation Gap'),
+                'UI/UX Feedback': _('UI/UX Feedback'),
+                'Network Issue': _('Network Issue'),
+                'Database Issue': _('Database Issue'),
+                'API Issue': _('API Issue'),
+                'User Error': _('User Error'),
+                'Configuration Issue': _('Configuration Issue'),
+                'Compatibility Issue': _('Compatibility Issue'),
+                'Timeout Issue': _('Timeout Issue'),
+                'Access Denied': _('Access Denied'),
+                'Permission Issue': _('Permission Issue'),
+                'Authentication Issue': _('Authentication Issue'),
             }
             translated_issue = issue_translations.get(issue_type, issue_type)
             
@@ -1317,9 +1653,16 @@ class MessageAdmin(admin.ModelAdmin):
         urgency_score = importance_data.get('urgency_score', 0)
         
         color_map = {
-            'high': 'red',
-            'medium': 'orange',
-            'low': 'green'
+            'critical': '#CC0000',   # Dark red - most alert for critical issues
+            'urgent': '#FF0000',     # Red - urgent issues
+            'high': '#FF4444',       # Light red - high importance
+            'medium': '#FF8800',     # Orange - medium importance  
+            'low': '#008800',        # Green - low importance
+            'normal': '#008800',     # Green - normal level
+            'technical': '#0066CC',  # Blue - technical issues
+            'hardware': '#9900CC',   # Purple - hardware issues
+            'documentation': '#0088CC',  # Light blue - documentation issues
+            'question': '#666666'    # Gray - general questions
         }
         
         # Translation mapping for importance levels
@@ -1356,16 +1699,20 @@ class MessageAdmin(admin.ModelAdmin):
         improvement_areas = doc_data.get('improvement_areas', [])
         
         color_map = {
-            'high': 'red',
-            'medium': 'orange',
-            'low': 'green'
+            'critical': '#CC0000',   # Dark red - critical doc improvements needed
+            'high': '#FF4444',       # Light red - high doc potential
+            'medium': '#FF8800',     # Orange - medium doc potential  
+            'low': '#008800',        # Green - low doc potential
+            'normal': '#008800'      # Green - normal level
         }
         
         # Translation mapping for potential levels
         level_translations = {
+            'critical': _('Critical'),
             'high': _('High'),
             'medium': _('Medium'),
-            'low': _('Low')
+            'low': _('Low'),
+            'normal': _('Normal')
         }
         
         color = color_map.get(potential_level, 'gray')
@@ -1390,16 +1737,20 @@ class MessageAdmin(admin.ModelAdmin):
         should_add = faq_data.get('should_add_to_faq', False)
         
         color_map = {
-            'high': 'red',
-            'medium': 'orange',
-            'low': 'green'
+            'critical': '#CC0000',   # Dark red - critical FAQ needed
+            'high': '#FF4444',       # Light red - high FAQ potential
+            'medium': '#FF8800',     # Orange - medium FAQ potential  
+            'low': '#008800',        # Green - low FAQ potential
+            'normal': '#008800'      # Green - normal level
         }
         
         # Translation mapping for potential levels
         level_translations = {
+            'critical': _('Critical'),
             'high': _('High'),
             'medium': _('Medium'),
-            'low': _('Low')
+            'low': _('Low'),
+            'normal': _('Normal')
         }
         
         color = color_map.get(potential_level, 'gray')

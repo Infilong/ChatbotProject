@@ -62,8 +62,8 @@ class BaseLLMService:
         """
         raise NotImplementedError("Subclasses must implement generate_response")
     
-    def get_system_prompt(self, prompt_type: str = 'system', language: str = 'en') -> str:
-        """Get universal system prompt for any industry/use case"""
+    def get_system_prompt(self, prompt_type: str = 'system', language: str = 'en', conversation_metadata: dict = None, langextract_analysis: dict = None) -> str:
+        """Get universal system prompt for any industry/use case with optional analysis data access"""
         # UNIVERSAL PROMPTS FOR ANY INDUSTRY
         logger.info("Using universal system prompt for any industry")
         
@@ -86,9 +86,96 @@ class BaseLLMService:
             }
         }
         
-        # Get prompt for the specified language and type
+        # Get base prompt for the specified language and type
         lang_prompts = universal_prompts.get(language, universal_prompts['en'])
-        return lang_prompts.get(prompt_type, lang_prompts['system'])
+        base_prompt = lang_prompts.get(prompt_type, lang_prompts['system'])
+        
+        # Enhance prompt with analysis data if available
+        enhanced_prompt = base_prompt
+        
+        if conversation_metadata or langextract_analysis:
+            enhanced_prompt += "\n\nYou have access to conversation analysis data:"
+            
+            if conversation_metadata:
+                enhanced_prompt += f"\n\nConversation Metadata:\n{self._format_metadata_for_llm(conversation_metadata)}"
+            
+            if langextract_analysis:
+                enhanced_prompt += f"\n\nLangExtract Analysis:\n{self._format_analysis_for_llm(langextract_analysis)}"
+            
+            enhanced_prompt += "\n\nYou can reference this analysis data when relevant to provide more informed responses about conversation patterns, user sentiment, issues detected, or conversation quality."
+        
+        return enhanced_prompt
+    
+    def _format_metadata_for_llm(self, metadata: dict) -> str:
+        """Format conversation metadata for LLM consumption"""
+        if not metadata:
+            return ""
+        
+        formatted_lines = []
+        formatted_lines.append(f"- Conversation UUID: {metadata.get('conversation_uuid', 'N/A')}")
+        formatted_lines.append(f"- Total Messages: {metadata.get('total_messages', 0)}")
+        formatted_lines.append(f"- User/Bot Messages: {metadata.get('user_messages', 0)}/{metadata.get('bot_messages', 0)}")
+        formatted_lines.append(f"- Duration: {metadata.get('conversation_duration_hours', 0):.1f} hours")
+        formatted_lines.append(f"- Feedback: +{metadata.get('positive_feedback', 0)}/-{metadata.get('negative_feedback', 0)}")
+        
+        user_info = metadata.get('user_info', {})
+        if user_info:
+            formatted_lines.append(f"- User: {user_info.get('username', 'N/A')} (ID: {user_info.get('user_id', 'N/A')})")
+        
+        return "\n".join(formatted_lines)
+    
+    def _format_analysis_for_llm(self, analysis: dict) -> str:
+        """Format LangExtract analysis for LLM consumption"""
+        if not analysis:
+            return ""
+        
+        formatted_lines = []
+        
+        # Customer insights
+        customer_insights = analysis.get('customer_insights', {})
+        if customer_insights:
+            sentiment_analysis = customer_insights.get('sentiment_analysis', {})
+            if sentiment_analysis:
+                overall_sentiment = sentiment_analysis.get('overall_sentiment', 'neutral')
+                satisfaction_score = sentiment_analysis.get('satisfaction_score', 0)
+                formatted_lines.append(f"- Sentiment: {overall_sentiment} (Score: {satisfaction_score}/10)")
+            
+            issue_extraction = customer_insights.get('issue_extraction', {})
+            primary_issues = issue_extraction.get('primary_issues', [])
+            if primary_issues:
+                issues_text = ", ".join([issue.get('issue_type', 'Unknown') for issue in primary_issues[:3]])
+                formatted_lines.append(f"- Issues Detected: {issues_text}")
+            
+            urgency_assessment = customer_insights.get('urgency_assessment', {})
+            urgency_level = urgency_assessment.get('urgency_level', 'not_applicable')
+            if urgency_level != 'not_applicable':
+                formatted_lines.append(f"- Urgency Level: {urgency_level}")
+        
+        # Conversation patterns
+        conversation_patterns = analysis.get('conversation_patterns', {})
+        if conversation_patterns:
+            conversation_flow = conversation_patterns.get('conversation_flow', {})
+            if conversation_flow:
+                conv_type = conversation_flow.get('conversation_type', 'unknown')
+                quality = conversation_flow.get('conversation_quality', 0)
+                status = conversation_flow.get('resolution_status', 'unknown')
+                formatted_lines.append(f"- Conversation Type: {conv_type}")
+                formatted_lines.append(f"- Quality Score: {quality}/10")
+                formatted_lines.append(f"- Resolution Status: {status}")
+            
+            user_behavior = conversation_patterns.get('user_behavior_patterns', {})
+            if user_behavior:
+                expertise = user_behavior.get('technical_expertise', 'unknown')
+                engagement = user_behavior.get('engagement_level', 'unknown')
+                formatted_lines.append(f"- User Expertise: {expertise}")
+                formatted_lines.append(f"- Engagement Level: {engagement}")
+        
+        # Unknown patterns
+        unknown_patterns = analysis.get('unknown_patterns', {})
+        if unknown_patterns and unknown_patterns.get('requires_review'):
+            formatted_lines.append("- Requires Review: Yes")
+        
+        return "\n".join(formatted_lines)
     
     async def aget_system_prompt(self, prompt_type: str = 'system', language: str = 'en') -> str:
         """Get system prompt from AdminPrompt model (async version)"""
@@ -497,8 +584,58 @@ class LLMManager:
         try:
             service = await cls.get_active_service(provider)
             
-            # Get minimal system prompt to avoid token limits
-            system_prompt = service.get_system_prompt('system', language)
+            # Get conversation metadata and analysis data for enhanced LLM responses
+            conversation_metadata = None
+            langextract_analysis = None
+            
+            # If we have a conversation_id, fetch the conversation and its analysis data
+            if conversation_id:
+                try:
+                    from .models import Conversation
+                    from asgiref.sync import sync_to_async
+                    
+                    conversation = await sync_to_async(Conversation.objects.get)(id=conversation_id)
+                    
+                    # Extract conversation metadata
+                    messages = conversation.messages.all()
+                    user_messages = await sync_to_async(lambda: messages.filter(sender_type='user').count())()
+                    bot_messages = await sync_to_async(lambda: messages.filter(sender_type='bot').count())()
+                    positive_feedback = await sync_to_async(lambda: messages.filter(feedback='positive').count())()
+                    negative_feedback = await sync_to_async(lambda: messages.filter(feedback='negative').count())()
+                    
+                    # Calculate duration
+                    duration_hours = 0
+                    first_message = await sync_to_async(lambda: messages.order_by('timestamp').first())()
+                    last_message = await sync_to_async(lambda: messages.order_by('timestamp').last())()
+                    if first_message and last_message:
+                        duration = last_message.timestamp - first_message.timestamp
+                        duration_hours = duration.total_seconds() / 3600
+                    
+                    conversation_metadata = {
+                        'conversation_uuid': str(conversation.uuid),
+                        'total_messages': await sync_to_async(lambda: messages.count())(),
+                        'user_messages': user_messages,
+                        'bot_messages': bot_messages,
+                        'conversation_duration_hours': duration_hours,
+                        'positive_feedback': positive_feedback,
+                        'negative_feedback': negative_feedback,
+                        'user_info': {
+                            'username': conversation.user.username,
+                            'user_id': conversation.user.id,
+                            'is_active': conversation.user.is_active
+                        }
+                    }
+                    
+                    # Get LangExtract analysis if available
+                    if conversation.langextract_analysis:
+                        langextract_analysis = conversation.langextract_analysis
+                        logger.info(f"Including LangExtract analysis data for conversation {conversation.uuid}")
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to fetch conversation metadata: {e}")
+            
+            # Get enhanced system prompt with analysis data
+            system_prompt = service.get_system_prompt('system', language, conversation_metadata, langextract_analysis)
             
             # Enhanced system prompt with knowledge base context
             knowledge_context = ""
