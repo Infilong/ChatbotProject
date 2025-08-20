@@ -614,6 +614,8 @@ class ConversationAdmin(admin.ModelAdmin):
         
         # Create expandable HTML with toggle button and inline JavaScript
         unique_id = f'langextract_{obj.id}'
+        show_more_text = _('Show More')
+        show_less_text = _('Show Less')
         return format_html('''
             <div>
                 <div>{}</div>
@@ -622,19 +624,19 @@ class ConversationAdmin(admin.ModelAdmin):
                     var button = this;
                     if (element.style.display === 'none') {{
                         element.style.display = 'block';
-                        button.textContent = 'Show Less';
+                        button.textContent = '{}';
                     }} else {{
                         element.style.display = 'none';
-                        button.textContent = 'Show More';
+                        button.textContent = '{}';
                     }}
                 " style="font-size: 11px; padding: 2px 6px; margin-top: 4px; cursor: pointer; background: #28a745; color: white; border: none; border-radius: 3px;">
-                    Show More
+                    {}
                 </button>
                 <div id="{}" style="display: none; margin-top: 8px; padding: 8px; background: #f0f8ff; border-radius: 4px; border: 1px solid #b3d9ff; font-size: 12px;">
                     {}
                 </div>
             </div>
-        ''', compact_summary, unique_id, unique_id, detailed_content)
+        ''', compact_summary, unique_id, show_less_text, show_more_text, show_more_text, unique_id, detailed_content)
     langextract_insights.short_description = _('LangExtract')
     
     def conversation_metadata(self, obj):
@@ -689,6 +691,8 @@ class ConversationAdmin(admin.ModelAdmin):
         
         # Create expandable HTML with toggle button and inline JavaScript
         unique_id = f'metadata_{obj.id}'
+        show_more_text = _('Show More')
+        show_less_text = _('Show Less')
         return format_html('''
             <div>
                 <div>{}</div>
@@ -697,19 +701,19 @@ class ConversationAdmin(admin.ModelAdmin):
                     var button = this;
                     if (element.style.display === 'none') {{
                         element.style.display = 'block';
-                        button.textContent = 'Show Less';
+                        button.textContent = '{}';
                     }} else {{
                         element.style.display = 'none';
-                        button.textContent = 'Show More';
+                        button.textContent = '{}';
                     }}
                 " style="font-size: 11px; padding: 2px 6px; margin-top: 4px; cursor: pointer; background: #007cba; color: white; border: none; border-radius: 3px;">
-                    Show More
+                    {}
                 </button>
                 <div id="{}" style="display: none; margin-top: 8px; padding: 8px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; font-size: 12px;">
                     {}
                 </div>
             </div>
-        ''', compact_summary, unique_id, unique_id, detailed_content)
+        ''', compact_summary, unique_id, show_less_text, show_more_text, show_more_text, unique_id, detailed_content)
     conversation_metadata.short_description = _('Metadata')
     
     def created_at_local(self, obj):

@@ -1,6 +1,11 @@
 {% extends "admin/base_site.html" %}
 {% load static i18n %}
 
+{% block extrahead %}
+{{ block.super }}
+<script type="text/javascript" src="{% url 'admin:jsi18n' %}"></script>
+{% endblock %}
+
 {% block title %}{{ title }} | {{ site_title|default:"Django site admin" }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -49,7 +54,7 @@
             <div class="chat-config">
                 <label class="knowledge-toggle">
                     <input type="checkbox" id="use-knowledge-base" checked>
-                    <span>Knowledge Base</span>
+                    <span>{% trans 'Knowledge Base' %}</span>
                 </label>
             </div>
         </div>
@@ -69,9 +74,9 @@
                         </ul>
                         <p class="examples">
                             <strong>{% trans "Try asking:" %}</strong><br>
-                            "What's our customer satisfaction rate?"<br>
-                            "How many conversations this week?"<br>
-                            "Show me user activity stats"
+                            "{% trans 'What\'s our customer satisfaction rate?' %}"<br>
+                            "{% trans 'How many conversations this week?' %}"<br>
+                            "{% trans 'Show me user activity stats' %}"
                         </p>
                     </div>
                 </div>
@@ -139,7 +144,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showWelcomeMessage();
             updateConversationTitle();
             renderConversations();
-            addMessage("⚠️ Loading took too long. Some features may not work properly. Please refresh the page.", false);
+            addMessage('⚠️ ' + gettext('Loading took too long. Some features may not work properly. Please refresh the page.'), false);
         }
     }, 5000); // 5 second timeout
     
@@ -148,7 +153,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (isInitializing) {
             console.log('Emergency fallback - clearing loading state');
             isInitializing = false;
-            conversationsContainer.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">No history available</p>';
+            conversationsContainer.innerHTML = '<p style="text-align: center; color: #6b7280; padding: 20px;">' + gettext('No history available') + '</p>';
             showWelcomeMessage();
         }
     }, 2000); // 2 second emergency fallback
@@ -276,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
             updateConversationTitle();
             renderConversations();
             // Show user-friendly error in chat
-            addMessage("❌ Unable to load conversation history. Please refresh the page or check your connection.", false);
+            addMessage('❌ ' + gettext('Unable to load conversation history. Please refresh the page or check your connection.'), false);
         }
     }
     
@@ -323,7 +328,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.log('Could not create new conversation:', error);
-            addMessage("❌ Unable to create new conversation. Please try again.", false);
+            addMessage('❌ ' + gettext('Unable to create new conversation. Please try again.'), false);
             return false;
         }
         return false;
@@ -390,11 +395,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }, 200);
             } else {
-                addMessage("❌ Unable to load conversation history. Server error.", false);
+                addMessage('❌ ' + gettext('Unable to load conversation history. Server error.'), false);
             }
         } catch (error) {
             console.log('Could not load conversation history:', error);
-            addMessage("❌ Unable to load conversation history. Please try selecting a different conversation.", false);
+            addMessage('❌ ' + gettext('Unable to load conversation history. Please try selecting a different conversation.'), false);
         }
     }
     
@@ -427,12 +432,12 @@ document.addEventListener('DOMContentLoaded', function() {
             convElement.className = `conversation-item ${conv.id === currentConversationId ? 'active' : ''}`;
             
             // Use the title from backend (which already handles empty titles)
-            const displayTitle = conv.title || 'New Conversation';
+            const displayTitle = conv.title || gettext('New Conversation');
             
             convElement.innerHTML = `
                 <div class="conversation-content" data-conversation-id="${conv.id}">
                     <div class="conversation-title">${displayTitle}</div>
-                    <div class="conversation-info">${conv.message_count} messages</div>
+                    <div class="conversation-info">${conv.message_count} ${gettext('messages')}</div>
                 </div>
                 <button class="delete-conversation" data-conversation-id="${conv.id}">
                     <svg width="16" height="16" fill="currentColor">
@@ -465,7 +470,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     async function deleteConversation(conversationId) {
-        if (!confirm('Are you sure you want to delete this conversation?')) return;
+        if (!confirm(gettext('Are you sure you want to delete this conversation?'))) return;
         
         try {
             const response = await fetch(HISTORY_API_URL, {
@@ -498,7 +503,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         } catch (error) {
             console.log('Could not delete conversation:', error);
-            addMessage("❌ Unable to delete conversation. Please try again.", false);
+            addMessage('❌ ' + gettext('Unable to delete conversation. Please try again.'), false);
         }
     }
     
@@ -511,9 +516,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const currentConv = conversations.find(c => c.id === currentConversationId);
         if (currentConv) {
             // Use meaningful title or default
-            const title = currentConv.title && currentConv.title !== 'New Conversation' 
+            const title = currentConv.title && currentConv.title !== gettext('New Conversation') 
                 ? currentConv.title 
-                : '{% trans "Admin AI Assistant" %}';
+                : gettext('Admin AI Assistant');
             conversationTitle.textContent = title;
         } else {
             conversationTitle.textContent = '{% trans "Admin AI Assistant" %}';
@@ -573,7 +578,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 conversation.updated_at = new Date().toISOString();
                 
                 // If this is the first message, fetch updated title from server
-                if (conversation.message_count === 2 && conversation.title === 'New Conversation') {
+                if (conversation.message_count === 2 && conversation.title === gettext('New Conversation')) {
                     setTimeout(async () => {
                         await refreshConversationTitle(currentConversationId);
                     }, 1000); // Wait a bit for title generation
@@ -634,12 +639,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Messages are already saved in the backend, just update local conversation list
                 await refreshConversationsList();
             } else {
-                const errorMessage = `Error: ${data.error}`;
+                const errorMessage = `${gettext('Error')}: ${data.error}`;
                 addMessage(errorMessage, false);
             }
         } catch (error) {
             hideTypingIndicator();
-            const errorMessage = `Network Error: ${error.message}`;
+            const errorMessage = `${gettext('Network Error')}: ${error.message}`;
             addMessage(errorMessage, false);
         }
     }
@@ -810,7 +815,6 @@ html, body {
     font-size: 14px;
     font-weight: 600;
     color: #6b7280;
-    text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
