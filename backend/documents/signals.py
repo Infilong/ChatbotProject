@@ -57,14 +57,31 @@ def auto_process_document(sender, instance, created, **kwargs):
 @receiver(post_save, sender=Document)
 def update_knowledge_base_stats(sender, instance, created, **kwargs):
     """
-    Update knowledge base statistics when documents change
+    Update knowledge base statistics and rebuild search indexes when documents change
     """
     if created:
         logger.info(f"New document added to knowledge base: {instance.name}")
     
-    # Could trigger knowledge base reindexing here if needed
-    # For now, just log the update
-    if instance.extracted_text:
+    # Automatically rebuild search indexes when document has extracted text
+    if instance.extracted_text and instance.is_active:
+        try:
+            logger.info(f"Rebuilding search indexes due to document change: {instance.name}")
+            
+            # Import here to avoid circular imports
+            from .hybrid_search import HybridSearchService
+            
+            # Rebuild indexes in background
+            search_service = HybridSearchService()
+            success = search_service.build_indexes(force_rebuild=False)
+            
+            if success:
+                logger.info(f"✅ Search indexes updated successfully for new document: {instance.name}")
+            else:
+                logger.warning(f"❌ Failed to update search indexes for document: {instance.name}")
+                
+        except Exception as e:
+            logger.error(f"Error rebuilding search indexes for document {instance.name}: {e}")
+    else:
         logger.debug(f"Document with extracted text available: {instance.name}")
 
 
