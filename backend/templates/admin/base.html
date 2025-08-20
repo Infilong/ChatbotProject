@@ -2,12 +2,25 @@
 
 {% block extrahead %}
 {{ block.super }}
+<!-- Add Font Awesome for user avatar -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 <style type="text/css">
 /* Ensure all action selectors have consistent font styling */
 select[name="action"] {
     font-family: inherit;
     font-size: inherit;
     font-weight: inherit;
+}
+
+/* User avatar styling in header */
+.user-panel .user-avatar,
+#header .user-tools .user-avatar,
+.fas.fa-inverse.user-profile.fa-user-circle {
+    color: #10a37f !important;
+    font-size: 28px !important;
+    margin-right: 8px !important;
+    vertical-align: middle !important;
+    display: inline-block !important;
 }
 </style>
 <script type="text/javascript">
@@ -117,6 +130,29 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Run timezone detection after a short delay to ensure page is fully loaded
     setTimeout(detectAndSetTimezone, 500);
+
+    // Style existing avatar instead of adding a new one
+    function styleExistingAvatar() {
+        // Find existing avatar element
+        const existingAvatar = document.querySelector('.fas.fa-inverse.user-profile.fa-user-circle');
+        
+        if (existingAvatar) {
+            // Apply our custom styling to the existing avatar
+            existingAvatar.style.color = '#10a37f';
+            existingAvatar.style.fontSize = '28px';
+            existingAvatar.style.marginLeft = '12px';
+            existingAvatar.style.marginRight = '12px';
+            existingAvatar.style.verticalAlign = 'middle';
+            existingAvatar.style.display = 'inline-block';
+            
+            console.log('Styled existing user avatar');
+        } else {
+            console.log('No existing avatar found to style');
+        }
+    }
+    
+    // Style existing avatar after page load
+    setTimeout(styleExistingAvatar, 100);
 });
 </script>
 {% endblock %}
