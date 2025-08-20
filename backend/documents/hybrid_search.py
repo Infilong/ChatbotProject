@@ -66,6 +66,31 @@ class HybridSearchService:
         # Initialize embedding model
         self._load_embedding_model()
     
+    def _clean_markdown_formatting(self, text: str) -> str:
+        """
+        Clean markdown formatting that interferes with hybrid search
+        
+        Removes ** ### * # formatting characters while preserving content
+        """
+        if not text:
+            return ""
+        
+        import re
+        
+        # Remove markdown headers (##, ###, ####, etc.)
+        text = re.sub(r'#{1,6}\s*', '', text)
+        
+        # Remove bold/italic formatting (**text**, *text*) but keep the content
+        text = re.sub(r'\*{1,2}([^*]+)\*{1,2}', r'\1', text)
+        
+        # Remove remaining standalone asterisks and hashes
+        text = re.sub(r'[#*]+', ' ', text)
+        
+        # Clean up multiple spaces created by formatting removal
+        text = re.sub(r'\s+', ' ', text.strip())
+        
+        return text
+    
     def _ensure_nltk_data(self):
         """Download required NLTK data"""
         try:
@@ -110,6 +135,9 @@ class HybridSearchService:
         """
         if not text or not text.strip():
             return []
+        
+        # Clean markdown formatting before chunking to improve search quality
+        text = self._clean_markdown_formatting(text)
         
         try:
             # Step 1: Try semantic chunking first
