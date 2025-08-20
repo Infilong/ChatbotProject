@@ -812,9 +812,20 @@ class LLMAdminService:
             history = ConversationService.get_conversation_history(request, conversation_id)
             conversations = ConversationService.get_all_conversations(request)
             
+            # Transform history format: change 'role' to 'type' for frontend compatibility
+            transformed_history = []
+            for item in history:
+                transformed_item = {
+                    'type': item.get('role', 'user'),  # Convert 'role' to 'type'
+                    'content': item.get('content', ''),
+                    'timestamp': item.get('timestamp', ''),
+                    'metadata': item.get('metadata', {})
+                }
+                transformed_history.append(transformed_item)
+            
             return JsonResponse({
                 'success': True,
-                'history': history,
+                'history': transformed_history,
                 'conversations': conversations,
                 'current_conversation_id': conversation_id
             })
