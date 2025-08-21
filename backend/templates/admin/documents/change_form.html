@@ -1,0 +1,579 @@
+{% extends "admin/change_form.html" %}
+{% load i18n %}
+
+{% block admin_change_form_document_ready %}
+{{ block.super }}
+
+<!-- File Upload Progress Modal -->
+<div id="upload-progress-modal" class="upload-modal-overlay" style="display: none;">
+    <div class="upload-modal-content">
+        <div class="upload-modal-header">
+            <h3>{% trans "File Upload in Progress" %}</h3>
+            <div class="upload-modal-controls">
+                <button type="button" id="minimize-upload" class="upload-btn-minimize" title="{% trans 'Minimize' %}">−</button>
+                <button type="button" id="cancel-upload" class="upload-btn-cancel" title="{% trans 'Cancel Upload' %}">×</button>
+            </div>
+        </div>
+        
+        <div class="upload-modal-body">
+            <div class="upload-status-info">
+                <p><strong>{% trans "File:" %}</strong> <span id="upload-filename">-</span></p>
+                <p><strong>{% trans "Size:" %}</strong> <span id="upload-filesize">-</span></p>
+                <p><strong>{% trans "Status:" %}</strong> <span id="upload-status">{% trans "Preparing..." %}</span></p>
+            </div>
+            
+            <div class="upload-progress-container">
+                <div class="upload-progress-bar">
+                    <div id="upload-progress-fill" class="upload-progress-fill"></div>
+                </div>
+                <div class="upload-progress-text">
+                    <span id="upload-percentage">0%</span>
+                    <span id="upload-speed"></span>
+                </div>
+            </div>
+            
+            <div class="upload-actions">
+                <button type="button" id="upload-ok-btn" class="upload-btn-ok" style="display: none;">{% trans "OK" %}</button>
+                <button type="button" id="upload-retry-btn" class="upload-btn-retry" style="display: none;">{% trans "Retry" %}</button>
+            </div>
+            
+            <div id="upload-error-message" class="upload-error" style="display: none;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Minimized Upload Progress Widget -->
+<div id="upload-progress-minimized" class="upload-minimized-widget" style="display: none;">
+    <div class="upload-minimized-content">
+        <span class="upload-minimized-text">{% trans "Uploading..." %} <span id="minimized-percentage">0%</span></span>
+        <button type="button" id="restore-upload" class="upload-btn-restore">⬆</button>
+    </div>
+    <div class="upload-minimized-progress">
+        <div id="minimized-progress-fill" class="upload-minimized-fill"></div>
+    </div>
+</div>
+
+<style>
+/* Upload Modal Styles */
+.upload-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.upload-modal-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    width: 450px;
+    max-width: 90vw;
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.upload-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e1e4e8;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
+
+.upload-modal-header h3 {
+    margin: 0;
+    color: #24292e;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.upload-modal-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.upload-btn-minimize,
+.upload-btn-cancel {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 4px;
+    background: #f1f3f4;
+    color: #5f6368;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 16px;
+    transition: background-color 0.2s;
+}
+
+.upload-btn-minimize:hover {
+    background: #e8eaed;
+}
+
+.upload-btn-cancel:hover {
+    background: #fce8e6;
+    color: #d93025;
+}
+
+.upload-modal-body {
+    padding: 20px;
+}
+
+.upload-status-info {
+    margin-bottom: 20px;
+}
+
+.upload-status-info p {
+    margin: 8px 0;
+    font-size: 14px;
+    color: #5f6368;
+}
+
+.upload-progress-container {
+    margin-bottom: 20px;
+}
+
+.upload-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #e8eaed;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.upload-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1a73e8, #4285f4);
+    border-radius: 4px;
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+.upload-progress-text {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #5f6368;
+}
+
+.upload-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.upload-btn-ok,
+.upload-btn-retry {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.upload-btn-ok {
+    background: #1a73e8;
+    color: white;
+}
+
+.upload-btn-ok:hover {
+    background: #1557b0;
+}
+
+.upload-btn-retry {
+    background: #f8f9fa;
+    color: #1a73e8;
+    border: 1px solid #dadce0;
+}
+
+.upload-btn-retry:hover {
+    background: #f1f3f4;
+}
+
+.upload-error {
+    background: #fce8e6;
+    color: #d93025;
+    padding: 12px;
+    border-radius: 4px;
+    border-left: 4px solid #d93025;
+    margin-top: 16px;
+    font-size: 14px;
+}
+
+/* Minimized Upload Widget */
+.upload-minimized-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: white;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 9999;
+    width: 280px;
+    overflow: hidden;
+    animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.upload-minimized-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+}
+
+.upload-minimized-text {
+    font-size: 13px;
+    color: #5f6368;
+    font-weight: 500;
+}
+
+.upload-btn-restore {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    background: #f1f3f4;
+    color: #5f6368;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    transition: background-color 0.2s;
+}
+
+.upload-btn-restore:hover {
+    background: #e8eaed;
+}
+
+.upload-minimized-progress {
+    height: 3px;
+    background: #e8eaed;
+}
+
+.upload-minimized-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #1a73e8, #4285f4);
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+/* Success and Error States */
+.upload-progress-fill.success {
+    background: linear-gradient(90deg, #137333, #34a853);
+}
+
+.upload-progress-fill.error {
+    background: linear-gradient(90deg, #d93025, #ea4335);
+}
+
+.upload-minimized-fill.success {
+    background: linear-gradient(90deg, #137333, #34a853);
+}
+
+.upload-minimized-fill.error {
+    background: linear-gradient(90deg, #d93025, #ea4335);
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('input[type="file"][name="file"]');
+    const form = document.querySelector('#content-main form');
+    
+    if (!fileInput || !form) return;
+    
+    let uploadXHR = null;
+    let isUploading = false;
+    
+    // Modal elements
+    const modal = document.getElementById('upload-progress-modal');
+    const minimizedWidget = document.getElementById('upload-progress-minimized');
+    const progressFill = document.getElementById('upload-progress-fill');
+    const minimizedProgressFill = document.getElementById('minimized-progress-fill');
+    const percentageSpan = document.getElementById('upload-percentage');
+    const minimizedPercentageSpan = document.getElementById('minimized-percentage');
+    const statusSpan = document.getElementById('upload-status');
+    const filenameSpan = document.getElementById('upload-filename');
+    const filesizeSpan = document.getElementById('upload-filesize');
+    const speedSpan = document.getElementById('upload-speed');
+    const errorDiv = document.getElementById('upload-error-message');
+    const okBtn = document.getElementById('upload-ok-btn');
+    const retryBtn = document.getElementById('upload-retry-btn');
+    
+    // Control buttons
+    const minimizeBtn = document.getElementById('minimize-upload');
+    const cancelBtn = document.getElementById('cancel-upload');
+    const restoreBtn = document.getElementById('restore-upload');
+    
+    let startTime = null;
+    let lastLoaded = 0;
+    
+    // Format file size
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // Format upload speed
+    function formatSpeed(bytesPerSecond) {
+        return formatFileSize(bytesPerSecond) + '/s';
+    }
+    
+    // Show upload modal
+    function showUploadModal(filename, filesize) {
+        filenameSpan.textContent = filename;
+        filesizeSpan.textContent = formatFileSize(filesize);
+        statusSpan.textContent = '{% trans "Uploading..." %}';
+        updateProgress(0);
+        hideError();
+        hideCompletionButtons();
+        modal.style.display = 'flex';
+        minimizedWidget.style.display = 'none';
+    }
+    
+    // Update progress
+    function updateProgress(percentage) {
+        const roundedPercentage = Math.round(percentage);
+        progressFill.style.width = percentage + '%';
+        minimizedProgressFill.style.width = percentage + '%';
+        percentageSpan.textContent = roundedPercentage + '%';
+        minimizedPercentageSpan.textContent = roundedPercentage + '%';
+    }
+    
+    // Update upload speed
+    function updateSpeed(loaded, total) {
+        if (!startTime) {
+            startTime = Date.now();
+            lastLoaded = loaded;
+            return;
+        }
+        
+        const now = Date.now();
+        const timeDiff = (now - startTime) / 1000; // seconds
+        const bytesDiff = loaded - lastLoaded;
+        
+        if (timeDiff > 0.5) { // Update every 500ms
+            const speed = bytesDiff / (timeDiff);
+            speedSpan.textContent = formatSpeed(speed);
+            
+            // Estimate remaining time
+            const remainingBytes = total - loaded;
+            const remainingTime = speed > 0 ? remainingBytes / speed : 0;
+            
+            if (remainingTime > 0 && remainingTime < 3600) { // Less than 1 hour
+                const minutes = Math.floor(remainingTime / 60);
+                const seconds = Math.floor(remainingTime % 60);
+                if (minutes > 0) {
+                    speedSpan.textContent += ` (${minutes}m ${seconds}s remaining)`;
+                } else {
+                    speedSpan.textContent += ` (${seconds}s remaining)`;
+                }
+            }
+            
+            startTime = now;
+            lastLoaded = loaded;
+        }
+    }
+    
+    // Show success state
+    function showSuccess() {
+        progressFill.classList.add('success');
+        minimizedProgressFill.classList.add('success');
+        statusSpan.textContent = '{% trans "Upload completed successfully!" %}';
+        statusSpan.style.color = '#137333';
+        speedSpan.textContent = '{% trans "Complete" %}';
+        okBtn.style.display = 'inline-block';
+    }
+    
+    // Show error state
+    function showError(message) {
+        progressFill.classList.add('error');
+        minimizedProgressFill.classList.add('error');
+        statusSpan.textContent = '{% trans "Upload failed" %}';
+        statusSpan.style.color = '#d93025';
+        speedSpan.textContent = '';
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        retryBtn.style.display = 'inline-block';
+    }
+    
+    // Hide error message
+    function hideError() {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+    
+    // Hide completion buttons
+    function hideCompletionButtons() {
+        okBtn.style.display = 'none';
+        retryBtn.style.display = 'none';
+    }
+    
+    // Reset progress styles
+    function resetProgressStyles() {
+        progressFill.classList.remove('success', 'error');
+        minimizedProgressFill.classList.remove('success', 'error');
+        statusSpan.style.color = '';
+    }
+    
+    // Handle form submission with progress
+    function handleFormSubmission(e) {
+        if (!fileInput.files.length || isUploading) return;
+        
+        const file = fileInput.files[0];
+        
+        // Show progress modal
+        showUploadModal(file.name, file.size);
+        isUploading = true;
+        startTime = null;
+        lastLoaded = 0;
+        
+        // Prevent default form submission
+        e.preventDefault();
+        
+        // Create FormData
+        const formData = new FormData(form);
+        
+        // Create XMLHttpRequest for upload progress
+        uploadXHR = new XMLHttpRequest();
+        
+        // Progress event handler
+        uploadXHR.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percentage = (e.loaded / e.total) * 100;
+                updateProgress(percentage);
+                updateSpeed(e.loaded, e.total);
+            }
+        });
+        
+        // Success handler
+        uploadXHR.addEventListener('load', function() {
+            if (uploadXHR.status >= 200 && uploadXHR.status < 300) {
+                updateProgress(100);
+                showSuccess();
+                
+                // Redirect after a delay to show success
+                setTimeout(function() {
+                    // Parse response to get redirect URL if available
+                    try {
+                        const response = uploadXHR.responseText;
+                        // If it's an HTML response (normal Django admin behavior)
+                        if (response.includes('<html')) {
+                            // Check for any redirect meta tags or just reload
+                            window.location.reload();
+                        }
+                    } catch (e) {
+                        window.location.reload();
+                    }
+                }, 1500);
+            } else {
+                showError('{% trans "Server returned an error. Please try again." %}');
+            }
+        });
+        
+        // Error handler
+        uploadXHR.addEventListener('error', function() {
+            showError('{% trans "Network error. Please check your connection and try again." %}');
+        });
+        
+        // Abort handler
+        uploadXHR.addEventListener('abort', function() {
+            showError('{% trans "Upload was cancelled." %}');
+        });
+        
+        // Start upload
+        uploadXHR.open('POST', form.action || window.location.href);
+        
+        // Set CSRF token header
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        uploadXHR.setRequestHeader('X-CSRFToken', csrfToken);
+        
+        uploadXHR.send(formData);
+    }
+    
+    // Event listeners for controls
+    minimizeBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+        minimizedWidget.style.display = 'block';
+    });
+    
+    restoreBtn.addEventListener('click', function() {
+        minimizedWidget.style.display = 'none';
+        modal.style.display = 'flex';
+    });
+    
+    cancelBtn.addEventListener('click', function() {
+        if (uploadXHR && isUploading) {
+            uploadXHR.abort();
+        }
+        modal.style.display = 'none';
+        minimizedWidget.style.display = 'none';
+        isUploading = false;
+        resetProgressStyles();
+    });
+    
+    okBtn.addEventListener('click', function() {
+        modal.style.display = 'none';
+        minimizedWidget.style.display = 'none';
+        isUploading = false;
+    });
+    
+    retryBtn.addEventListener('click', function() {
+        hideError();
+        hideCompletionButtons();
+        resetProgressStyles();
+        
+        // Retry the upload
+        if (fileInput.files.length) {
+            const file = fileInput.files[0];
+            showUploadModal(file.name, file.size);
+            setTimeout(function() {
+                handleFormSubmission({ preventDefault: function() {} });
+            }, 500);
+        }
+    });
+    
+    // Attach to form submission only if file is selected
+    form.addEventListener('submit', function(e) {
+        if (fileInput.files.length > 0) {
+            handleFormSubmission(e);
+        }
+    });
+    
+    // Close modal when clicking outside (only if not uploading)
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal && !isUploading) {
+            modal.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}
