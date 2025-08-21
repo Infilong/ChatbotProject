@@ -12,6 +12,11 @@
                 {% trans "LLM Chat Interface" %}
             </a>
         </div>
+        <div class="llm-button-wrapper">
+            <a href="/admin/authentication/usersession/" class="llm-button session-button">
+                {% trans "Admin Sessions" %}
+            </a>
+        </div>
     </div>
 </div>
 
@@ -49,6 +54,14 @@
     background-color: #356680;
     color: white !important;
     text-decoration: none;
+}
+
+.session-button {
+    background-color: #28a745 !important;
+}
+
+.session-button:hover {
+    background-color: #218838 !important;
 }
 
 

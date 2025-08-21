@@ -4,6 +4,10 @@ from django.contrib.auth.models import User
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from .models import UserProfile, UserPreferences
+from .session_models import UserSession, SessionActivity
+
+# Import session admin
+from . import session_admin
 
 
 class UserProfileInline(admin.StackedInline):

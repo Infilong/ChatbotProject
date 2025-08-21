@@ -4,6 +4,9 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 
+# Import session models
+from .session_models import UserSession, SessionActivity
+
 
 class UserProfile(models.Model):
     ROLE_CHOICES = [

@@ -143,19 +143,15 @@ class UserSession(models.Model):
     started_at = models.DateTimeField(auto_now_add=True, verbose_name=_('Started At'))
     ended_at = models.DateTimeField(null=True, blank=True, verbose_name=_('Ended At'))
     is_active = models.BooleanField(default=True, verbose_name=_('Is Active'))
-    
-    # Session analytics
-    total_conversations = models.IntegerField(default=0, verbose_name=_('Total Conversations'))
-    total_messages_sent = models.IntegerField(default=0, verbose_name=_('Total Messages Sent'))
-    average_response_time = models.FloatField(null=True, blank=True, verbose_name=_('Average Response Time'))
+    last_activity = models.DateTimeField(auto_now=True, verbose_name=_('Last Activity'))
     
     class Meta:
         ordering = ['-started_at']
-        verbose_name = _('User Session')
-        verbose_name_plural = _('User Sessions')
+        verbose_name = _('Customer Session')
+        verbose_name_plural = _('Customer Sessions')
         
     def __str__(self):
-        return f"Session {self.session_id} - {self.user.username}"
+        return f"Customer Session {self.session_id} - {self.user.username}"
     
     def end_session(self):
         self.ended_at = timezone.now()

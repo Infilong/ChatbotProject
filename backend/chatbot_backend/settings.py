@@ -65,6 +65,9 @@ MIDDLEWARE = [
     # Custom timezone middleware - re-enabled (popup and auto-refresh removed from template)
     'chatbot_backend.middleware.TimezoneDetectionMiddleware',
     'chatbot_backend.middleware.UserTimezoneMiddleware',
+    # Session tracking middleware
+    'authentication.middleware.SessionTrackingMiddleware',
+    'authentication.middleware.SessionCleanupMiddleware',
 ]
 
 ROOT_URLCONF = 'chatbot_backend.urls'
@@ -156,11 +159,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+        # Remove SessionAuthentication to avoid CSRF issues with cross-origin requests
+        # 'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         # 'rest_framework.permissions.IsAuthenticated', 
-        'rest_framework.permissions.AllowAny',# Secure by default
+        'rest_framework.permissions.AllowAny',# Secure by default for development
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
@@ -256,7 +260,37 @@ JAZZMIN_SETTINGS = {
     "search_model": "auth.User",
     "show_sidebar": True,
     "navigation_expanded": True,
-    "order_with_respect_to": ["auth", "authentication", "chat", "analytics", "documents"],
+    "order_with_respect_to": [
+        # Auth app and models
+        "auth",
+        "auth.user", 
+        "auth.group",
+        
+        # Auth Token app and models
+        "authtoken",
+        "authtoken.tokenproxy",
+        
+        # Authentication app and models (explicit order)
+        "authentication",
+        "authentication.usersession",      # Admin Sessions first
+        "authentication.sessionactivity",  # Session Activities second  
+        "authentication.userprofile",     # User Profiles third
+        "authentication.userpreferences", # User Preferences fourth
+        
+        # Chat app and models (explicit order)
+        "chat",
+        "chat.usersession",           # Customer Sessions first
+        "chat.conversation",          # Conversations second
+        "chat.message",               # Messages third
+        "chat.conversationsummary",   # Conversation Summaries fourth
+        "chat.apiconfiguration",      # API Configuration fifth
+        "chat.adminprompt",           # Admin Prompts sixth
+        
+        # Documents app and models
+        "documents", 
+        "documents.document",
+        "documents.documentationimprovement"
+    ],
     "show_ui_builder": False,
     "show_sidebar_user": False,
     "navbar_user_avatar": False,
@@ -266,28 +300,37 @@ JAZZMIN_SETTINGS = {
         {}
     ],
     "icons": {
+        # Apps (5)
         "auth": "fas fa-shield-alt",
-        "auth.user": "fas fa-user",
-        "auth.Group": "fas fa-users",
-        "authentication": "fas fa-user-shield",
-        "authentication.UserProfile": "fas fa-user-circle",
-        "authentication.UserPreferences": "fas fa-user-cog",
+        "authtoken": "fas fa-key",
+        "authentication": "fas fa-user-shield", 
         "chat": "fas fa-comments",
-        "chat.Conversation": "fas fa-comment-dots",
-        "chat.Message": "fas fa-comment",
-        "chat.UserSession": "fas fa-clock",
-        "chat.APIConfiguration": "fas fa-key",
-        "chat.AdminPrompt": "fas fa-robot",
-        "analytics": "fas fa-chart-line",
-        "analytics.ConversationAnalysis": "fas fa-brain",
-        "analytics.UserFeedback": "fas fa-thumbs-up",
-        "analytics.AnalyticsSummary": "fas fa-chart-bar",
-        "analytics.DocumentUsage": "fas fa-bookmark",
         "documents": "fas fa-folder-open",
-        "documents.DocumentCategory": "fas fa-tags",
-        "documents.CompanyDocument": "fas fa-file-alt",
-        "documents.Document": "fas fa-file-alt",
-        "documents.DocumentationImprovement": "fas fa-tools",
+        
+        # Auth models (2)
+        "auth.user": "fas fa-user",
+        "auth.group": "fas fa-users",
+        
+        # Auth token models (1)  
+        "authtoken.tokenproxy": "fas fa-passport",
+        
+        # Authentication models (4)
+        "authentication.userprofile": "fas fa-user-circle",
+        "authentication.userpreferences": "fas fa-user-cog", 
+        "authentication.usersession": "fas fa-user-clock",
+        "authentication.sessionactivity": "fas fa-history",
+        
+        # Chat models (6)
+        "chat.conversation": "fas fa-comment-dots",
+        "chat.message": "fas fa-comment",
+        "chat.usersession": "fas fa-users-cog",
+        "chat.apiconfiguration": "fas fa-key",
+        "chat.adminprompt": "fas fa-robot",
+        "chat.conversationsummary": "fas fa-file-text",
+        
+        # Documents models (2)
+        "documents.document": "fas fa-file-alt",
+        "documents.documentationimprovement": "fas fa-tools",
     },
     "theme": "flatly",
     "custom_css": "admin/css/sidebar-responsive.css",

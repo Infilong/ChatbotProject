@@ -5,6 +5,7 @@ Provides comprehensive API endpoints for frontend integration
 
 import json
 import logging
+import uuid
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
@@ -35,8 +36,41 @@ from .serializers import (
 from .llm_services import LLMManager, LLMError
 from core.services.conversation_service import ConversationService
 from analytics.langextract_service import LangExtractService
+from .session_api import get_or_create_demo_user
 
 logger = logging.getLogger(__name__)
+
+
+def update_customer_session_activity(user):
+    """
+    Helper function to update customer session last activity when users send messages
+    Simple tracking: only updates last_activity timestamp when user is active
+    """
+    try:
+        # Get or create active session for the user
+        active_session = UserSession.objects.filter(
+            user=user,
+            is_active=True
+        ).first()
+        
+        if not active_session:
+            # Create new session if none exists
+            active_session = UserSession.objects.create(
+                user=user,
+                session_id=str(uuid.uuid4()),
+                is_active=True
+            )
+            logger.info(f"Created new Customer Session for user activity: {active_session.session_id}")
+        else:
+            # Update last_activity (auto_now=True will handle this automatically on save)
+            active_session.save()
+            logger.info(f"Updated Customer Session last activity: {active_session.session_id}")
+        
+        return active_session
+        
+    except Exception as e:
+        logger.error(f"Error updating customer session activity: {e}")
+        return None
 
 
 
@@ -565,6 +599,9 @@ class LLMChatAPIView(APIView):
                     # Create new conversation only if no recent conversation with same message exists
                     conversation = Conversation.objects.create(user=user)
                     print(f"Created new conversation: {conversation.uuid}")
+                    
+                    # Track user activity when starting new conversation
+                    update_customer_session_activity(user)
             
             # Get conversation history (last 10 messages)
             history = list(conversation.messages.all().order_by('-timestamp')[:10])
@@ -618,6 +655,9 @@ class LLMChatAPIView(APIView):
                     content=user_message,
                     sender_type='user'
                 )
+                
+                # Track user activity when sending message
+                update_customer_session_activity(user)
             
             # Generate LLM response using Django's async_to_sync with proper context
             bot_response, metadata = async_to_sync(LLMManager.generate_chat_response)(
@@ -639,6 +679,8 @@ class LLMChatAPIView(APIView):
                 tokens_used=metadata.get('tokens_used'),
                 metadata=metadata
             )
+            
+            # Note: We don't track bot responses, only user activity
             
             # Return response
             response_data = {

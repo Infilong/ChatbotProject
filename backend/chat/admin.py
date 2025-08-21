@@ -1557,7 +1557,25 @@ class MessageAdmin(admin.ModelAdmin):
     conversation_link.admin_order_field = 'conversation__title'
     
     def content_preview(self, obj):
-        return obj.content[:60] + "..." if len(obj.content) > 60 else obj.content
+        content = obj.content.strip()
+        if not content:
+            return _('-')
+        
+        # Check if content contains Japanese characters
+        import re
+        has_japanese = bool(re.search(r'[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]', content))
+        
+        if has_japanese:
+            # For Japanese text: limit to 15 characters
+            if len(content) > 15:
+                return content[:15] + "..."
+            return content
+        else:
+            # For English text: limit to 10 words
+            words = content.split()
+            if len(words) > 10:
+                return ' '.join(words[:10]) + "..."
+            return content
     content_preview.short_description = _('Content')
     
     def feedback_display(self, obj):
@@ -1847,22 +1865,31 @@ class MessageAdmin(admin.ModelAdmin):
             color, translated_level, add_indicator, score, question_type.replace('_', ' ').title()
         )
     faq_potential_display.short_description = _('FAQ Potential')
+    
+    class Media:
+        css = {
+            'all': ('admin/css/message_admin.css',)
+        }
 
 
 @admin.register(UserSession)
 class UserSessionAdmin(admin.ModelAdmin):
-    list_display = ['uuid_short', 'user_link', 'session_id_short', 'total_conversations', 'total_messages_sent', 'duration', 'started_at', 'is_active']
-    list_filter = ['is_active', 'started_at', 'ended_at']
+    """
+    Admin interface for Customer Sessions - tracks frontend user sessions from React app (localhost:3000)
+    This is separate from admin user sessions tracked in authentication.session_models
+    """
+    list_display = ['uuid_short', 'user_link', 'session_id_short', 'duration', 'last_activity', 'started_at', 'is_active']
+    list_filter = ['is_active', 'started_at', 'ended_at', 'last_activity']
     search_fields = ['user__username', 'session_id']
-    readonly_fields = ['started_at', 'ended_at']
+    readonly_fields = ['started_at', 'ended_at', 'last_activity']
     date_hierarchy = 'started_at'
     ordering = ['-started_at']
     
     def uuid_short(self, obj):
-        """Display first 4 characters of UUID followed by ..."""
-        return f"{str(obj.uuid)[:4]}..."
+        """Display first 8 characters of session ID followed by ..."""
+        return f"{str(obj.session_id)[:8]}..."
     uuid_short.short_description = _('ID')
-    uuid_short.admin_order_field = 'uuid'
+    uuid_short.admin_order_field = 'session_id'
     
     def user_link(self, obj):
         url = reverse('admin:auth_user_change', args=[obj.user.id])

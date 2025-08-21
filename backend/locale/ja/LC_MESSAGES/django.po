@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2025-08-20 14:56+0900\n"
+"POT-Creation-Date: 2025-08-20 20:21+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -106,9 +106,10 @@ msgstr "処理時間"
 msgid "Analysis"
 msgstr "分析"
 
-#: .\analytics\models.py:50 .\authentication\admin.py:112
-#: .\authentication\admin.py:126 .\authentication\admin.py:146
-#: .\chat\admin.py:168 .\chat\admin.py:1870 .\chat\models.py:13
+#: .\analytics\models.py:50 .\authentication\admin.py:116
+#: .\authentication\admin.py:130 .\authentication\admin.py:150
+#: .\authentication\session_admin.py:39 .\authentication\session_admin.py:117
+#: .\chat\admin.py:168 .\chat\admin.py:1874 .\chat\models.py:13
 #: .\chat\models.py:44 .\chat\models.py:141
 #: .\templates\admin\analytics\message_details.html:193
 msgid "User"
@@ -122,7 +123,8 @@ msgstr "メッセージ"
 msgid "Feedback Type"
 msgstr "フィードバックタイプ"
 
-#: .\analytics\models.py:53 .\chat\models.py:58
+#: .\analytics\models.py:53 .\authentication\session_models.py:134
+#: .\chat\models.py:58
 msgid "Timestamp"
 msgstr "タイムスタンプ"
 
@@ -142,7 +144,7 @@ msgstr "フィードバック"
 msgid "Date"
 msgstr "日付"
 
-#: .\analytics\models.py:73 .\authentication\models.py:29 .\chat\models.py:148
+#: .\analytics\models.py:73 .\authentication\models.py:32 .\chat\models.py:148
 msgid "Total Conversations"
 msgstr "総会話数"
 
@@ -154,7 +156,7 @@ msgstr "総メッセージ数"
 msgid "Unique Users"
 msgstr "ユニークユーザー"
 
-#: .\analytics\models.py:76 .\authentication\models.py:31
+#: .\analytics\models.py:76 .\authentication\models.py:34
 msgid "Average Satisfaction"
 msgstr "平均満足度"
 
@@ -190,7 +192,7 @@ msgstr "平均応答時間"
 msgid "Bot vs Human Ratio"
 msgstr "ボット対人間比率"
 
-#: .\analytics\models.py:92 .\authentication\models.py:35 .\chat\admin.py:731
+#: .\analytics\models.py:92 .\authentication\models.py:38 .\chat\admin.py:731
 #: .\chat\models.py:15 .\chat\models.py:192 .\chat\models.py:259
 #: .\documents\models.py:207 .\documents\models.py:1170
 #: .\templates\admin\documents\file_info.html:57
@@ -296,68 +298,70 @@ msgstr "抜粋なし"
 msgid "Basic usage"
 msgstr "基本使用"
 
-#: .\authentication\admin.py:12
+#: .\authentication\admin.py:16
 msgid "Profile"
 msgstr "プロフィール"
 
-#: .\authentication\admin.py:19 .\authentication\admin.py:97
+#: .\authentication\admin.py:23 .\authentication\admin.py:101
 msgid "Preferences"
 msgstr "設定"
 
-#: .\authentication\admin.py:38
+#: .\authentication\admin.py:42
 msgid "No Profile"
 msgstr "プロフィールなし"
 
-#: .\authentication\admin.py:39 .\authentication\models.py:16
+#: .\authentication\admin.py:43 .\authentication\models.py:19
 msgid "Role"
 msgstr "ロール"
 
-#: .\authentication\admin.py:46 .\chat\models.py:27
+#: .\authentication\admin.py:50 .\chat\models.py:27
 msgid "Conversations"
 msgstr "会話"
 
-#: .\authentication\admin.py:60
+#: .\authentication\admin.py:64
 msgid "Avg Satisfaction"
 msgstr "平均満足度"
 
-#: .\authentication\admin.py:66
+#: .\authentication\admin.py:70
 msgid "Never"
 msgstr "未活動"
 
-#: .\authentication\admin.py:67 .\authentication\models.py:32
+#: .\authentication\admin.py:71 .\authentication\models.py:35
+#: .\authentication\session_admin.py:65 .\authentication\session_models.py:23
 msgid "Last Active"
 msgstr "最終アクティブ"
 
-#: .\authentication\admin.py:91 .\chat\admin.py:747
+#: .\authentication\admin.py:95 .\chat\admin.py:747
 msgid "User Information"
 msgstr "ユーザー情報"
 
-#: .\authentication\admin.py:94
+#: .\authentication\admin.py:98
 msgid "Contact Details"
 msgstr "連絡先詳細"
 
-#: .\authentication\admin.py:100 .\chat\admin.py:1985
+#: .\authentication\admin.py:104 .\chat\admin.py:1989
 msgid "Usage Statistics"
 msgstr "使用統計"
 
-#: .\authentication\admin.py:104
+#: .\authentication\admin.py:108
 msgid "Timestamps"
 msgstr "タイムスタンプ"
 
-#: .\authentication\admin.py:129
+#: .\authentication\admin.py:133
 msgid "Chat Preferences"
 msgstr "チャット設定"
 
-#: .\authentication\admin.py:132
+#: .\authentication\admin.py:136
 msgid "AI Preferences"
 msgstr "AI設定"
 
-#: .\authentication\admin.py:135
+#: .\authentication\admin.py:139
 msgid "Privacy Settings"
 msgstr "プライバシー設定"
 
-#: .\authentication\admin.py:138 .\chat\admin.py:144 .\chat\admin.py:717
-#: .\chat\admin.py:1913 .\chat\admin.py:1989 .\chat\models.py:63
+#: .\authentication\admin.py:142 .\authentication\session_models.py:137
+#: .\chat\admin.py:144 .\chat\admin.py:717 .\chat\admin.py:1917
+#: .\chat\admin.py:1993 .\chat\models.py:63
 msgid "Metadata"
 msgstr "メタデータ"
 
@@ -365,90 +369,90 @@ msgstr "メタデータ"
 msgid "User Authentication"
 msgstr "ユーザー認証"
 
-#: .\authentication\models.py:10
+#: .\authentication\models.py:13
 msgid "Customer"
 msgstr "顧客"
 
-#: .\authentication\models.py:11 .\chat\models.py:46
+#: .\authentication\models.py:14 .\chat\models.py:46
 msgid "Admin"
 msgstr "管理者"
 
-#: .\authentication\models.py:12
+#: .\authentication\models.py:15
 msgid "Support Agent"
 msgstr "サポートエージェント"
 
-#: .\authentication\models.py:19
+#: .\authentication\models.py:22
 msgid "Display Name"
 msgstr "表示名"
 
-#: .\authentication\models.py:20
+#: .\authentication\models.py:23
 msgid "Phone Number"
 msgstr "電話番号"
 
-#: .\authentication\models.py:21
+#: .\authentication\models.py:24
 msgid "Company"
 msgstr "会社"
 
-#: .\authentication\models.py:22
+#: .\authentication\models.py:25
 msgid "Job Title"
 msgstr "職種"
 
-#: .\authentication\models.py:25
+#: .\authentication\models.py:28
 msgid "Preferred Language"
 msgstr "優先言語"
 
-#: .\authentication\models.py:26
+#: .\authentication\models.py:29
 msgid "Email Notifications"
 msgstr "メール通知"
 
-#: .\authentication\models.py:30 .\chat\models.py:149
+#: .\authentication\models.py:33 .\chat\models.py:149
 msgid "Total Messages Sent"
 msgstr "送信メッセージ総数"
 
-#: .\authentication\models.py:36 .\authentication\models.py:85
-#: .\chat\admin.py:1941 .\chat\admin.py:2046 .\chat\models.py:16
+#: .\authentication\models.py:39 .\authentication\models.py:88
+#: .\chat\admin.py:1945 .\chat\admin.py:2050 .\chat\models.py:16
 #: .\chat\models.py:193 .\chat\models.py:260 .\documents\models.py:208
 #: .\documents\models.py:1171
 msgid "Updated At"
 msgstr "更新日時"
 
-#: .\authentication\models.py:40
+#: .\authentication\models.py:43
 msgid "User Profile"
 msgstr "プロファイル"
 
-#: .\authentication\models.py:41
+#: .\authentication\models.py:44
 msgid "User Profiles"
 msgstr "プロファイル"
 
-#: .\authentication\models.py:73
+#: .\authentication\models.py:76
 msgid "Chat Theme"
 msgstr "チャットテーマ"
 
-#: .\authentication\models.py:74
+#: .\authentication\models.py:77
 msgid "Show Timestamps"
 msgstr "タイムスタンプ表示"
 
-#: .\authentication\models.py:75
+#: .\authentication\models.py:78
 msgid "Enable Sound Notifications"
 msgstr "音声通知を有効にする"
 
-#: .\authentication\models.py:78
+#: .\authentication\models.py:81
 msgid "Preferred Response Style"
 msgstr "優先回答スタイル"
 
-#: .\authentication\models.py:79
+#: .\authentication\models.py:82
 msgid "Enable Proactive Suggestions"
 msgstr "積極的提案を有効にする"
 
-#: .\authentication\models.py:82
+#: .\authentication\models.py:85
 msgid "Allow Conversation Analysis"
 msgstr "会話分析を許可"
 
-#: .\authentication\models.py:83
+#: .\authentication\models.py:86
 msgid "Share Data for Improvements"
 msgstr "改善のためのデータ共有"
 
-#: .\authentication\models.py:88 .\authentication\models.py:89
+#: .\authentication\models.py:91 .\authentication\models.py:92
 msgid "User Preferences"
 msgstr "環境設定"
 
@@ -520,6 +524,192 @@ msgstr "新しいパスワードの確認"
 msgid "New passwords do not match"
 msgstr "新しいパスワードが一致しません"
 
+#: .\authentication\session_admin.py:22
+#, fuzzy
+#| msgid "Conversation Closing"
+msgid "Session Information"
+msgstr "会話終了"
+
+#: .\authentication\session_admin.py:25 .\authentication\session_admin.py:106
+msgid "Timing"
+msgstr ""
+
+#: .\authentication\session_admin.py:28
+msgid "Device & Location"
+msgstr ""
+
+#: .\authentication\session_admin.py:31
+#, fuzzy
+#| msgid "Active"
+msgid "Activity"
+msgstr "アクティブ"
+
+#: .\authentication\session_admin.py:47
+msgid "Expired"
+msgstr ""
+
+#: .\authentication\session_admin.py:50 .\chat\admin.py:1888
+#: .\documents\admin.py:291
+msgid "Active"
+msgstr "アクティブ"
+
+#: .\authentication\session_admin.py:53
+#, fuzzy
+#| msgid "Ended At"
+msgid "Ended"
+msgstr "終了日時"
+
+#: .\authentication\session_admin.py:56
+msgid "Status"
+msgstr ""
+
+#: .\authentication\session_admin.py:60 .\authentication\session_models.py:22
+#: .\chat\models.py:143
+msgid "Started At"
+msgstr "開始日時"
+
+#: .\authentication\session_admin.py:70 .\chat\admin.py:1890
+msgid "Duration"
+msgstr "継続時間"
+
+#: .\authentication\session_admin.py:82
+msgid "Successfully ended {} sessions."
+msgstr ""
+
+#: .\authentication\session_admin.py:83
+msgid "Mark selected sessions as ended"
+msgstr ""
+
+#: .\authentication\session_admin.py:88
+msgid "Cleaned up {} expired sessions."
+msgstr ""
+
+#: .\authentication\session_admin.py:89
+msgid "Clean up expired sessions (30min timeout)"
+msgstr ""
+
+#: .\authentication\session_admin.py:103
+#, fuzzy
+#| msgid "File Information"
+msgid "Activity Information"
+msgstr "ファイル情報"
+
+#: .\authentication\session_admin.py:109
+msgid "Additional Data"
+msgstr ""
+
+#: .\authentication\session_admin.py:123
+#, fuzzy
+#| msgid "Session ID"
+msgid "Session"
+msgstr "セッションID"
+
+#: .\authentication\session_models.py:24 .\chat\models.py:144
+msgid "Ended At"
+msgstr "終了日時"
+
+#: .\authentication\session_models.py:27
+msgid "IP Address"
+msgstr ""
+
+#: .\authentication\session_models.py:28
+#, fuzzy
+#| msgid "User Intent"
+msgid "User Agent"
+msgstr "ユーザー意図"
+
+#: .\authentication\session_models.py:29
+#, fuzzy
+#| msgid "File Type"
+msgid "Device Type"
+msgstr "ファイルタイプ"
+
+#: .\authentication\session_models.py:32 .\chat\admin.py:1935
+#: .\chat\admin.py:2028 .\chat\models.py:17 .\chat\models.py:145
+#: .\chat\models.py:191 .\chat\models.py:235 .\documents\models.py:124
+msgid "Is Active"
+msgstr "アクティブ"
+
+#: .\authentication\session_models.py:33
+#, fuzzy
+#| msgid "Total Messages"
+msgid "Total Requests"
+msgstr "総メッセージ数"
+
+#: .\authentication\session_models.py:34
+#, fuzzy
+#| msgid "Last Active"
+msgid "Last Activity"
+msgstr "最終アクティブ"
+
+#: .\authentication\session_models.py:38
+msgid "Admin Session"
+msgstr "管理者セッション"
+
+#: .\authentication\session_models.py:39 .\templates\admin\index.html:17
+msgid "Admin Sessions"
+msgstr "管理者セッション"
+
+#: .\authentication\session_models.py:121
+msgid "Login"
+msgstr ""
+
+#: .\authentication\session_models.py:122
+#, fuzzy
+#| msgid "Message"
+msgid "Chat Message"
+msgstr "メッセージ"
+
+#: .\authentication\session_models.py:123
+msgid "Page View"
+msgstr ""
+
+#: .\authentication\session_models.py:124
+msgid "API Call"
+msgstr ""
+
+#: .\authentication\session_models.py:125
+#, fuzzy
+#| msgid "File Type"
+msgid "File Upload"
+msgstr "ファイルタイプ"
+
+#: .\authentication\session_models.py:126
+#, fuzzy
+#| msgid "Download File"
+msgid "File Download"
+msgstr "ファイルをダウンロード"
+
+#: .\authentication\session_models.py:127
+#, fuzzy
+#| msgid "Active"
+msgid "Admin Action"
+msgstr "アクティブ"
+
+#: .\authentication\session_models.py:128
+msgid "Logout"
+msgstr ""
+
+#: .\authentication\session_models.py:132
+#, fuzzy
+#| msgid "Active"
+msgid "Activity Type"
+msgstr "アクティブ"
+
+#: .\authentication\session_models.py:133 .\chat\models.py:232
+#: .\documents\models.py:85 .\templates\admin\documents\file_info.html:49
+msgid "Description"
+msgstr "説明"
+
+# ConversationSummary admin translations
+#: .\authentication\session_models.py:141
+msgid "Session Activity"
+msgstr "セッション履歴"
+
+#: .\authentication\session_models.py:142
+msgid "Session Activities"
+msgstr "セッション履歴"
+
 #: .\chat\admin.py:128
 #, fuzzy
 #| msgid "Conversations"
@@ -551,7 +741,7 @@ msgstr ""
 msgid "Essential conversation metadata and technical information"
 msgstr ""
 
-#: .\chat\admin.py:162 .\chat\admin.py:1548 .\chat\admin.py:1864
+#: .\chat\admin.py:162 .\chat\admin.py:1548 .\chat\admin.py:1868
 msgid "ID"
 msgstr "ID"
 
@@ -961,7 +1151,7 @@ msgstr "フィードバック"
 msgid "Source"
 msgstr "ソース"
 
-#: .\chat\admin.py:1719 .\chat\admin.py:1885 .\chat\admin.py:2036
+#: .\chat\admin.py:1719 .\chat\admin.py:1889 .\chat\admin.py:2040
 #: .\documents\admin.py:298 .\documents\models.py:233
 #: .\templates\admin\documents\file_info.html:54
 msgid "Unknown"
@@ -1030,89 +1220,75 @@ msgstr "文書化ポテンシャル"
 msgid "FAQ Potential"
 msgstr "FAQポテンシャル"
 
-#: .\chat\admin.py:1875 .\chat\models.py:142
+#: .\chat\admin.py:1879 .\chat\models.py:142
 msgid "Session ID"
 msgstr "セッションID"
 
-#: .\chat\admin.py:1884 .\documents\admin.py:291
-msgid "Active"
-msgstr "アクティブ"
-
-#: .\chat\admin.py:1886
-msgid "Duration"
-msgstr "継続時間"
-
-#: .\chat\admin.py:1902
+#: .\chat\admin.py:1906
 msgid "Input Model Name"
 msgstr "モデル名を入力"
 
-#: .\chat\admin.py:1906
+#: .\chat\admin.py:1910
 msgid "Provider Information"
 msgstr "プロバイダー情報"
 
-#: .\chat\admin.py:1909
+#: .\chat\admin.py:1913
 msgid "API Settings"
 msgstr "API設定"
 
-#: .\chat\admin.py:1911
+#: .\chat\admin.py:1915
 msgid "Configure API parameters for this provider"
 msgstr "このプロバイダーのAPIパラメータを設定"
 
-#: .\chat\admin.py:1921 .\chat\models.py:181
+#: .\chat\admin.py:1925 .\chat\models.py:181
 msgid "Provider"
 msgstr "プロバイダー"
 
-#: .\chat\admin.py:1926 .\chat\models.py:189
+#: .\chat\admin.py:1930 .\chat\models.py:189
 msgid "Model Name"
 msgstr "モデル名"
 
-#: .\chat\admin.py:1931 .\chat\admin.py:2024 .\chat\models.py:17
-#: .\chat\models.py:145 .\chat\models.py:191 .\chat\models.py:235
-#: .\documents\models.py:124
-msgid "Is Active"
-msgstr "アクティブ"
-
-#: .\chat\admin.py:1952 .\chat\models.py:184
+#: .\chat\admin.py:1956 .\chat\models.py:184
 msgid "API Key"
 msgstr "APIキー"
 
-#: .\chat\admin.py:1974
+#: .\chat\admin.py:1978
 msgid "Prompt Information"
 msgstr "プロンプト情報"
 
-#: .\chat\admin.py:1977
+#: .\chat\admin.py:1981
 msgid "Prompt Content"
 msgstr "プロンプト内容"
 
-#: .\chat\admin.py:1979 .\chat\models.py:228
+#: .\chat\admin.py:1983 .\chat\models.py:228
 msgid "The actual prompt text that will be sent to the LLM"
 msgstr "LLMに送信される実際のプロンプトテキスト"
 
-#: .\chat\admin.py:1981
+#: .\chat\admin.py:1985
 msgid "Settings"
 msgstr "設定"
 
-#: .\chat\admin.py:1983
+#: .\chat\admin.py:1987
 msgid "Only one default prompt per type and language is allowed"
 msgstr "タイプと言語ごとに1つのデフォルトプロンプトのみ許可されます"
 
-#: .\chat\admin.py:2002 .\documents\admin.py:270
+#: .\chat\admin.py:2006 .\documents\admin.py:270
 msgid "Name"
 msgstr "名前"
 
-#: .\chat\admin.py:2007 .\chat\models.py:224
+#: .\chat\admin.py:2011 .\chat\models.py:224
 msgid "Prompt Type"
 msgstr "プロンプトタイプ"
 
-#: .\chat\admin.py:2012 .\chat\models.py:245
+#: .\chat\admin.py:2016 .\chat\models.py:245
 msgid "Language"
 msgstr "言語"
 
-#: .\chat\admin.py:2019 .\chat\models.py:238
+#: .\chat\admin.py:2023 .\chat\models.py:238
 msgid "Is Default"
 msgstr "デフォルト"
 
-#: .\chat\admin.py:2030 .\chat\models.py:249
+#: .\chat\admin.py:2034 .\chat\models.py:249
 #: .\templates\admin\analytics\document_usage_analytics.html:223
 #: .\templates\admin\analytics\document_usage_analytics.html:304
 #: .\templates\admin\analytics\document_usage_grouped_list.html:176
@@ -1120,80 +1296,80 @@ msgstr "デフォルト"
 msgid "Usage Count"
 msgstr "使用回数"
 
-#: .\chat\admin.py:2037 .\chat\models.py:257
+#: .\chat\admin.py:2041 .\chat\models.py:257
 msgid "Created By"
 msgstr "作成者"
 
-#: .\chat\admin.py:2051
+#: .\chat\admin.py:2055
 msgid "Chatbot Administration"
 msgstr "チャットボット管理システム"
 
-#: .\chat\admin.py:2052
+#: .\chat\admin.py:2056
 msgid "Chatbot Admin"
 msgstr "チャットボット管理"
 
-#: .\chat\admin.py:2053
+#: .\chat\admin.py:2057
 msgid "Welcome to Chatbot Administration"
 msgstr "チャットボット管理へようこそ"
 
-#: .\chat\admin.py:2106 .\chat\admin.py:2162 .\chat\models.py:98
+#: .\chat\admin.py:2110 .\chat\admin.py:2166 .\chat\models.py:98
 msgid "LLM Analysis"
 msgstr "LLM分析"
 
-#: .\chat\admin.py:2109
+#: .\chat\admin.py:2113
 msgid "Summary Information"
 msgstr "サマリー情報"
 
-#: .\chat\admin.py:2112
+#: .\chat\admin.py:2116
 msgid "Generation Details"
 msgstr "生成詳細"
 
-#: .\chat\admin.py:2116 .\documents\admin.py:448
+#: .\chat\admin.py:2120 .\documents\admin.py:448
 msgid "System Information"
 msgstr "システム情報"
 
-#: .\chat\admin.py:2146
+#: .\chat\admin.py:2150
 msgid "Generate New Automatic Summary"
 msgstr "新しい自動サマリーを生成"
 
-#: .\chat\admin.py:2151
+#: .\chat\admin.py:2155
 msgid "Summary Preview"
 msgstr "サマリープレビュー"
 
-#: .\chat\admin.py:2155 .\chat\models.py:113
+#: .\chat\admin.py:2159 .\chat\models.py:113
 msgid "Generated At"
 msgstr "生成日時"
 
-#: .\chat\admin.py:2166 .\chat\models.py:104
+#: .\chat\admin.py:2170 .\chat\models.py:104
 msgid "Analysis Period"
 msgstr "分析期間"
 
-#: .\chat\admin.py:2171 .\chat\models.py:109
+#: .\chat\admin.py:2175 .\chat\models.py:109
 msgid "Messages Analyzed"
 msgstr "分析されたメッセージ数"
 
-#: .\chat\admin.py:2176 .\chat\models.py:110
+#: .\chat\admin.py:2180 .\chat\models.py:110
 msgid "Critical Issues Found"
 msgstr "検出された重要問題"
 
 # ConversationSummary admin translations
-#: .\chat\admin.py:2182
+#: .\chat\admin.py:2186
 msgid "Recent activity"
 msgstr "最近のアクティビティ"
 
-#: .\chat\admin.py:2183
+#: .\chat\admin.py:2187
 msgid "Manual trigger"
 msgstr "手動トリガー"
 
-#: .\chat\admin.py:2184
+#: .\chat\admin.py:2188
 msgid "Scheduled"
 msgstr "スケジュール済み"
 
-#: .\chat\admin.py:2185
+#: .\chat\admin.py:2189
 msgid "Legacy migration"
 msgstr "レガシー移行"
 
-#: .\chat\admin.py:2188 .\chat\models.py:117
+#: .\chat\admin.py:2192 .\chat\models.py:117
 msgid "Generation Trigger"
 msgstr "生成トリガー"
 
@@ -1256,21 +1432,13 @@ msgstr "LLM応答時間"
 msgid "Summaries"
 msgstr "サマリー"
 
-#: .\chat\models.py:143
-msgid "Started At"
-msgstr "開始日時"
-
-#: .\chat\models.py:144
-msgid "Ended At"
-msgstr "終了日時"
-
 #: .\chat\models.py:154
-msgid "User Session"
-msgstr "ユーザーセッション"
+msgid "Customer Session"
+msgstr "顧客セッション"
 
 #: .\chat\models.py:155
-msgid "User Sessions"
-msgstr "ユーザーセッション"
+msgid "Customer Sessions"
+msgstr "顧客セッション"
 
 #: .\chat\models.py:185
 #, fuzzy
@@ -1326,11 +1494,6 @@ msgstr "プロンプト名"
 msgid "Prompt Text"
 msgstr "プロンプトテキスト"
 
-#: .\chat\models.py:232 .\documents\models.py:85
-#: .\templates\admin\documents\file_info.html:49
-msgid "Description"
-msgstr "説明"
-
 #: .\chat\models.py:233
 msgid "Description of when and how this prompt is used"
 msgstr "このプロンプトがいつ、どのように使用されるかの説明"
@@ -1339,11 +1502,11 @@ msgstr "このプロンプトがいつ、どのように使用されるかの説
 msgid "Use this as the default prompt for this type"
 msgstr "このタイプのデフォルトプロンプトとして使用"
 
-#: .\chat\models.py:243 .\chatbot_backend\settings.py:126
+#: .\chat\models.py:243 .\chatbot_backend\settings.py:129
 msgid "English"
 msgstr "英語"
 
-#: .\chat\models.py:243 .\chatbot_backend\settings.py:127
+#: .\chat\models.py:243 .\chatbot_backend\settings.py:130
 msgid "Japanese"
 msgstr "日本語"
 
@@ -2299,3 +2462,6 @@ msgstr "一覧に戻る"
 #: .\templates\admin\index.html:12
 msgid "LLM Chat Interface"
 msgstr "LLMチャットインターフェース"
+
+#~ msgid "User Sessions"
+#~ msgstr "ユーザーセッション"

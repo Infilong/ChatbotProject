@@ -5,7 +5,7 @@ Comprehensive API coverage for frontend integration
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from . import api_views, admin_views, views, message_analytics_api
+from . import api_views, admin_views, views, message_analytics_api, session_api
 
 app_name = 'chat'
 
@@ -31,6 +31,14 @@ urlpatterns = [
     path('search/', api_views.conversation_search, name='conversation-search'),
     path('bulk-messages/', api_views.bulk_message_create, name='bulk-message-create'),
     path('health/', api_views.health_check, name='health-check'),
+    
+    # Customer Session Management endpoints (frontend integration)
+    path('sessions/start/', session_api.start_session, name='session-start'),
+    path('sessions/update/', session_api.update_session, name='session-update'),
+    path('sessions/end/', session_api.end_session, name='session-end'),
+    path('sessions/status/', session_api.session_status, name='session-status'),
+    path('sessions/history/', session_api.session_history, name='session-history'),
+    path('sessions/cleanup/', session_api.cleanup_expired_sessions, name='session-cleanup'),
     
     # Automatic analysis endpoints
     path('analysis/status/', api_views.automatic_analysis_status, name='analysis-status'),
