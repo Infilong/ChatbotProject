@@ -20,8 +20,14 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """Handle WebSocket connection"""
+        print(f"*** WEBSOCKET CONNECTION ATTEMPT ***")
+        print(f"User: {self.scope['user']}")
+        print(f"Authenticated: {self.scope['user'].is_authenticated if hasattr(self.scope['user'], 'is_authenticated') else 'No auth info'}")
+        
         self.room_name = f"chat_{self.scope['user'].id if self.scope['user'].is_authenticated else 'anonymous'}"
         self.room_group_name = f"chat_{self.room_name}"
+        
+        print(f"Room name: {self.room_name}")
         
         # Join room group
         await self.channel_layer.group_add(
@@ -38,6 +44,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             'message': 'Connected to chat system'
         }))
         
+        print(f"*** WEBSOCKET CONNECTED: {self.room_name} ***")
         logger.info(f"WebSocket connected: {self.room_name}")
     
     async def disconnect(self, close_code):
@@ -73,6 +80,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
     
     async def handle_chat_message(self, data: Dict[str, Any]):
         """Handle chat message from user"""
+        print(f"*** WEBSOCKET MESSAGE RECEIVED ***")
+        print(f"Data: {data}")
+        
         try:
             # Validate required fields
             user_message = data.get('message', '').strip()
@@ -87,6 +97,9 @@ class ChatConsumer(AsyncWebsocketConsumer):
             
             user = self.scope['user']
             conversation_id = data.get('conversation_id')
+            print(f"Processing message from user: {user.username} (ID: {user.id})")
+            print(f"Message: {user_message}")
+            print(f"Conversation ID: {conversation_id}")
             
             # Get or create conversation
             conversation = await self.get_or_create_conversation(user, conversation_id)
@@ -244,20 +257,31 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def get_or_create_conversation(self, user, conversation_id=None):
         """Get existing conversation or create new one"""
+        print(f"*** WEBSOCKET CONSUMER: get_or_create_conversation called ***")
+        print(f"User: {user.username} (ID: {user.id})")
+        print(f"Conversation ID: {conversation_id}")
+        
         if conversation_id:
             try:
                 conversation = Conversation.objects.get(id=conversation_id, user=user)
+                print(f"Found existing conversation: {conversation.uuid}")
                 return conversation
             except Conversation.DoesNotExist:
                 pass
         
         # Create new conversation
         conversation = Conversation.objects.create(user=user)
+        print(f"Created new conversation via WebSocket: {conversation.uuid} for user {user.username}")
         return conversation
     
     @database_sync_to_async
     def save_message(self, conversation, content, sender_type, metadata=None):
         """Save message to database"""
+        print(f"*** WEBSOCKET CONSUMER: save_message called ***")
+        print(f"Conversation: {conversation.uuid} | User: {conversation.user.username}")
+        print(f"Content: {content[:50]}...")
+        print(f"Sender: {sender_type}")
+        
         message = Message.objects.create(
             conversation=conversation,
             content=content,
@@ -266,6 +290,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
             llm_model_used=metadata.get('model') if metadata else None,
             response_time=metadata.get('response_time') if metadata else None,
         )
+        print(f"Message saved with ID: {message.id}")
         return message
     
     @database_sync_to_async

@@ -36,7 +36,7 @@ from .serializers import (
 from .llm_services import LLMManager, LLMError
 from core.services.conversation_service import ConversationService
 from analytics.langextract_service import LangExtractService
-from .session_api import get_or_create_demo_user
+# Removed demo user fallback - all APIs now require proper authentication
 
 logger = logging.getLogger(__name__)
 
@@ -88,27 +88,16 @@ class ConversationViewSet(ModelViewSet):
     """
     
     serializer_class = ConversationSerializer
-    permission_classes = [permissions.AllowAny]  # For development
+    permission_classes = [permissions.IsAuthenticated]  # Require authentication
     pagination_class = StandardResultsSetPagination
     lookup_field = 'uuid'  # Use UUID for URL lookups instead of pk
     
-    def get_demo_user(self):
-        """Get or create a demo user for anonymous access"""
-        demo_user, created = User.objects.get_or_create(
-            username='demo_user',
-            defaults={
-                'email': 'demo@datapro.solutions',
-                'first_name': 'Demo',
-                'last_name': 'User',
-                'is_active': True,
-            }
-        )
-        return demo_user
-    
     def get_queryset(self):
-        """Filter conversations by current user"""
-        user = self.request.user if self.request.user.is_authenticated else self.get_demo_user()
-        return Conversation.objects.filter(user=user).order_by('-updated_at')
+        """Filter conversations by authenticated user only"""
+        if not self.request.user.is_authenticated:
+            return Conversation.objects.none()  # Return empty queryset for unauthenticated users
+        
+        return Conversation.objects.filter(user=self.request.user).order_by('-updated_at')
     
     def get_serializer_class(self):
         """Use different serializers for list vs detail views"""
@@ -117,9 +106,11 @@ class ConversationViewSet(ModelViewSet):
         return ConversationSerializer
     
     def perform_create(self, serializer):
-        """Set user when creating conversation"""
-        user = self.request.user if self.request.user.is_authenticated else self.get_demo_user()
-        serializer.save(user=user)
+        """Set authenticated user when creating conversation"""
+        if not self.request.user.is_authenticated:
+            raise PermissionDenied("Authentication required to create conversations")
+        
+        serializer.save(user=self.request.user)
     
     @action(detail=True, methods=['get'])
     def messages(self, request, pk=None):
@@ -191,12 +182,19 @@ class ConversationViewSet(ModelViewSet):
                     print(f"ConversationViewSet: Retrying LLM call for existing message: {user_msg.id}")
             else:
                 # Save new user message
+                print(f"*** ConversationViewSet: About to call ConversationService.save_message_to_session ***")
+                print(f"Request user: {request.user.username} (ID: {request.user.id})")
+                print(f"Conversation UUID: {conversation.uuid}")
+                print(f"User message: {user_message}")
+                
                 user_msg = ConversationService.save_message_to_session(
                     request=request,
                     conversation_id=str(conversation.uuid),
                     role='user',
                     content=user_message
                 )
+                
+                print(f"*** ConversationViewSet: ConversationService returned message with ID: {getattr(user_msg, 'id', 'NO_ID')} ***")
             
             # Get conversation history (last 10 messages)
             history = list(conversation.messages.all().order_by('-timestamp')[:10])
@@ -402,28 +400,16 @@ class MessageViewSet(ModelViewSet):
     """
     
     serializer_class = MessageSerializer
-    permission_classes = [permissions.AllowAny]  # For development
+    permission_classes = [permissions.IsAuthenticated]  # Require authentication
     pagination_class = StandardResultsSetPagination
     lookup_field = 'uuid'  # Use UUID for URL lookups instead of pk
     
     def get_queryset(self):
-        """Filter messages by user's conversations"""
-        # Get user (demo user for anonymous requests)
-        if self.request.user.is_authenticated:
-            user = self.request.user
-        else:
-            from django.contrib.auth.models import User
-            user, created = User.objects.get_or_create(
-                username='demo_user',
-                defaults={
-                    'email': 'demo@datapro.solutions',
-                    'first_name': 'Demo',
-                    'last_name': 'User',
-                    'is_active': True,
-                }
-            )
+        """Filter messages by authenticated user's conversations"""
+        if not self.request.user.is_authenticated:
+            return Message.objects.none()  # Return empty queryset for unauthenticated users
         
-        user_conversations = Conversation.objects.filter(user=user)
+        user_conversations = Conversation.objects.filter(user=self.request.user)
         queryset = Message.objects.filter(
             conversation__in=user_conversations
         ).order_by('-timestamp')
@@ -456,6 +442,9 @@ class MessageViewSet(ModelViewSet):
     
     def perform_create(self, serializer):
         """Handle message creation"""
+        if not self.request.user.is_authenticated:
+            raise PermissionDenied("Authentication required to create messages")
+        
         # Get the conversation from the request data
         conversation_id = self.request.data.get('conversation')
         if not conversation_id:
@@ -467,23 +456,8 @@ class MessageViewSet(ModelViewSet):
         except Conversation.DoesNotExist:
             raise ValidationError("Conversation not found")
         
-        # Get current user (demo user for anonymous requests)
-        if self.request.user.is_authenticated:
-            current_user = self.request.user
-        else:
-            from django.contrib.auth.models import User
-            current_user, created = User.objects.get_or_create(
-                username='demo_user',
-                defaults={
-                    'email': 'demo@datapro.solutions',
-                    'first_name': 'Demo',
-                    'last_name': 'User',
-                    'is_active': True,
-                }
-            )
-        
-        # Verify user owns the conversation
-        if conversation.user != current_user:
+        # Verify authenticated user owns the conversation
+        if conversation.user != self.request.user:
             raise PermissionDenied("You don't have permission to add messages to this conversation")
         
         # Save the message
@@ -492,24 +466,16 @@ class MessageViewSet(ModelViewSet):
     @action(detail=True, methods=['post'])
     def feedback(self, request, uuid=None):
         """Submit feedback for a message"""
-        message = self.get_object()
-        
-        # Check if message belongs to user's conversation (handle anonymous users)
-        if request.user.is_authenticated:
-            current_user = request.user
-        else:
-            from django.contrib.auth.models import User
-            current_user, created = User.objects.get_or_create(
-                username='demo_user',
-                defaults={
-                    'email': 'demo@datapro.solutions',
-                    'first_name': 'Demo',
-                    'last_name': 'User',
-                    'is_active': True,
-                }
+        if not request.user.is_authenticated:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
             )
         
-        if message.conversation.user != current_user:
+        message = self.get_object()
+        
+        # Check if message belongs to authenticated user's conversation
+        if message.conversation.user != request.user:
             return Response(
                 {'error': 'Permission denied'},
                 status=status.HTTP_403_FORBIDDEN
@@ -529,24 +495,38 @@ class LLMChatAPIView(APIView):
     Handles single message interactions without conversation context
     """
     
-    # For development: allow anonymous access, in production should be IsAuthenticated
-    permission_classes = [permissions.AllowAny]
-    
-    def get_or_create_demo_user(self):
-        """Get or create a demo user for anonymous access"""
-        demo_user, created = User.objects.get_or_create(
-            username='demo_user',
-            defaults={
-                'email': 'demo@datapro.solutions',
-                'first_name': 'Demo',
-                'last_name': 'User',
-                'is_active': True,
-            }
-        )
-        return demo_user
+    # Require authentication for message creation
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         """Send message to LLM and get response"""
+        # DEBUG: ENTRY - This method was called
+        import sys
+        print("=" * 80, file=sys.stderr)
+        print("ENTRY ENTRY ENTRY - LLMChatAPIView.post() called!!!", file=sys.stderr)
+        print(f"Request path = {request.path}", file=sys.stderr)
+        print(f"Request method = {request.method}", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        sys.stderr.flush()
+        
+        # DEBUG: Log authentication details
+        print(f"DEBUG: request.user = {request.user}")
+        print(f"DEBUG: request.user.is_authenticated = {request.user.is_authenticated}")
+        print(f"DEBUG: request.user.id = {getattr(request.user, 'id', 'NO_ID')}")
+        print(f"DEBUG: request.user.username = {getattr(request.user, 'username', 'NO_USERNAME')}")
+        print(f"DEBUG: Authorization header = {request.headers.get('Authorization', 'NO_AUTH_HEADER')}")
+        
+        if not request.user.is_authenticated:
+            print("DEBUG: User not authenticated, returning 401")
+            print("=" * 60)
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        
+        print(f"DEBUG: User IS authenticated! Proceeding with user {request.user.username} (ID: {request.user.id})")
+        print("=" * 60)
+        
         serializer = LLMChatRequestSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -559,8 +539,9 @@ class LLMChatAPIView(APIView):
         
         
         try:
-            # Get user (use demo user for anonymous requests)
-            user = request.user if request.user.is_authenticated else self.get_or_create_demo_user()
+            # Use authenticated user only
+            user = request.user
+            print(f"DEBUG: Using user = {user} (ID: {user.id})")
             
             # Get or create conversation using UUID (industry best practice)
             if conversation_id:
@@ -597,8 +578,13 @@ class LLMChatAPIView(APIView):
                     conversation = existing_conversation
                 else:
                     # Create new conversation only if no recent conversation with same message exists
+                    print(f"DEBUG: About to create conversation with user = {user} (ID: {user.id}, username: {user.username})")
                     conversation = Conversation.objects.create(user=user)
-                    print(f"Created new conversation: {conversation.uuid}")
+                    print(f"DEBUG: Created conversation {conversation.uuid} with user {conversation.user.username} (ID: {conversation.user.id})")
+                    
+                    # Double check what's in the database
+                    fresh_conv = Conversation.objects.get(uuid=conversation.uuid)
+                    print(f"DEBUG: Fresh from DB - conversation {fresh_conv.uuid} belongs to {fresh_conv.user.username} (ID: {fresh_conv.user.id})")
                     
                     # Track user activity when starting new conversation
                     update_customer_session_activity(user)
@@ -740,13 +726,16 @@ class UserSessionViewSet(ReadOnlyModelViewSet):
 @permission_classes([permissions.IsAuthenticated])
 def conversation_search(request):
     """
-    Search conversations by content
+    Search conversations by content - requires authentication
     """
+    if not request.user.is_authenticated:
+        return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+    
     query = request.query_params.get('q', '').strip()
     if not query:
         return Response({'error': 'Query parameter "q" is required'}, status=400)
     
-    # Search in conversation messages
+    # Search in authenticated user's conversation messages only
     user_conversations = Conversation.objects.filter(user=request.user)
     matching_conversations = user_conversations.filter(
         Q(messages__content__icontains=query) |
@@ -819,6 +808,21 @@ def health_check(request):
         'timestamp': timezone.now().isoformat(),
         'user': request.user.username,
         'version': '1.0.0'
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def test_debug_endpoint(request):
+    """
+    Test debug endpoint to verify code execution
+    """
+    print("=" * 80)
+    print("TEST DEBUG ENDPOINT CALLED!")
+    print("=" * 80)
+    return Response({
+        'status': 'debug_endpoint_working',
+        'timestamp': timezone.now().isoformat(),
     })
 
 

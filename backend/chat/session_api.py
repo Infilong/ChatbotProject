@@ -20,32 +20,19 @@ from .models import UserSession
 logger = logging.getLogger(__name__)
 
 
-def get_or_create_demo_user():
-    """Get or create demo user for anonymous frontend sessions"""
-    demo_user, created = User.objects.get_or_create(
-        username='demo_user',
-        defaults={
-            'email': 'demo@datapro.solutions',
-            'first_name': 'Demo',
-            'last_name': 'User',
-            'is_active': True,
-        }
-    )
-    if created:
-        logger.info(f"Created demo user for Customer Sessions: {demo_user.username}")
-    return demo_user
-
 
 @api_view(['POST'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def start_session(request):
     """
     Start a new customer session for frontend user
     Used when user visits React app (localhost:3000)
     """
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Check if user already has an active session
         active_session = UserSession.objects.filter(
@@ -92,7 +79,7 @@ def start_session(request):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def update_session(request):
     """
     Update customer session activity
@@ -106,8 +93,10 @@ def update_session(request):
         )
     
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Get session
         session = UserSession.objects.filter(
@@ -143,7 +132,7 @@ def update_session(request):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def end_session(request):
     """
     End customer session
@@ -157,8 +146,10 @@ def end_session(request):
         )
     
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Get session
         session = UserSession.objects.filter(
@@ -200,15 +191,17 @@ def end_session(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def session_status(request):
     """
     Get current session status
     Used to check if user has an active session
     """
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Get active session
         active_session = UserSession.objects.filter(
@@ -246,15 +239,17 @@ def session_status(request):
 
 
 @api_view(['GET'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def session_history(request):
     """
     Get user's session history
     Shows past sessions for analytics
     """
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Get recent sessions (last 30 days)
         thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -306,15 +301,17 @@ def session_history(request):
 
 
 @api_view(['POST'])
-@permission_classes([permissions.AllowAny])  # Allow anonymous users
+@permission_classes([permissions.IsAuthenticated])  # Require authentication
 def cleanup_expired_sessions(request):
     """
     Clean up expired sessions
     Sessions are considered expired after 1 hour of inactivity
     """
     try:
-        # Get user (demo user for anonymous requests)
-        user = request.user if request.user.is_authenticated else get_or_create_demo_user()
+        # Require authenticated user - no demo fallback
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
+        user = request.user
         
         # Find expired sessions (active for more than 1 hour)
         one_hour_ago = timezone.now() - timedelta(hours=1)

@@ -37,6 +37,22 @@ class Conversation(models.Model):
         if first_message:
             return first_message.content[:50] + "..." if len(first_message.content) > 50 else first_message.content
         return f"Conversation {self.id}"
+    
+    def save(self, *args, **kwargs):
+        """Debug save method to track conversation creation"""
+        import traceback
+        import threading
+        is_new = self.pk is None
+        if is_new:
+            print(f"=== CONVERSATION CREATION DEBUG ===")
+            print(f"User: {self.user.username} (ID: {self.user.id})")
+            print(f"Thread: {threading.current_thread().name}")
+            print(f"UUID: {self.uuid}")
+            print(f"Stack trace:")
+            for i, line in enumerate(traceback.format_stack()):
+                print(f"  [{i}] {line.strip()}")
+            print(f"=== END CONVERSATION DEBUG ===")
+        super().save(*args, **kwargs)
 
 
 class Message(models.Model):

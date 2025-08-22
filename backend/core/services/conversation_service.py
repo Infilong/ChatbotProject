@@ -42,11 +42,16 @@ class ConversationService:
                               content: str, metadata: Optional[Dict] = None) -> Message:
         """Save a message to database and return the Message instance"""
         try:
-            # Get or create conversation
+            print(f"ConversationService.save_message_to_session - request.user = {request.user} (ID: {getattr(request.user, 'id', 'NO_ID')})")
+            print(f"ConversationService.save_message_to_session - conversation_id = {conversation_id}")
+            
+            # Get or create conversation (FIXED: Make conversation UUID user-specific)
             conversation, created = Conversation.objects.get_or_create(
                 uuid=conversation_id,
-                defaults={'user': request.user}
+                user=request.user,  # CRITICAL FIX: Include user in the get query
+                defaults={}
             )
+            print(f"ConversationService.save_message_to_session - conversation.user = {conversation.user.username} (ID: {conversation.user.id}), created = {created}")
             
             # Convert role to sender_type format
             sender_type = 'user' if role == 'user' else 'bot'

@@ -27,6 +27,10 @@ urlpatterns = [
     # Direct LLM chat endpoint - this becomes /api/chat/
     path('', api_views.LLMChatAPIView.as_view(), name='llm-chat'),
     
+    # TEST ENDPOINT - Remove after debugging
+    path('debug-test/', api_views.LLMChatAPIView.as_view(), name='debug-test'),
+    path('test-debug/', api_views.test_debug_endpoint, name='test-debug'),
+    
     # Search and utility endpoints
     path('search/', api_views.conversation_search, name='conversation-search'),
     path('bulk-messages/', api_views.bulk_message_create, name='bulk-message-create'),

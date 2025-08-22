@@ -3,13 +3,37 @@ Django signals for automatic conversation analysis
 """
 
 import logging
-from django.db.models.signals import post_save
+import traceback
+import threading
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django.utils import timezone
 from datetime import timedelta
 from .models import Message, Conversation
 
 logger = logging.getLogger(__name__)
+
+@receiver(pre_save, sender=Conversation)
+def debug_conversation_pre_save(sender, instance, **kwargs):
+    """Debug signal to catch conversation creation before save"""
+    if instance.pk is None:  # New conversation
+        print(f"*** SIGNAL PRE_SAVE: Conversation about to be created ***")
+        print(f"User: {instance.user.username} (ID: {instance.user.id})")
+        print(f"Thread: {threading.current_thread().name}")
+        print(f"Stack trace (last 8 frames):")
+        for i, line in enumerate(traceback.format_stack()[-8:]):
+            print(f"  [{i}] {line.strip()}")
+        print(f"*** END SIGNAL PRE_SAVE ***")
+
+@receiver(post_save, sender=Conversation)
+def debug_conversation_post_save(sender, instance, created, **kwargs):
+    """Debug signal to catch conversation creation after save"""
+    if created:
+        print(f"*** SIGNAL POST_SAVE: Conversation was created ***")
+        print(f"User: {instance.user.username} (ID: {instance.user.id})")
+        print(f"UUID: {instance.uuid}")
+        print(f"Thread: {threading.current_thread().name}")
+        print(f"*** END SIGNAL POST_SAVE ***")
 
 
 @receiver(post_save, sender=Message)

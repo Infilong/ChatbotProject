@@ -310,7 +310,46 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
   }, [state.currentConversationId, generateConversationTitle, saveConversation]);
 
   const loadConversation = useCallback(async (conversationId: string): Promise<Conversation | null> => {
-    return new Promise((resolve) => {
+    try {
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      if (authService.isAuthenticated()) {
+        // Load conversation with full messages from backend
+        console.log('Loading conversation from backend:', conversationId);
+        const backendConv = await conversationService.getConversation(conversationId);
+        const conversation = conversationService.convertToFrontendFormat(backendConv);
+        
+        // Update the conversation in our local state
+        setState(prev => ({
+          ...prev,
+          conversations: prev.conversations.map(conv => 
+            conv.id === conversationId ? conversation : conv
+          ),
+          currentConversationId: conversationId,
+          isLoading: false
+        }));
+        
+        console.log('Loaded conversation with messages:', conversation.messages?.length || 0);
+        return conversation;
+      } else {
+        // Fallback to localStorage for unauthenticated users
+        const conversation = state.conversations.find(conv => conv.id === conversationId);
+        if (conversation) {
+          setState(prev => ({
+            ...prev,
+            currentConversationId: conversationId,
+            isLoading: false
+          }));
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }));
+        }
+        return conversation || null;
+      }
+    } catch (error) {
+      console.error('Error loading conversation:', error);
+      setState(prev => ({ ...prev, isLoading: false }));
+      
+      // Fallback to local conversation if backend fails
       const conversation = state.conversations.find(conv => conv.id === conversationId);
       if (conversation) {
         setState(prev => ({
@@ -318,8 +357,8 @@ export const ConversationHistoryProvider: React.FC<ConversationHistoryProviderPr
           currentConversationId: conversationId,
         }));
       }
-      resolve(conversation || null);
-    });
+      return conversation || null;
+    }
   }, [state.conversations]);
 
   const deleteConversation = useCallback(async (conversationId: string): Promise<void> => {

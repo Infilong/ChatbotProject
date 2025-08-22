@@ -84,16 +84,36 @@ class ConversationService {
   async getConversation(conversationId: string): Promise<BackendConversation> {
     try {
       const headers = authService.getAuthHeaders();
-      const response = await fetch(`${CONVERSATION_API_URL}/${conversationId}/`, {
+      
+      // First get the conversation metadata
+      const conversationResponse = await fetch(`${CONVERSATION_API_URL}/${conversationId}/`, {
         method: 'GET',
         headers,
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch conversation: ${response.statusText}`);
+      if (!conversationResponse.ok) {
+        throw new Error(`Failed to fetch conversation: ${conversationResponse.statusText}`);
       }
 
-      return await response.json();
+      const conversation = await conversationResponse.json();
+      
+      // Then get the messages for this conversation
+      const messagesResponse = await fetch(`${CONVERSATION_API_URL}/${conversationId}/messages/`, {
+        method: 'GET',
+        headers,
+      });
+
+      if (messagesResponse.ok) {
+        const messagesData = await messagesResponse.json();
+        // Handle paginated response - messages are in results array
+        conversation.messages = messagesData.results || messagesData;
+        console.log(`Fetched ${conversation.messages.length} messages for conversation ${conversationId}`);
+      } else {
+        console.warn(`Failed to fetch messages for conversation ${conversationId}:`, messagesResponse.statusText);
+        conversation.messages = [];
+      }
+
+      return conversation;
     } catch (error) {
       console.error('Error fetching conversation:', error);
       throw error;

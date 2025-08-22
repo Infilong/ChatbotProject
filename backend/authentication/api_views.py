@@ -9,6 +9,8 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -101,6 +103,7 @@ class LoginAPIView(APIView):
     """
     
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []  # Disable authentication for login endpoint
     
     def post(self, request):
         """Authenticate user and return token"""

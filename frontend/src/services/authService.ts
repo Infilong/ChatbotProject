@@ -91,6 +91,9 @@ class AuthService {
    */
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      console.log('🔐 Attempting login with:', { username: credentials.username, password: '***' });
+      console.log('🔐 Login URL:', `${AUTH_API_URL}/login/`);
+      
       const response = await fetch(`${AUTH_API_URL}/login/`, {
         method: 'POST',
         headers: {
@@ -99,7 +102,11 @@ class AuthService {
         body: JSON.stringify(credentials),
       });
 
+      console.log('🔐 Login response status:', response.status, response.statusText);
+      console.log('🔐 Login response headers:', response.headers);
+
       const result = await response.json();
+      console.log('🔐 Login response body:', result);
 
       if (response.ok && result.success) {
         // Store authentication token

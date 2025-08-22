@@ -86,16 +86,17 @@ class ConversationSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     message_count = serializers.SerializerMethodField()
     last_message_time = serializers.SerializerMethodField()
+    messages = serializers.SerializerMethodField()  # Include messages for detail view
     
     class Meta:
         model = Conversation
         fields = [
             'id', 'user', 'title', 'created_at', 'updated_at',
             'is_active', 'total_messages', 'satisfaction_score', 'langextract_analysis', 
-            'message_count', 'last_message_time'
+            'message_count', 'last_message_time', 'messages'
         ]
         read_only_fields = [
-            'id', 'user', 'created_at', 'updated_at', 'message_count', 'total_messages'
+            'id', 'user', 'created_at', 'updated_at', 'message_count', 'total_messages', 'messages'
         ]
     
     
@@ -107,6 +108,11 @@ class ConversationSerializer(serializers.ModelSerializer):
         """Get last message timestamp"""
         last_msg = obj.messages.order_by('-timestamp').first()
         return last_msg.timestamp if last_msg else obj.created_at
+    
+    def get_messages(self, obj):
+        """Get all messages for this conversation"""
+        messages = obj.messages.all().order_by('timestamp')
+        return MessageSerializer(messages, many=True).data
 
 
 class MessageSerializer(serializers.ModelSerializer):

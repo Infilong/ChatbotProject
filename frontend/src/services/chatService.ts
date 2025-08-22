@@ -1,5 +1,6 @@
 import { Message } from '../types/Message';
 import { messageUtils } from '../utils/messageUtils';
+import authService from './authService';
 
 type LanguageType = 'en' | 'ja';
 
@@ -47,11 +48,23 @@ class ChatService {
   private currentConversationId: string | null = null;
 
   private async makeApiCall(endpoint: string, data: Record<string, any>): Promise<ApiResponse> {
-    // Simplified API call for demo environment
-    // Backend has AllowAny permissions and csrf_exempt
+    // Include authentication headers for proper user identification
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
+    
+    // Add authentication header if user is logged in
+    if (authService.isAuthenticated()) {
+      const token = authService.getToken();
+      if (token) {
+        headers['Authorization'] = `Token ${token}`;
+        console.log('🔑 Using authentication token for API call:', `Token ${token.substring(0, 10)}...`);
+      } else {
+        console.warn('⚠️ User appears authenticated but no token found');
+      }
+    } else {
+      console.warn('⚠️ User not authenticated - API call may fail');
+    }
     
     const response = await fetch(`${this.API_BASE_URL}${endpoint}`, {
       method: 'POST',
@@ -358,11 +371,21 @@ class ChatService {
   // Submit feedback for a bot message
   async submitFeedback(messageId: string, feedback: 'positive' | 'negative'): Promise<void> {
     try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // Add authentication header if user is logged in
+      if (authService.isAuthenticated()) {
+        const token = authService.getToken();
+        if (token) {
+          headers['Authorization'] = `Token ${token}`;
+        }
+      }
+      
       await fetch(`${this.API_BASE_URL}/api/chat/api/messages/${messageId}/feedback/`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({ feedback }),
       });
     } catch (error) {
