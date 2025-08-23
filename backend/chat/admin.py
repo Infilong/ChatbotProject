@@ -1077,10 +1077,44 @@ class ConversationAdmin(admin.ModelAdmin):
                     
                     mock_request = MockRequest(session)
                     
-                    # Run the analysis with the mock request
-                    logger.info("Starting LangExtract analysis in background thread...")
-                    service.bulk_analyze_conversations_with_progress(valid_conversations, mock_request)
-                    logger.info("Background analysis completed successfully")
+                    # Use async analysis service instead of blocking LangExtract calls
+                    logger.info("Queuing conversations for async analysis...")
+                    from core.services.async_analysis_service import async_analysis_service
+                    
+                    queued_count = 0
+                    for i, conv_id in enumerate(valid_conversations):
+                        try:
+                            from chat.models import Conversation
+                            conversation = Conversation.objects.get(id=conv_id)
+                            
+                            # Queue with staggered delays to avoid overwhelming the API
+                            task_id = async_analysis_service.schedule_conversation_analysis(
+                                conversation,
+                                delay_seconds=i * 2  # 2 second intervals between analyses
+                            )
+                            queued_count += 1
+                            logger.info(f"Queued conversation {conv_id} for analysis (task: {task_id})")
+                            
+                            # Update progress in session
+                            progress = session.get('langextract_progress', {})
+                            progress['processed'] = queued_count
+                            progress['current_step'] = f'Queued {queued_count}/{len(valid_conversations)} conversations for background analysis'
+                            progress['status'] = 'queuing'
+                            session['langextract_progress'] = progress
+                            session.save()
+                            
+                        except Exception as e:
+                            logger.error(f"Error queuing conversation {conv_id}: {e}")
+                    
+                    # Final progress update
+                    progress = session.get('langextract_progress', {})
+                    progress['status'] = 'queued' 
+                    progress['current_step'] = f'Successfully queued {queued_count} conversations. Background processing in progress...'
+                    progress['processed'] = queued_count
+                    session['langextract_progress'] = progress
+                    session.save()
+                    
+                    logger.info(f"Successfully queued {queued_count} conversations for async analysis")
                     
                 except Exception as e:
                     # Update progress with error status
@@ -1223,20 +1257,36 @@ class ConversationAdmin(admin.ModelAdmin):
                 )
                 return
             
-            # Analyze all conversations without analysis
-            result = service.bulk_analyze_conversations()
+            # Schedule conversations for async background analysis instead of blocking
+            from core.services.async_analysis_service import async_analysis_service
             
-            if result['success'] > 0:
+            # Get conversations without analysis
+            unanalyzed_conversations = queryset.filter(
+                langextract_analysis__isnull=True
+            ) if hasattr(queryset.first(), 'langextract_analysis') else queryset.filter(
+                langextract_analysis={}
+            )
+            
+            # Queue them for background analysis
+            queued_count = 0
+            for conversation in unanalyzed_conversations[:50]:  # Limit to 50 to avoid overwhelming the queue
+                task_id = async_analysis_service.schedule_conversation_analysis(
+                    conversation,
+                    delay_seconds=queued_count  # Stagger the analysis to avoid API rate limits
+                )
+                queued_count += 1
+            
+            if queued_count > 0:
                 self.message_user(
                     request,
-                    f"Bulk analysis completed: {result['success']} successful, {result['failed']} failed.",
-                    level='SUCCESS' if result['failed'] == 0 else 'WARNING'
+                    f"Queued {queued_count} conversations for background analysis. Processing will complete within the next few minutes.",
+                    level='SUCCESS'
                 )
             else:
                 self.message_user(
                     request,
-                    f"Bulk analysis failed: {result.get('error', 'Unknown error')}",
-                    level='ERROR'
+                    "No unanalyzed conversations found to process.",
+                    level='INFO'
                 )
         except ImportError as e:
             self.message_user(

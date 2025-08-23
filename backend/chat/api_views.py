@@ -258,31 +258,43 @@ class ConversationViewSet(ModelViewSet):
     
     @action(detail=True, methods=['get'])
     def analyze(self, request, pk=None):
-        """Get LangExtract analysis for this conversation"""
+        """Get LangExtract analysis for this conversation (non-blocking)"""
         conversation = self.get_object()
         
         try:
-            # Get conversation messages
-            messages = list(conversation.messages.all().order_by('timestamp'))
-            message_data = [
-                {
-                    'role': msg.sender_type,
-                    'content': msg.content,
-                    'timestamp': msg.timestamp.isoformat()
-                }
-                for msg in messages
-            ]
-            
-            # Run LangExtract analysis
-            lang_extract = LangExtractService()
-            analysis = lang_extract.analyze_conversation(message_data)
-            
-            return Response({
-                'conversation_id': conversation.uuid,
-                'analysis': analysis,
-                'message_count': len(messages),
-                'analysis_timestamp': timezone.now().isoformat()
-            })
+            # Check if analysis already exists from background processing
+            if conversation.langextract_analysis and conversation.langextract_analysis != {}:
+                # Return existing analysis
+                return Response({
+                    'conversation_id': conversation.uuid,
+                    'analysis': conversation.langextract_analysis,
+                    'message_count': conversation.total_messages,
+                    'status': 'completed',
+                    'processing_mode': conversation.langextract_analysis.get('processing_mode', 'background'),
+                    'analysis_timestamp': conversation.langextract_analysis.get('processed_at', 
+                                                                             conversation.updated_at.isoformat())
+                })
+            else:
+                # Analysis not available - queue it for background processing
+                from core.services.async_analysis_service import async_analysis_service
+                
+                # Schedule analysis with immediate processing (no delay for manual requests)
+                task_id = async_analysis_service.schedule_conversation_analysis(
+                    conversation, 
+                    delay_seconds=0  # Immediate processing for manual analysis requests
+                )
+                
+                logger.info(f"Queued immediate analysis for conversation {conversation.uuid}, task ID: {task_id}")
+                
+                # Return processing status
+                return Response({
+                    'conversation_id': conversation.uuid,
+                    'status': 'processing',
+                    'message': 'Analysis has been queued for processing. Check back in a few seconds.',
+                    'task_id': task_id,
+                    'message_count': conversation.total_messages,
+                    'estimated_completion': 'within 10 seconds'
+                })
             
         except Exception as e:
             logger.error(f"Analysis error for conversation {conversation.uuid}: {e}")
