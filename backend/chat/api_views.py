@@ -113,7 +113,7 @@ class ConversationViewSet(ModelViewSet):
         serializer.save(user=self.request.user)
     
     @action(detail=True, methods=['get'])
-    def messages(self, request, pk=None):
+    def messages(self, request, uuid=None):
         """Get all messages in a conversation"""
         conversation = self.get_object()
         messages = conversation.messages.all().order_by('timestamp')

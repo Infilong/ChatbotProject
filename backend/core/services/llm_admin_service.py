@@ -837,6 +837,14 @@ class LLMAdminService:
                 'error_code': e.error_code
             }, status=400)
             
+        except ValueError as e:
+            # Handle conversation not found errors from ConversationService
+            return JsonResponse({
+                'success': False,
+                'error': str(e),
+                'error_code': 'CONVERSATION_NOT_FOUND'
+            }, status=404)
+            
         except ConversationException as e:
             return JsonResponse({
                 'success': False,

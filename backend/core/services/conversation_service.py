@@ -14,7 +14,7 @@ class ConversationService:
     @staticmethod
     def generate_conversation_id() -> str:
         """Generate a unique conversation ID"""
-        return f"conv_{uuid.uuid4().hex[:8]}"
+        return str(uuid.uuid4())  # Full UUID
     
     @staticmethod
     def get_session_keys(user_id: int, conversation_id: str = None) -> Tuple[str, str]:
@@ -27,9 +27,15 @@ class ConversationService:
     
     @classmethod
     def get_conversation_history(cls, request, conversation_id: str) -> List[Dict[str, Any]]:
-        """Get chat history for a specific conversation from Django sessions"""
-        session_key, _ = cls.get_session_keys(request.user.id, conversation_id)
-        return request.session.get(session_key, [])
+        """Get chat history for a specific conversation from database"""
+        try:
+            conversation = Conversation.objects.get(uuid=conversation_id, user=request.user)
+            messages = Message.objects.filter(conversation=conversation).order_by('timestamp')
+            return [cls._serialize_message(msg) for msg in messages]
+        except Conversation.DoesNotExist:
+            raise ValueError(f"Conversation not found: {conversation_id}")
+        except Exception as e:
+            raise Exception(f"Error fetching conversation history: {str(e)}")
     
     @classmethod
     def get_all_conversations(cls, request) -> List[Dict[str, Any]]:
@@ -196,3 +202,17 @@ class ConversationService:
         _, conversations_key = cls.get_session_keys(request.user.id)
         conversations = request.session.get(conversations_key, [])
         return len(conversations)
+    
+    @staticmethod
+    def _serialize_message(message) -> Dict[str, Any]:
+        """Serialize a Message model instance to dictionary format"""
+        return {
+            'id': str(message.uuid),
+            'role': message.sender_type,
+            'content': message.content,
+            'timestamp': message.timestamp.isoformat(),
+            'metadata': message.metadata or {},
+            'feedback': message.feedback,
+            'llm_model_used': message.llm_model_used,
+            'response_time': message.response_time
+        }
