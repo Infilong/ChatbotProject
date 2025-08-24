@@ -40,40 +40,54 @@ def debug_conversation_post_save(sender, instance, created, **kwargs):
 def message_saved_trigger_analysis(sender, instance, created, **kwargs):
     """
     Signal handler triggered when a message is saved
+    Uses async queuing to prevent database locks during concurrent analysis
     Triggers message-level analysis for user messages immediately
     Also checks if the conversation should be analyzed automatically
-    Includes retry mechanism for failed analyses
     """
     if not created:
         # Only process new messages, not updates
         return
     
     try:
-        conversation = instance.conversation
+        # Use threading to avoid blocking the main request
+        import threading
+        import time
+        from django.db import transaction
         
-        # 1. DELAYED MESSAGE-LEVEL ANALYSIS - trigger only after bot response
-        if instance.sender_type == 'bot' and not instance.message_analysis:
-            # Find the corresponding user message that triggered this bot response
-            user_msg = conversation.messages.filter(
-                sender_type='user',
-                timestamp__lt=instance.timestamp
-            ).order_by('-timestamp').first()
-            
-            if user_msg and not user_msg.message_analysis:
-                logger.info(f"Bot response completed, scheduling delayed analysis for user message {user_msg.uuid}")
+        def async_analysis_handler():
+            """Run analysis in a separate thread with proper database handling"""
+            try:
+                # Small delay to allow the main transaction to complete first
+                time.sleep(0.1)
                 
-                # Use async analysis service to avoid blocking admin interface
-                from core.services.async_analysis_service import async_analysis_service
-                task_id = async_analysis_service.schedule_message_analysis(
-                    user_msg,
-                    delay_seconds=5  # Same 5-second delay but non-blocking
-                )
-                logger.info(f"Scheduled non-blocking message analysis for {user_msg.uuid} with task ID: {task_id}")
-                
-                # Start retry mechanism for the user message
-                start_message_analysis_retry_monitor(user_msg)
+                # Refresh instance from database to get latest state
+                with transaction.atomic():
+                    instance.refresh_from_db()
+                    conversation = instance.conversation
+                    conversation.refresh_from_db()
+                    
+                    _perform_analysis_tasks(instance, conversation)
+                    
+            except Exception as e:
+                logger.error(f"Async analysis handler failed: {e}")
         
-        # 2. CONVERSATION-LEVEL ANALYSIS (enhanced)
+        # Start analysis in background thread
+        analysis_thread = threading.Thread(
+            target=async_analysis_handler,
+            name=f"analysis-{instance.uuid}",
+            daemon=True
+        )
+        analysis_thread.start()
+        
+    except Exception as e:
+        logger.error(f"Failed to start async analysis: {e}")
+
+
+def _perform_analysis_tasks(instance, conversation):
+    """Perform the actual analysis tasks in a thread-safe manner"""
+    try:
+        
+        # 1. CONVERSATION-LEVEL ANALYSIS (simplified to prevent locks)
         message_count = conversation.total_messages
         has_analysis = bool(conversation.langextract_analysis and conversation.langextract_analysis != {})
         
@@ -81,72 +95,47 @@ def message_saved_trigger_analysis(sender, instance, created, **kwargs):
                     f"{message_count} messages, analyzed: {has_analysis}")
         
         # Trigger conversation analysis for conversations with enough messages
-        if message_count >= 3 and not has_analysis:
-            logger.info(f"Conversation {conversation.uuid} has {message_count} messages and no analysis - "
-                       f"scheduling conversation analysis")
+        # Only run analysis if we're processing a user message to avoid double-triggering
+        if (message_count >= 3 and not has_analysis and 
+            instance.sender_type == 'user'):
             
-            # Use async analysis service to avoid blocking admin interface
-            from core.services.async_analysis_service import async_analysis_service
-            task_id = async_analysis_service.schedule_conversation_analysis(
-                conversation, 
-                delay_seconds=5  # Same 5-second delay but non-blocking
-            )
-            logger.info(f"Scheduled non-blocking conversation analysis for {conversation.uuid} with task ID: {task_id}")
+            logger.info(f"Triggering conversation analysis for {conversation.uuid} "
+                       f"({message_count} messages)")
             
-            # Start retry mechanism for this conversation
-            start_conversation_analysis_retry_monitor(conversation)
+            # Run analysis directly but with database lock protection
+            try:
+                from core.services.langextract_service import langextract_service
+                import asyncio
+                
+                # Create new event loop for this thread
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                
+                try:
+                    # Run the analysis
+                    result = loop.run_until_complete(
+                        langextract_service.analyze_full_conversation(conversation)
+                    )
+                    
+                    if result:
+                        logger.info(f"Conversation analysis completed for {conversation.uuid}")
+                    else:
+                        logger.warning(f"Conversation analysis returned no results for {conversation.uuid}")
+                        
+                except Exception as analysis_error:
+                    logger.error(f"Conversation analysis failed for {conversation.uuid}: {analysis_error}")
+                    
+                finally:
+                    loop.close()
+                    
+            except Exception as e:
+                logger.error(f"Failed to setup analysis for conversation {conversation.uuid}: {e}")
         
-        # 3. AUTOMATIC SUMMARY TRIGGER (NEW - Development Mode)
-        # Check if we should trigger automatic summary generation
-        if instance.sender_type == 'user' and instance.message_analysis:
-            importance_level = instance.message_analysis.get('importance_level', {}).get('level', 'low')
-            
-            # If this is a critical or high importance message, check for summary trigger
-            if importance_level in ['critical', 'high']:
-                logger.info(f"Critical/high importance message detected: {instance.uuid} (level: {importance_level})")
-                
-                def check_summary_trigger_async():
-                    """Check if automatic summary should be triggered"""
-                    try:
-                        import asyncio
-                        import time
-                        from django.db import connections
-                        from chat.services.automatic_summary_service import AutomaticSummaryService
-                        
-                        # Small delay to ensure message analysis is complete
-                        time.sleep(2)
-                        
-                        # Close database connections for threading
-                        connections.close_all()
-                        
-                        # Create new event loop
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        
-                        try:
-                            # Check and generate summary if conditions are met
-                            summary = loop.run_until_complete(
-                                AutomaticSummaryService.check_and_generate_summary()
-                            )
-                            
-                            if summary:
-                                logger.info(f"Automatic summary triggered by message {instance.uuid}: {summary.uuid}")
-                            else:
-                                logger.debug(f"No automatic summary triggered by message {instance.uuid}")
-                                
-                        finally:
-                            loop.close()
-                            
-                    except Exception as e:
-                        logger.error(f"Error in automatic summary trigger: {e}")
-                
-                # Start summary check in background thread
-                import threading
-                summary_thread = threading.Thread(target=check_summary_trigger_async, daemon=True)
-                summary_thread.start()
+        logger.debug(f"Analysis tasks completed for message {instance.uuid}")
         
     except Exception as e:
-        logger.warning(f"Error in message_saved_trigger_analysis signal: {e}")
+        logger.error(f"Error in analysis tasks for message {instance.uuid}: {e}")
+        # Don't re-raise to avoid breaking the message save operation
 
 
 @receiver(post_save, sender=Conversation)

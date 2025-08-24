@@ -5,9 +5,12 @@ Django signals for automatic document processing
 import asyncio
 import logging
 import json
+import threading
+import time
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.utils import timezone
+from django.db import transaction
 from .models import Document, DocumentationImprovement
 from .document_processor import DocumentProcessor
 from chat.models import Message, Conversation
@@ -30,26 +33,40 @@ def auto_process_document(sender, instance, created, **kwargs):
     if should_process and instance.file:
         logger.info(f"Triggering automatic processing for document: {instance.name}")
         
-        # Process document asynchronously
-        try:
-            # Create new event loop for async processing
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            # Run document processing
-            success = loop.run_until_complete(
-                DocumentProcessor.process_document(instance)
-            )
-            
-            if success:
-                logger.info(f"Successfully auto-processed document: {instance.name}")
-            else:
-                logger.warning(f"Auto-processing failed for document: {instance.name}")
+        # Process document in background thread to avoid blocking admin interface
+        def async_document_processing():
+            try:
+                # Small delay to allow main transaction to complete
+                time.sleep(0.2)
                 
-        except Exception as e:
-            logger.error(f"Error in auto-processing document {instance.name}: {e}")
-        finally:
-            loop.close()
+                with transaction.atomic():
+                    # Refresh instance from database
+                    document = Document.objects.get(id=instance.id)
+                    
+                    # Create new event loop for this thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    # Run document processing
+                    success = loop.run_until_complete(
+                        DocumentProcessor.process_document(document)
+                    )
+                    
+                    if success:
+                        logger.info(f"Successfully auto-processed document: {document.name}")
+                    else:
+                        logger.warning(f"Auto-processing failed for document: {document.name}")
+                        
+            except Exception as e:
+                logger.error(f"Error in background document processing: {e}")
+            finally:
+                if 'loop' in locals():
+                    loop.close()
+        
+        # Start processing in background thread
+        processing_thread = threading.Thread(target=async_document_processing, daemon=True)
+        processing_thread.start()
+        logger.info(f"Started background processing for document: {instance.name}")
     else:
         logger.debug(f"Skipping processing for document: {instance.name} (no changes or no file)")
 
@@ -64,23 +81,42 @@ def update_knowledge_base_stats(sender, instance, created, **kwargs):
     
     # Automatically rebuild search indexes when document has extracted text
     if instance.extracted_text and instance.is_active:
-        try:
-            logger.info(f"Rebuilding search indexes due to document change: {instance.name}")
-            
-            # Import here to avoid circular imports
-            from .hybrid_search import HybridSearchService
-            
-            # Rebuild indexes in background
-            search_service = HybridSearchService()
-            success = search_service.build_indexes(force_rebuild=False)
-            
-            if success:
-                logger.info(f"✅ Search indexes updated successfully for new document: {instance.name}")
-            else:
-                logger.warning(f"❌ Failed to update search indexes for document: {instance.name}")
+        logger.info(f"Scheduling search index rebuild for document: {instance.name}")
+        
+        # Rebuild indexes in background thread to avoid blocking admin interface
+        def async_index_rebuild():
+            try:
+                # Small delay to allow main transaction to complete
+                time.sleep(0.3)
                 
-        except Exception as e:
-            logger.error(f"Error rebuilding search indexes for document {instance.name}: {e}")
+                with transaction.atomic():
+                    # Refresh instance from database
+                    document = Document.objects.get(id=instance.id)
+                    
+                    if document.extracted_text and document.is_active:
+                        logger.info(f"Rebuilding search indexes for document: {document.name}")
+                        
+                        # Import here to avoid circular imports
+                        from .hybrid_search import HybridSearchService
+                        
+                        # Rebuild indexes
+                        search_service = HybridSearchService()
+                        success = search_service.build_indexes(force_rebuild=False)
+                        
+                        if success:
+                            logger.info(f"Search indexes updated successfully for document: {document.name}")
+                        else:
+                            logger.warning(f"Failed to update search indexes for document: {document.name}")
+                    else:
+                        logger.debug(f"Document no longer has extracted text or is inactive: {document.name}")
+                        
+            except Exception as e:
+                logger.error(f"Error in background search index rebuild: {e}")
+        
+        # Start index rebuild in background thread
+        rebuild_thread = threading.Thread(target=async_index_rebuild, daemon=True)
+        rebuild_thread.start()
+        logger.info(f"Started background search index rebuild for document: {instance.name}")
     else:
         logger.debug(f"Document with extracted text available: {instance.name}")
 

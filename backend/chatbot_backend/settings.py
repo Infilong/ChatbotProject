@@ -34,7 +34,7 @@ ALLOWED_HOSTS = ['*']  # Allow all hosts for development
 # Application definition
 
 INSTALLED_APPS = [
-    'jazzmin',  # Must be before django.contrib.admin
+    'jazzmin',  # Re-enabled
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -97,6 +97,16 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 60,  # 60 second timeout for database locks
+            'init_command': (
+                "PRAGMA journal_mode=WAL;"  # Write-Ahead Logging for better concurrency
+                "PRAGMA synchronous=NORMAL;"  # Balance between performance and safety
+                "PRAGMA cache_size=1000;"  # Larger cache for better performance
+                "PRAGMA temp_store=MEMORY;"  # Store temporary data in memory
+                "PRAGMA busy_timeout=60000;"  # 60 second busy timeout
+            ),
+        },
     }
 }
 
@@ -251,17 +261,17 @@ LOGGING = {
     },
     'root': {
         'handlers': ['console'],
-        'level': 'DEBUG',
+        'level': 'INFO',
     },
     'loggers': {
         'analytics.langextract_service': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
         'django': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
             'propagate': False,
         },
     },

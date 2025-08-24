@@ -1495,13 +1495,48 @@ class LangExtractService:
         }
     
     def _save_conversation_analysis(self, conversation: Conversation, analysis_data: Dict[str, Any]):
-        """Sync method to save conversation analysis (called via sync_to_async)"""
-        try:
-            conversation.langextract_analysis = analysis_data
-            conversation.save(update_fields=['langextract_analysis'])
-        except Exception as e:
-            logger.error(f"Failed to save conversation analysis: {e}")
-            raise
+        """
+        Sync method to save conversation analysis with database lock handling
+        Uses transaction management and retry logic for SQLite database locks
+        """
+        import time
+        from django.db import transaction, OperationalError
+        
+        max_retries = 3
+        retry_delay = 0.1  # Start with 100ms delay
+        
+        for attempt in range(max_retries):
+            try:
+                # Use atomic transaction with proper timeout handling
+                with transaction.atomic():
+                    # Refresh the conversation from database to avoid stale data
+                    conversation.refresh_from_db()
+                    conversation.langextract_analysis = analysis_data
+                    conversation.save(update_fields=['langextract_analysis'])
+                    
+                logger.debug(f"Successfully saved conversation analysis on attempt {attempt + 1}")
+                return
+                
+            except OperationalError as e:
+                error_msg = str(e).lower()
+                if "database is locked" in error_msg or "disk i/o error" in error_msg:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Database lock detected on attempt {attempt + 1}, retrying in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"Failed to save conversation analysis after {max_retries} attempts: database locked")
+                        # Don't raise exception - log the failure but don't crash the request
+                        return
+                else:
+                    logger.error(f"Database operational error: {e}")
+                    raise
+                    
+            except Exception as e:
+                logger.error(f"Failed to save conversation analysis: {e}")
+                # Don't raise exception for non-critical analysis saving failures
+                return
 
 
 # Global service instance

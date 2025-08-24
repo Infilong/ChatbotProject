@@ -13,4 +13,5 @@ urlpatterns = [
     path('chat/api/', admin_views.AdminChatAPI.as_view(), name='llm_chat_api'),
     path('chat/history/api/', admin_views.AdminChatHistory.as_view(), name='chat_history_api'),
     path('knowledge-test/', admin_views.knowledge_base_test, name='knowledge_test'),
+    path('document-stats/api/', admin_views.DocumentStatsAPI.as_view(), name='document_stats_api'),
 ]

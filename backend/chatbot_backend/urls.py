@@ -20,6 +20,8 @@ from django.http import HttpResponse, JsonResponse
 from django.conf.urls.i18n import i18n_patterns
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.decorators import login_required
+from django.conf import settings
+from django.conf.urls.static import static
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -56,3 +58,7 @@ urlpatterns = [
     path('api/jwt/login/', TokenObtainPairView.as_view(), name='jwt_login'),
     path('api/jwt/refresh/', TokenRefreshView.as_view(), name='jwt_token_refresh'),
 ]
+
+# Serve static files during development
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

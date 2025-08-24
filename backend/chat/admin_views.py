@@ -12,6 +12,8 @@ from django.views import View
 from core.services.analytics_service import AnalyticsService
 from core.services.conversation_service import ConversationService
 from core.services.llm_admin_service import LLMAdminService
+from documents.models import Document
+from chat.models import Conversation
 
 
 @staff_member_required
@@ -153,3 +155,37 @@ def knowledge_base_test(request):
         'analytics': AnalyticsService.get_conversation_metrics()
     }
     return render(request, 'admin/documents/knowledge_test.html', context)
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class DocumentStatsAPI(View):
+    """API endpoint for admin dashboard statistics"""
+    
+    def get(self, request):
+        """Get dashboard statistics"""
+        try:
+            # Get basic counts
+            total_documents = Document.objects.filter(is_active=True).count()
+            total_conversations = Conversation.objects.count()
+            processed_documents = Document.objects.filter(
+                is_active=True, 
+                extracted_text__isnull=False
+            ).exclude(extracted_text='').count()
+            
+            stats = {
+                'total_documents': total_documents,
+                'total_references': total_conversations,
+                'processed_documents': processed_documents,
+                'processing_rate': (processed_documents / total_documents * 100) if total_documents > 0 else 0
+            }
+            
+            return JsonResponse({
+                'success': True,
+                'stats': stats
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
