@@ -47,6 +47,7 @@ urlpatterns = [
     # Automatic analysis endpoints
     path('analysis/status/', api_views.automatic_analysis_status, name='analysis-status'),
     path('analysis/trigger/', api_views.trigger_automatic_analysis, name='trigger-analysis'),
+    path('analysis/message-status/', api_views.message_analysis_status, name='message-analysis-status'),
     
     # Message-level analytics endpoints
     path('analytics/messages/', message_analytics_api.message_analytics, name='message-analytics'),

@@ -87,7 +87,25 @@ def _perform_analysis_tasks(instance, conversation):
     """Perform the actual analysis tasks in a thread-safe manner"""
     try:
         
-        # 1. CONVERSATION-LEVEL ANALYSIS (simplified to prevent locks)
+        # 1. MESSAGE-LEVEL ANALYSIS (direct processing to ensure reliability)
+        if instance.sender_type == 'user':
+            logger.debug(f"Starting direct analysis for message {instance.uuid}")
+            
+            try:
+                from core.services.message_analysis_service import message_analysis_service
+                
+                # Analyze message directly (more reliable than background workers)
+                result = message_analysis_service.analyze_message_sync(instance)
+                
+                if result:
+                    logger.info(f"✓ Message {instance.uuid} analyzed successfully")
+                else:
+                    logger.warning(f"✗ Message {instance.uuid} analysis failed or skipped")
+                    
+            except Exception as e:
+                logger.error(f"Failed to analyze message {instance.uuid}: {e}")
+        
+        # 2. CONVERSATION-LEVEL ANALYSIS (simplified to prevent locks)
         message_count = conversation.total_messages
         has_analysis = bool(conversation.langextract_analysis and conversation.langextract_analysis != {})
         

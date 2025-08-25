@@ -648,11 +648,12 @@ class LLMChatAPIView(APIView):
                     print(f"Retrying LLM call for existing message: {user_msg.id}")
             else:
                 # New message - save user message first to get its ID for document usage tracking
-                user_msg = Message.objects.create(
+                user_msg = Message(
                     conversation=conversation,
                     content=user_message,
                     sender_type='user'
                 )
+                user_msg.save()  # Use save() to trigger signals for analysis
                 
                 # Track user activity when sending message
                 update_customer_session_activity(user)
@@ -668,7 +669,7 @@ class LLMChatAPIView(APIView):
             )
             
             # Create bot message
-            bot_msg = Message.objects.create(
+            bot_msg = Message(
                 conversation=conversation,
                 content=bot_response,
                 sender_type='bot',
@@ -677,6 +678,7 @@ class LLMChatAPIView(APIView):
                 tokens_used=metadata.get('tokens_used'),
                 metadata=metadata
             )
+            bot_msg.save()  # Use save() to trigger signals
             
             # Note: We don't track bot responses, only user activity
             
@@ -789,12 +791,13 @@ def bulk_message_create(request):
         # Create messages
         created_messages = []
         for msg_data in messages_data:
-            message = Message.objects.create(
+            message = Message(
                 conversation=conversation,
                 content=msg_data['content'],
                 sender_type=msg_data['sender_type'],
                 file_attachment=msg_data.get('file_attachment')
             )
+            message.save()  # Use save() to trigger signals
             created_messages.append(message)
         
         # Return created messages
@@ -907,6 +910,50 @@ def trigger_automatic_analysis(request):
         
     except Exception as e:
         logger.error(f"Manual trigger of automatic analysis failed: {e}")
+        return Response({
+            'status': 'error',
+            'error': str(e),
+            'timestamp': timezone.now().isoformat()
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def message_analysis_status(request):
+    """
+    Get status of message analysis system (now using simple direct processing)
+    """
+    try:
+        from core.services.message_analysis_service import message_analysis_service
+        
+        # Get analysis statistics from the message analysis service
+        stats = message_analysis_service.get_analysis_stats()
+        
+        return Response({
+            'analysis_system': {
+                'service_type': 'direct_processing',
+                'queue_based': False,
+                'background_workers': False,
+                'admin_freeze_prevention': True,
+                'database_transaction_safety': True
+            },
+            'database_statistics': {
+                'total_user_messages': stats.get('total_user_messages', 0),
+                'analyzed_messages': stats.get('analyzed_messages', 0),
+                'pending_messages': stats.get('pending_messages', 0),
+                'analysis_percentage': stats.get('analysis_percentage', 0.0)
+            },
+            'analysis_method': {
+                'llm_provider': 'LangExtract + Gemini',
+                'model': 'gemini-2.5-flash',
+                'processing_mode': 'direct_signal_based',
+                'async_database_ops': True,
+                'service_handler': stats.get('service_type', 'unknown')
+            },
+            'timestamp': timezone.now().isoformat()
+        })
+        
+    except Exception as e:
         return Response({
             'status': 'error',
             'error': str(e),

@@ -62,8 +62,8 @@ class ConversationService:
             # Convert role to sender_type format
             sender_type = 'user' if role == 'user' else 'bot'
             
-            # Create message
-            message = Message.objects.create(
+            # Create message - Use save() to trigger Django signals for automatic analysis
+            message = Message(
                 conversation=conversation,
                 content=content,
                 sender_type=sender_type,
@@ -71,6 +71,7 @@ class ConversationService:
                 llm_model_used=metadata.get('model') if metadata else None,
                 response_time=metadata.get('response_time') if metadata else None
             )
+            message.save()  # Use save() to trigger post_save signals
             
             # Update conversation title if needed (check for None or empty string)
             if (not conversation.title or conversation.title.strip() == '') and sender_type == 'user':
