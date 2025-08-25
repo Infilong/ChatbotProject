@@ -16,9 +16,10 @@ import { useLanguage } from '../contexts/LanguageContext';
 
 interface MessageInputProps {
   onSendMessage: (message: string, file?: File) => void;
+  disabled?: boolean;
 }
 
-const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage }) => {
+const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage, disabled = false }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -45,6 +46,7 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
     e.preventDefault();
     
     if (!inputMessage.trim() && !selectedFile) return;
+    if (disabled) return; // Prevent submission when disabled
 
     onSendMessage(inputMessage, selectedFile || undefined);
     setInputMessage('');
@@ -52,7 +54,7 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, [inputMessage, selectedFile, onSendMessage]);
+  }, [inputMessage, selectedFile, onSendMessage, disabled]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,10 +99,11 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
           {/* Emoji Picker Button */}
           <IconButton
             onClick={toggleEmojiPicker}
+            disabled={disabled}
             sx={{
-              color: '#1565C0',
+              color: disabled ? '#ccc' : '#1565C0',
               borderRadius: 2,
-              '&:hover': { 
+              '&:hover': disabled ? {} : { 
                 backgroundColor: 'rgba(21, 101, 192, 0.1)',
                 transform: 'scale(1.05)',
               },
@@ -118,6 +121,7 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
             variant="outlined"
+            disabled={disabled}
             sx={{
               '& .MuiOutlinedInput-root': {
                 borderRadius: 3,
@@ -135,9 +139,10 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
           />
           <IconButton
             onClick={() => fileInputRef.current?.click()}
+            disabled={disabled}
             sx={{
-              color: '#1565C0',
-              '&:hover': { backgroundColor: 'rgba(21, 101, 192, 0.1)' },
+              color: disabled ? '#ccc' : '#1565C0',
+              '&:hover': disabled ? {} : { backgroundColor: 'rgba(21, 101, 192, 0.1)' },
             }}
           >
             <AttachFile />
@@ -146,18 +151,24 @@ const MessageInput: React.FC<MessageInputProps> = React.memo(({ onSendMessage })
           <Button
             type="submit"
             variant="contained"
+            disabled={disabled}
             sx={{
               minWidth: 48,
               height: 48,
               borderRadius: 3,
-              backgroundColor: 'white',
-              color: '#1565C0',
-              border: '2px solid #1565C0',
-              '&:hover': {
+              backgroundColor: disabled ? '#f5f5f5' : 'white',
+              color: disabled ? '#ccc' : '#1565C0',
+              border: disabled ? '2px solid #e0e0e0' : '2px solid #1565C0',
+              '&:hover': disabled ? {} : {
                 backgroundColor: '#1565C0',
                 color: 'white',
                 transform: 'translateY(-2px)',
                 boxShadow: '0 4px 15px rgba(21, 101, 192, 0.3)',
+              },
+              '&:disabled': {
+                backgroundColor: '#f5f5f5',
+                color: '#ccc',
+                border: '2px solid #e0e0e0',
               },
             }}
           >

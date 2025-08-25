@@ -545,7 +545,7 @@ const ChatPage: React.FC<ChatPageProps> = ({ username, onLogout }) => {
             isTyping={isTyping}
           />
           
-          <MessageInput onSendMessage={handleSendMessage} />
+          <MessageInput onSendMessage={handleSendMessage} disabled={isTyping} />
         </Paper>
       </Container>
 
