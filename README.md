@@ -6,7 +6,9 @@ A comprehensive AI-driven chatbot platform with advanced document management, co
 
 ### 🧠 **AI-Powered Chatbot System**
 
-![Chat System Demo](Assets/chat-demo.gif)
+![Chat System Demo](Assets/LoginPage.gif)
+![Chat System Demo](Assets/AnalyzePage.gif)
+![Chat System Demo](Assets/AdminChat.gif)
 
 - **Multi-LLM Support**: OpenAI GPT, Google Gemini, Anthropic Claude integration
 - **Advanced RAG (Retrieval-Augmented Generation)**: Hybrid vector + BM25 search with semantic reranking
@@ -15,8 +17,6 @@ A comprehensive AI-driven chatbot platform with advanced document management, co
 - **Document Knowledge Base**: Upload company documents for AI-powered Q&A
 
 ### 📊 **Comprehensive Analytics & Insights**
-
-![Analytics Dashboard Demo](Assets/analytics-demo.gif)
 
 - **LangExtract Integration**: AI-powered conversation analysis with sentiment detection
 - **Automatic Issue Detection**: Smart identification of customer problems and urgency levels
